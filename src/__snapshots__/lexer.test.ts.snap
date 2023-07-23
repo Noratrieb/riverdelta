@@ -1,0 +1,84 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`should tokenize an emtpy function 1`] = `
+[
+  {
+    "kind": "kw_function",
+    "span": {
+      "end": 8,
+      "start": 0,
+    },
+  },
+  {
+    "ident": "hello",
+    "kind": "identifier",
+    "span": {
+      "end": 14,
+      "start": 9,
+    },
+  },
+  {
+    "kind": "p_popen",
+    "span": {
+      "end": 15,
+      "start": 14,
+    },
+  },
+  {
+    "kind": "p_pclose",
+    "span": {
+      "end": 16,
+      "start": 15,
+    },
+  },
+  {
+    "kind": "p_bopen",
+    "span": {
+      "end": 18,
+      "start": 17,
+    },
+  },
+  {
+    "kind": "p_bclose",
+    "span": {
+      "end": 19,
+      "start": 18,
+    },
+  },
+]
+`;
+
+exports[`should tokenize hello world 1`] = `
+[
+  {
+    "ident": "print",
+    "kind": "identifier",
+    "span": {
+      "end": 5,
+      "start": 0,
+    },
+  },
+  {
+    "kind": "p_popen",
+    "span": {
+      "end": 6,
+      "start": 5,
+    },
+  },
+  {
+    "kind": "lit_string",
+    "span": {
+      "end": 19,
+      "start": 6,
+    },
+    "value": "hello world",
+  },
+  {
+    "kind": "p_pclose",
+    "span": {
+      "end": 20,
+      "start": 19,
+    },
+  },
+]
+`;
