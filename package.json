@@ -1,0 +1,17 @@
+{
+  "name": "tscript",
+  "version": "1.0.0",
+  "description": "",
+  "main": "target/index.js",
+  "scripts": {
+    "build": "tsc",
+    "fmt": "prettier -w .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "prettier": "^3.0.0",
+    "typescript": "^5.1.6"
+  }
+}
