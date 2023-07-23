@@ -3,19 +3,15 @@ import { tokenize } from "./lexer";
 import { parse } from "./parser";
 import { printAst } from "./printer";
 import { resolve } from "./resolve";
+import { typeck } from "./typeck";
 
 const input = `
-function main(argv: [String]): () = (
-  print(argv);
-  if 1 then (
-    print("AAAAAAAAAAAAAAAAAAAA");
-    let a = 0 in
-    a;
-  ) else (
-    print("AAAAAAAAAAAAAAAAAAAAAA");
-    let b = 0 in
-    b;
-  )
+function main() = (
+  let a = 0 in
+  let b = a in
+  let c = b in
+  let d = c in
+  d;
 );
 `;
 
@@ -38,6 +34,11 @@ function main() {
     console.log("-----AST resolved------");
     const resolvedPrinted = printAst(resolved);
     console.log(resolvedPrinted);
+
+    console.log("-----AST typecked------");
+
+    const typecked = typeck(resolved);
+    console.dir(typecked, { depth: 10 });
   });
 }
 

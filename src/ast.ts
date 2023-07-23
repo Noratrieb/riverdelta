@@ -15,6 +15,7 @@ export type ItemKind = {
 
 export type Item = ItemKind & {
   span: Span;
+  id: number;
 };
 
 export type FunctionDef = {
@@ -94,6 +95,7 @@ export type ExprKind =
 
 export type Expr = ExprKind & {
   span: Span;
+  ty?: Ty;
 };
 
 export type Literal =
@@ -128,6 +130,7 @@ export const COMPARISON_KINDS: BinaryKind[] = [
   ">=",
   "!=",
 ];
+export const EQUALITY_KINDS: BinaryKind[] = ["==", "!="];
 export const LOGICAL_KINDS: BinaryKind[] = ["&", "|"];
 export const ARITH_TERM_KINDS: BinaryKind[] = ["+", "-"];
 export const ARITH_FACTOR_KINDS: BinaryKind[] = ["*", "/"];
@@ -174,6 +177,7 @@ export type TypeKind =
 
 export type Type = TypeKind & {
   span: Span;
+  ty?: Ty;
 };
 
 export type Resolution =
@@ -202,7 +206,52 @@ export type Resolution =
     }
   | {
       kind: "builtin";
+      name: string;
     };
+
+export type TyString = {
+  kind: "string";
+};
+
+export type TyInt = {
+  kind: "int";
+};
+
+export type TyBool = {
+  kind: "bool";
+};
+
+export type TyList = {
+  kind: "list";
+  elem: Ty;
+};
+
+export type TyTuple = {
+  kind: "tuple";
+  elems: Ty[];
+};
+
+export type TyUnit = {
+  kind: "tuple";
+  elems: [];
+};
+
+export type TyFn = {
+  kind: "fn";
+  params: Ty[];
+  returnTy: Ty;
+};
+
+export type TyVar = {
+  kind: "var";
+  index: number;
+};
+
+export type Ty = TyString | TyInt | TyBool | TyList | TyTuple | TyFn | TyVar;
+
+export function tyIsUnit(ty: Ty): ty is TyUnit {
+  return ty.kind === "tuple" && ty.elems.length === 0;
+}
 
 // folders
 
@@ -252,6 +301,7 @@ export function super_fold_item(item: Item, folder: Folder): Item {
           body: folder.expr(item.node.body),
           returnType: item.node.returnType && folder.type(item.node.returnType),
         },
+        id: item.id,
       };
     }
   }

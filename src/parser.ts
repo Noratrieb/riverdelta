@@ -27,7 +27,9 @@ export function parse(t: Token[]): Ast {
     items.push(item);
   }
 
-  return items;
+  const withIds = items.map((item, i) => ({ ...item, id: i }));
+
+  return withIds;
 }
 
 function parseItem(t: Token[]): [Token[], Item] {
@@ -79,7 +81,16 @@ function parseItem(t: Token[]): [Token[], Item] {
       body,
     };
 
-    return [t, { kind: "function", node: def, span: tok.span }];
+    return [
+      t,
+      {
+        kind: "function",
+        node: def,
+        span: tok.span,
+        // Assigned later.
+        id: 0,
+      },
+    ];
   } else {
     unexpectedToken(tok);
   }
@@ -114,7 +125,7 @@ function parseExpr(t: Token[]): [Token[], Expr] {
   if (peak.kind === "let") {
     [t] = expectNext(t, "let");
     let name;
-    [t, name] = expectNext<TokenIdent>(t, "identifier");
+    [t, name] = expectNext<TokenIdent & Token>(t, "identifier");
 
     let type = undefined;
     let colon;
@@ -132,7 +143,7 @@ function parseExpr(t: Token[]): [Token[], Expr] {
 
     return [
       t,
-      { kind: "let", name: name.ident, type, rhs, after, span: t[0].span },
+      { kind: "let", name: name.ident, type, rhs, after, span: name.span },
     ];
   }
 

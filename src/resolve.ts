@@ -10,7 +10,14 @@ import {
 } from "./ast";
 import { CompilerError } from "./error";
 
-const BUILTINS = new Set<string>(["print", "String"]);
+const BUILTINS = new Set<string>([
+  "print",
+  "String",
+  "Int",
+  "Bool",
+  "true",
+  "false",
+]);
 
 export function resolve(ast: Ast): Ast {
   const items = new Map<string, number>();
@@ -60,9 +67,9 @@ export function resolve(ast: Ast): Ast {
     }
 
     if (BUILTINS.has(ident.name)) {
-      return { kind: "builtin" };
+      return { kind: "builtin", name: ident.name };
     }
-    
+
     throw new CompilerError(`cannot find ${ident.name}`, ident.span);
   };
 
@@ -92,6 +99,7 @@ export function resolve(ast: Ast): Ast {
               returnType,
               body,
             },
+            id: item.id,
           };
         }
       }

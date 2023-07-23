@@ -5,7 +5,9 @@ import {
   Identifier,
   Item,
   Resolution,
+  Ty,
   Type,
+  tyIsUnit,
 } from "./ast";
 
 export function printAst(ast: Ast): string {
@@ -137,6 +139,33 @@ function printIdent(ident: Identifier): string {
   };
   const res = ident.res ? printRes(ident.res) : "";
   return `${ident.name}${res}`;
+}
+
+export function printTy(ty: Ty): string {
+  switch (ty.kind) {
+    case "string": {
+      return "String";
+    }
+    case "int": {
+      return "Int";
+    }
+    case "bool": {
+      return "Bool";
+    }
+    case "list": {
+      return `[${printTy(ty.elem)}]`;
+    }
+    case "tuple": {
+      return `(${ty.elems.map(printTy).join(", ")})`;
+    }
+    case "fn": {
+      const ret = tyIsUnit(ty.returnTy) ? "" : `: ${printTy(ty.returnTy)}`;
+      return `fn(${ty.params.map(printTy).join(", ")})${ret}`;
+    }
+    case "var": {
+      return `?${ty.index}`;
+    }
+  }
 }
 
 function linebreak(indent: number): string {
