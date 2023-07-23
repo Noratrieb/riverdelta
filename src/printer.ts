@@ -1,4 +1,4 @@
-import { Expr, FunctionDef, Item } from "./ast";
+import { Expr, FunctionDef, Item, Type } from "./ast";
 
 export function printAst(ast: Item[]): string {
   return ast.map(printItem).join("\n");
@@ -13,8 +13,11 @@ function printItem(item: Item): string {
 }
 
 function printFunction(func: FunctionDef): string {
-  const args = func.args.map(({ name }) => name).join(", ");
-  return `function ${func.name}(${args}) = ${printExpr(func.body, 0)}`;
+  const args = func.args
+    .map(({ name, type }) => `${name}: ${printType(type)}`)
+    .join(", ");
+  const ret = func.returnType ? `: ${printType(func.returnType)}` : "";
+  return `function ${func.name}(${args})${ret} = ${printExpr(func.body, 0)}`;
 }
 
 function printExpr(expr: Expr, indent: number): string {
@@ -23,9 +26,12 @@ function printExpr(expr: Expr, indent: number): string {
       return "";
     }
     case "let": {
-      return `let ${expr.name} = ${printExpr(expr.rhs, 1)} in${linebreak(
-        indent
-      )}`;
+      const type = expr.type ? `: ${printType(expr.type)}` : "";
+
+      return `let ${expr.name}${type} = ${printExpr(
+        expr.rhs,
+        indent + 1
+      )} in${linebreak(indent)}${printExpr(expr.after, indent)}`;
     }
     case "block": {
       const exprs = expr.exprs.map((expr) => printExpr(expr, indent + 1));
@@ -35,8 +41,10 @@ function printExpr(expr: Expr, indent: number): string {
       }
       const shortExprs =
         exprs.map((s) => s.length).reduce((a, b) => a + b, 0) < 40;
+
+      const alreadyHasTrailingSpace =
+        expr.exprs[exprs.length - 1]?.kind === "empty";
       if (shortExprs) {
-        const alreadyHasTrailingSpace = expr.exprs[exprs.length - 1]?.kind === "empty";
         const trailingSpace = alreadyHasTrailingSpace ? "" : " ";
         return `( ${exprs.join("; ")}${trailingSpace})`;
       } else {
@@ -84,6 +92,26 @@ function printExpr(expr: Expr, indent: number): string {
         );
       }
     }
+    case "if": {
+      const elsePart = expr.else
+        ? ` else ${printExpr(expr.else, indent + 1)}`
+        : "";
+      return `if ${printExpr(expr.cond, indent + 1)} then ${printExpr(
+        expr.then,
+        indent + 1
+      )}${elsePart}`;
+    }
+  }
+}
+
+function printType(type: Type): string {
+  switch (type.kind) {
+    case "ident":
+      return type.value;
+    case "list":
+      return `[${printType(type.elem)}]`;
+    case "tuple":
+      return `(${type.elems.map(printType).join(", ")})`;
   }
 }
 

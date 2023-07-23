@@ -4,9 +4,15 @@ export type DatalessToken =
   | "function"
   | "let"
   | "in"
+  | "if"
+  | "then"
+  | "else"
   | "("
   | ")"
+  | "["
+  | "]"
   | ";"
+  | ":"
   | ","
   | "="
   | "+"
@@ -47,7 +53,10 @@ export type BaseToken = { kind: Token["kind"] };
 const SINGLE_PUNCT: string[] = [
   "(",
   ")",
+  "[",
+  "]",
   ";",
+  ":",
   ",",
   "+",
   "-",
@@ -193,7 +202,14 @@ function isWhitespace(char: string): boolean {
   return char === " " || char === "\t" || char === "\n" || char === "\r";
 }
 
-const keywords = new Set<string>(["function", "let", "in"]);
+const keywords = new Set<string>([
+  "function",
+  "let",
+  "in",
+  "if",
+  "then",
+  "else",
+]);
 function isKeyword(kw: string): DatalessToken | undefined {
   return keywords.has(kw) ? (kw as DatalessToken) : undefined;
 }

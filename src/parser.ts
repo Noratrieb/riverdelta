@@ -4,13 +4,15 @@ import {
   BinaryKind,
   COMPARISON_KINDS,
   Expr,
+  FunctionArg,
   FunctionDef,
   Item,
   LOGICAL_KINDS,
+  Type,
   UNARY_KINDS,
   UnaryKind,
 } from "./ast";
-import { CompilerError, todo } from "./error";
+import { CompilerError, Span, todo } from "./error";
 import { BaseToken, Token, TokenIdent } from "./lexer";
 
 type Parser<T> = (t: Token[]) => [Token[], T];
@@ -35,7 +37,33 @@ function parseItem(t: Token[]): [Token[], Item] {
     [t, name] = expectNext<TokenIdent>(t, "identifier");
 
     [t] = expectNext(t, "(");
+
+    const args: FunctionArg[] = [];
+    let first = true;
+    while (next(t)[1]?.kind !== ")") {
+      if (!first) {
+        [t] = expectNext(t, ",");
+      }
+      first = false;
+
+      let name;
+      [t, name] = expectNext<TokenIdent & { span: Span }>(t, "identifier");
+      [t] = expectNext(t, ":");
+      let type;
+      [t, type] = parseType(t);
+
+      args.push({ name: name.ident, type, span: name.span });
+    }
+
     [t] = expectNext(t, ")");
+
+    let colon;
+    let returnType = undefined;
+    [t, colon] = eat(t, ":");
+    if (colon) {
+      [t, returnType] = parseType(t);
+    }
+
     [t] = expectNext(t, "=");
 
     let body;
@@ -45,7 +73,8 @@ function parseItem(t: Token[]): [Token[], Item] {
 
     const def: FunctionDef = {
       name: name.ident,
-      args: [],
+      args,
+      returnType,
       body,
     };
 
@@ -57,7 +86,10 @@ function parseItem(t: Token[]): [Token[], Item] {
 
 function parseExpr(t: Token[]): [Token[], Expr] {
   /*
-  EXPR = { "let" NAME "=" EXPR "in" EXPR | COMPARISON }
+  EXPR = { LET | COMPARISON | IF }
+
+  LET = "let" NAME { ":" TYPE } "=" EXPR "in" EXPR
+  IF = "if" EXPR "then" EXPR { "else" EXPR }
 
   // The precende here is pretty arbitrary since we forbid mixing of operators
   // with different precedence classes anyways.
@@ -79,17 +111,46 @@ function parseExpr(t: Token[]): [Token[], Expr] {
   const [, peak] = next(t);
 
   if (peak.kind === "let") {
-    [t] = next(t);
+    [t] = expectNext(t, "let");
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
-    expectNext(t, "=");
+
+    let type = undefined;
+    let colon;
+    [t, colon] = eat(t, ":");
+    if (colon) {
+      [t, type] = parseType(t);
+    }
+
+    [t] = expectNext(t, "=");
     let rhs;
     [t, rhs] = parseExpr(t);
-    expectNext(t, "in");
+    [t] = expectNext(t, "in");
     let after;
     [t, after] = parseExpr(t);
 
-    return [t, { kind: "let", name: name.ident, rhs, after, span: t[0].span }];
+    return [
+      t,
+      { kind: "let", name: name.ident, type, rhs, after, span: t[0].span },
+    ];
+  }
+
+  if (peak.kind === "if") {
+    [t] = expectNext(t, "if");
+    let cond;
+    [t, cond] = parseExpr(t);
+    [t] = expectNext(t, "then");
+    let then;
+    [t, then] = parseExpr(t);
+
+    let elseTok;
+    [t, elseTok] = eat(t, "else");
+    let elsePart = undefined;
+    if (elseTok) {
+      [t, elsePart] = parseExpr(t);
+    }
+
+    return [t, { kind: "if", cond, then, else: elsePart, span: peak.span }];
   }
 
   return parseExprComparison(t);
@@ -227,6 +288,45 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
   return [startT, { kind: "empty", span: tok.span }];
 }
 
+function parseType(t: Token[]): [Token[], Type] {
+  let tok;
+  [t, tok] = next(t);
+
+  switch (tok.kind) {
+    case "identifier": {
+      return [t, { kind: "ident", value: tok.ident, span: tok.span }];
+    }
+    case "[": {
+      let elem;
+      [t, elem] = parseType(t);
+      [t] = expectNext(t, "]");
+      return [t, { kind: "list", elem, span: tok.span }];
+    }
+    case "(": {
+      let first = true;
+      const elems = [];
+      while (next(t)[1]?.kind !== ")") {
+        if (!first) {
+          [t] = expectNext(t, ",");
+        }
+        first = false;
+        let type;
+        [t, type] = parseType(t);
+        elems.push(type);
+      }
+      [t] = expectNext(t, ")");
+
+      return [t, { kind: "tuple", elems, span: tok.span }];
+    }
+    default: {
+      throw new CompilerError(
+        `unexpected token: \`${tok.kind}\`, expected type`,
+        tok.span
+      );
+    }
+  }
+}
+
 // helpers
 
 function eat<T extends BaseToken>(
@@ -246,8 +346,10 @@ function expectNext<T extends BaseToken>(
 ): [Token[], T] {
   let tok;
   [t, tok] = next(t);
-  const token = expectToken(kind, tok);
-  return [t, token];
+  if (tok.kind !== kind) {
+    throw new CompilerError(`expected ${kind}, found ${tok.kind}`, tok.span);
+  }
+  return [t, tok as unknown as T];
 }
 
 function next(t: Token[]): [Token[], Token] {
@@ -269,14 +371,4 @@ function maybeNextT(t: Token[]): [Token[], Token | undefined] {
 
 function unexpectedToken(token: Token): never {
   throw new CompilerError("unexpected token", token.span);
-}
-
-function expectToken<T extends BaseToken>(kind: T["kind"], token: Token): T {
-  if (token.kind !== kind) {
-    throw new CompilerError(
-      `expected ${kind}, found ${token.kind}`,
-      token.span
-    );
-  }
-  return token as unknown as T;
 }

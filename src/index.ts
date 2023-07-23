@@ -4,9 +4,13 @@ import { parse } from "./parser";
 import { printAst } from "./printer";
 
 const input = `
-function main() = (
+function main(argv: [String]): uwu = (
   print("Hello, world!");
-  "uwu";
+  let a: [String] = 0 in
+  let b = 1 in
+  if 0 then 0 else (
+    if 1 == 1 then 1 else "what" 
+  ;"meow")
 );
 `;
 

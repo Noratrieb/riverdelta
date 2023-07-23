@@ -13,16 +13,18 @@ export type FunctionDef = {
   name: string;
   args: FunctionArg[];
   body: Expr;
+  returnType?: Type;
 };
 
 export type FunctionArg = {
   name: string;
+  type: Type;
   span: Span;
 };
 
 export type ExprKind =
   | { kind: "empty" }
-  | { kind: "let"; name: string; rhs: Expr; after: Expr }
+  | { kind: "let"; name: string; type?: Type; rhs: Expr; after: Expr }
   | { kind: "block"; exprs: Expr[] }
   | {
       kind: "literal";
@@ -39,15 +41,21 @@ export type ExprKind =
       rhs: Expr;
     }
   | {
-    kind: "unary",
-    unaryKind: UnaryKind,
-    rhs: Expr,
-  }
+      kind: "unary";
+      unaryKind: UnaryKind;
+      rhs: Expr;
+    }
   | {
-    kind: "call",
-    lhs: Expr,
-    args: Expr[],
-  };
+      kind: "call";
+      lhs: Expr;
+      args: Expr[];
+    }
+  | {
+      kind: "if";
+      cond: Expr;
+      then: Expr;
+      else?: Expr;
+    };
 
 export type Expr = ExprKind & {
   span: Span;
@@ -112,5 +120,23 @@ export function binaryExprPrecedenceClass(k: BinaryKind): number {
   return cls;
 }
 
-export type UnaryKind = '!' | '-';
-export const UNARY_KINDS: UnaryKind[] = ['!', '-'];
+export type UnaryKind = "!" | "-";
+export const UNARY_KINDS: UnaryKind[] = ["!", "-"];
+
+export type TypeKind =
+  | {
+      kind: "ident";
+      value: string;
+    }
+  | {
+      kind: "list";
+      elem: Type;
+    }
+  | {
+      kind: "tuple";
+      elems: Type[];
+    };
+
+export type Type = TypeKind & {
+  span: Span;
+};
