@@ -3,6 +3,13 @@ export type Span = {
   end: number;
 };
 
+export function spanMerge(a: Span, b: Span): Span {
+  return {
+    start: Math.min(a.start, b.start),
+    end: Math.max(a.end, b.end),
+  };
+}
+
 export class CompilerError extends Error {
   msg: string;
   span: Span;
