@@ -266,16 +266,16 @@ export type Folder = {
 
 export const DEFAULT_FOLDER: Folder = {
   item(item) {
-    return super_fold_item(item, this);
+    return superFoldItem(item, this);
   },
   expr(expr) {
-    return super_fold_expr(expr, this);
+    return superFoldExpr(expr, this);
   },
   ident(ident) {
     return ident;
   },
   type(type) {
-    return super_fold_type(type, this);
+    return superFoldType(type, this);
   },
 };
 
@@ -283,7 +283,7 @@ export function fold_ast(ast: Ast, folder: Folder): Ast {
   return ast.map((item) => folder.item(item));
 }
 
-export function super_fold_item(item: Item, folder: Folder): Item {
+export function superFoldItem(item: Item, folder: Folder): Item {
   switch (item.kind) {
     case "function": {
       const args = item.node.args.map(({ name, type, span }) => ({
@@ -307,7 +307,7 @@ export function super_fold_item(item: Item, folder: Folder): Item {
   }
 }
 
-export function super_fold_expr(expr: Expr, folder: Folder): Expr {
+export function superFoldExpr(expr: Expr, folder: Folder): Expr {
   const span = expr.span;
   switch (expr.kind) {
     case "empty": {
@@ -373,7 +373,7 @@ export function super_fold_expr(expr: Expr, folder: Folder): Expr {
   }
 }
 
-export function super_fold_type(type: Type, folder: Folder): Type {
+export function superFoldType(type: Type, folder: Folder): Type {
   const span = type.span;
   switch (type.kind) {
     case "ident": {

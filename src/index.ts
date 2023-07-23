@@ -7,11 +7,7 @@ import { typeck } from "./typeck";
 
 const input = `
 function main() = (
-  let a = 0 in
-  let b = a in
-  let c = b in
-  let d = c in
-  d;
+  let true = false in print(true)
 );
 `;
 

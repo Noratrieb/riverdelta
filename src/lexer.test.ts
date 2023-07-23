@@ -1,7 +1,7 @@
 import { tokenize } from "./lexer";
 
 it("should tokenize an emtpy function", () => {
-  const input = `function hello() = {}`;
+  const input = `function hello() = ;`;
 
   const tokens = tokenize(input);
 

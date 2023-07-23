@@ -5,8 +5,8 @@ import {
   Identifier,
   Resolution,
   fold_ast,
-  super_fold_expr,
-  super_fold_item,
+  superFoldExpr,
+  superFoldItem,
 } from "./ast";
 import { CompilerError } from "./error";
 
@@ -87,7 +87,7 @@ export function resolve(ast: Ast): Ast {
             item.node.returnType && this.type(item.node.returnType);
 
           item.node.args.forEach(({ name }) => scopes.push(name));
-          const body = super_fold_expr(item.node.body, this);
+          const body = superFoldExpr(item.node.body, this);
           item.node.args.forEach(({ name }) => popScope(name));
 
           return {
@@ -104,7 +104,7 @@ export function resolve(ast: Ast): Ast {
         }
       }
 
-      return super_fold_item(item, this);
+      return superFoldItem(item, this);
     },
     expr(expr) {
       if (expr.kind === "let") {
@@ -124,7 +124,7 @@ export function resolve(ast: Ast): Ast {
         };
       }
 
-      return super_fold_expr(expr, this);
+      return superFoldExpr(expr, this);
     },
     ident(ident) {
       const res = resolveIdent(ident);

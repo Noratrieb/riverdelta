@@ -3,7 +3,7 @@
 exports[`should tokenize an emtpy function 1`] = `
 [
   {
-    "kind": "kw_function",
+    "kind": "function",
     "span": {
       "end": 8,
       "start": 0,
@@ -18,31 +18,31 @@ exports[`should tokenize an emtpy function 1`] = `
     },
   },
   {
-    "kind": "p_popen",
+    "kind": "(",
     "span": {
       "end": 15,
       "start": 14,
     },
   },
   {
-    "kind": "p_pclose",
+    "kind": ")",
     "span": {
       "end": 16,
       "start": 15,
     },
   },
   {
-    "kind": "p_bopen",
+    "kind": "=",
     "span": {
       "end": 18,
       "start": 17,
     },
   },
   {
-    "kind": "p_bclose",
+    "kind": ";",
     "span": {
-      "end": 19,
-      "start": 18,
+      "end": 20,
+      "start": 19,
     },
   },
 ]
@@ -59,7 +59,7 @@ exports[`should tokenize hello world 1`] = `
     },
   },
   {
-    "kind": "p_popen",
+    "kind": "(",
     "span": {
       "end": 6,
       "start": 5,
@@ -74,7 +74,7 @@ exports[`should tokenize hello world 1`] = `
     "value": "hello world",
   },
   {
-    "kind": "p_pclose",
+    "kind": ")",
     "span": {
       "end": 20,
       "start": 19,

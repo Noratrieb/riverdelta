@@ -1,4 +1,3 @@
-import { check } from "prettier";
 import {
   Ast,
   COMPARISON_KINDS,
@@ -6,7 +5,6 @@ import {
   EQUALITY_KINDS,
   Expr,
   ExprBinary,
-  ExprCall,
   ExprUnary,
   Folder,
   Identifier,
@@ -14,11 +12,9 @@ import {
   Resolution,
   Ty,
   TyFn,
-  TyVar,
   Type,
   binaryExprPrecedenceClass,
   fold_ast,
-  super_fold_expr,
 } from "./ast";
 import { CompilerError, Span } from "./error";
 import { printTy } from "./printer";
