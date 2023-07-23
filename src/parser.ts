@@ -1,6 +1,7 @@
 import {
   ARITH_FACTOR_KINDS,
   ARITH_TERM_KINDS,
+  Ast,
   BinaryKind,
   COMPARISON_KINDS,
   Expr,
@@ -17,7 +18,7 @@ import { BaseToken, Token, TokenIdent } from "./lexer";
 
 type Parser<T> = (t: Token[]) => [Token[], T];
 
-export function parse(t: Token[]): Item[] {
+export function parse(t: Token[]): Ast {
   const items: Item[] = [];
 
   while (t.length > 0) {
@@ -242,6 +243,7 @@ function parseExprCall(t: Token[]): [Token[], Expr] {
 
 function parseExprAtom(startT: Token[]): [Token[], Expr] {
   let [t, tok] = next(startT);
+  const span = tok.span;
 
   if (tok.kind === "(") {
     let expr: Expr;
@@ -255,7 +257,7 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
     }
     [t] = expectNext(t, ")");
 
-    return [t, { kind: "block", span: tok.span, exprs }];
+    return [t, { kind: "block", span, exprs }];
   }
 
   if (tok.kind === "lit_string") {
@@ -263,7 +265,7 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
       t,
       {
         kind: "literal",
-        span: tok.span,
+        span,
         value: { kind: "str", value: tok.value },
       },
     ];
@@ -274,33 +276,48 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
       t,
       {
         kind: "literal",
-        span: tok.span,
+        span,
         value: { kind: "int", value: tok.value },
       },
     ];
   }
 
   if (tok.kind === "identifier") {
-    return [t, { kind: "ident", span: tok.span, value: tok.ident }];
+    return [
+      t,
+      {
+        kind: "ident",
+        span,
+        value: { name: tok.ident, span },
+      },
+    ];
   }
 
   // Parse nothing at all.
-  return [startT, { kind: "empty", span: tok.span }];
+  return [startT, { kind: "empty", span }];
 }
 
 function parseType(t: Token[]): [Token[], Type] {
   let tok;
   [t, tok] = next(t);
+  const span = tok.span;
 
   switch (tok.kind) {
     case "identifier": {
-      return [t, { kind: "ident", value: tok.ident, span: tok.span }];
+      return [
+        t,
+        {
+          kind: "ident",
+          value: { name: tok.ident, span },
+          span,
+        },
+      ];
     }
     case "[": {
       let elem;
       [t, elem] = parseType(t);
       [t] = expectNext(t, "]");
-      return [t, { kind: "list", elem, span: tok.span }];
+      return [t, { kind: "list", elem, span }];
     }
     case "(": {
       let first = true;
@@ -316,12 +333,12 @@ function parseType(t: Token[]): [Token[], Type] {
       }
       [t] = expectNext(t, ")");
 
-      return [t, { kind: "tuple", elems, span: tok.span }];
+      return [t, { kind: "tuple", elems, span }];
     }
     default: {
       throw new CompilerError(
         `unexpected token: \`${tok.kind}\`, expected type`,
-        tok.span
+        span
       );
     }
   }

@@ -2,15 +2,20 @@ import { withErrorHandler } from "./error";
 import { tokenize } from "./lexer";
 import { parse } from "./parser";
 import { printAst } from "./printer";
+import { resolve } from "./resolve";
 
 const input = `
-function main(argv: [String]): uwu = (
-  print("Hello, world!");
-  let a: [String] = 0 in
-  let b = 1 in
-  if 0 then 0 else (
-    if 1 == 1 then 1 else "what" 
-  ;"meow")
+function main(argv: [String]): () = (
+  print(argv);
+  if 1 then (
+    print("AAAAAAAAAAAAAAAAAAAA");
+    let a = 0 in
+    a;
+  ) else (
+    print("AAAAAAAAAAAAAAAAAAAAAA");
+    let b = 0 in
+    b;
+  )
 );
 `;
 
@@ -22,13 +27,17 @@ function main() {
 
     const ast = parse(tokens);
     console.log("-----AST------");
-    
-    console.dir(ast, { depth: 10 });
+
+    console.dir(ast, { depth: 50 });
 
     const printed = printAst(ast);
     console.log("-----AST pretty------");
     console.log(printed);
-    
+
+    const resolved = resolve(ast);
+    console.log("-----AST resolved------");
+    const resolvedPrinted = printAst(resolved);
+    console.log(resolvedPrinted);
   });
 }
 

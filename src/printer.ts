@@ -1,6 +1,14 @@
-import { Expr, FunctionDef, Item, Type } from "./ast";
+import {
+  Ast,
+  Expr,
+  FunctionDef,
+  Identifier,
+  Item,
+  Resolution,
+  Type,
+} from "./ast";
 
-export function printAst(ast: Item[]): string {
+export function printAst(ast: Ast): string {
   return ast.map(printItem).join("\n");
 }
 
@@ -67,7 +75,7 @@ function printExpr(expr: Expr, indent: number): string {
       }
     }
     case "ident": {
-      return expr.value;
+      return printIdent(expr.value);
     }
     case "binary": {
       return `${printExpr(expr.lhs, indent)} ${expr.binaryKind} ${printExpr(
@@ -107,12 +115,28 @@ function printExpr(expr: Expr, indent: number): string {
 function printType(type: Type): string {
   switch (type.kind) {
     case "ident":
-      return type.value;
+      return printIdent(type.value);
     case "list":
       return `[${printType(type.elem)}]`;
     case "tuple":
       return `(${type.elems.map(printType).join(", ")})`;
   }
+}
+
+function printIdent(ident: Identifier): string {
+  const printRes = (res: Resolution): string => {
+    switch (res.kind) {
+      case "local":
+        return `#${res.index}`;
+      case "item":
+        return `#G${res.index}`;
+      case "builtin": {
+        return `#B`;
+      }
+    }
+  };
+  const res = ident.res ? printRes(ident.res) : "";
+  return `${ident.name}${res}`;
 }
 
 function linebreak(indent: number): string {

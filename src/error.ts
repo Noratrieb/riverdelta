@@ -76,6 +76,6 @@ export function lines(input: string): Span[] {
   return lines;
 }
 
-export function todo(msg: string, span: Span): never {
-  throw new CompilerError(`TODO: ${msg}`, span);
+export function todo(msg: string): never {
+  throw new CompilerError(`TODO: ${msg}`, { start: 0, end: 0 });
 }
