@@ -252,19 +252,18 @@ export function checkBody(
    * before calling this.
    */
   function constrainVar(variable: number, ty: Ty) {
+    let root = variable;
+    let nextVar;
+    while ((nextVar = tyVars[root]).kind === "unified") {
+      root = nextVar.index;
+    }
+
     if (ty.kind === "var") {
       // Point the lhs to the rhs.
-      tyVars[variable] = { kind: "unified", index: ty.index };
+      tyVars[root] = { kind: "unified", index: ty.index };
+    } else {
+      tyVars[root] = { kind: "final", ty };
     }
-
-    let idx = variable;
-    let nextVar;
-    while ((nextVar = tyVars[idx]).kind === "unified") {
-      idx = nextVar.index;
-    }
-
-    const root = idx;
-    tyVars[root] = { kind: "final", ty };
   }
 
   function resolveIfPossible(ty: Ty): Ty {
@@ -472,7 +471,20 @@ export function checkBody(
 
   assign(fnTy.returnTy, checked.ty!, body.span);
 
-  return checked;
+  const resolver: Folder = {
+    ...DEFAULT_FOLDER,
+    expr(expr) {
+      const ty = resolveIfPossible(expr.ty!);
+      if (!ty) {
+        throw new CompilerError("cannot infer type", expr.span);
+      }
+      return { ...expr, ty };
+    },
+  };
+
+  const resolved = resolver.expr(checked);
+
+  return resolved;
 }
 
 function checkBinary(expr: Expr & ExprBinary): Expr {

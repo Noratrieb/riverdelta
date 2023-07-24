@@ -7,7 +7,7 @@ import { typeck } from "./typeck";
 
 const input = `
 function main() = (
-  let true = false in print(true)
+  let a = 0 in 0;
 );
 `;
 
