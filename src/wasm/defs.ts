@@ -33,9 +33,9 @@ export type Limits = {
   max: u32;
 };
 
-export type Memtype = Limits;
+export type MemType = Limits;
 
-export type Tabletype = {
+export type TableType = {
   limits: Limits;
   reftype: Reftype;
 };
@@ -54,11 +54,11 @@ export type Externtype =
     }
   | {
       kind: "table";
-      type: Tabletype;
+      type: TableType;
     }
   | {
       kind: "mem";
-      type: Memtype;
+      type: MemType;
     }
   | {
       kind: "global";
@@ -289,6 +289,7 @@ export type Module = {
   start?: Start;
   imports: Vec<Import>;
   exports: Vec<Export>;
+  _name?: string,
 };
 
 export type TypeIdx = u32;
@@ -305,14 +306,15 @@ export type Func = {
   type: TypeIdx;
   locals: Vec<Valtype>;
   body: Expr;
+  _name?: string,
 };
 
 export type Table = {
-  type: Tabletype;
+  type: TableType;
 };
 
 export type Mem = {
-  type: Memtype;
+  type: MemType;
 };
 
 export type GLobal = {
@@ -357,7 +359,8 @@ export type Import = {
 export type ImportDesc =
   | {
       kind: "func";
-      idx: FuncIdx;
+      type: TypeIdx;
     }
-  | { kind: "table"; idx: TableIdx }
-  | { kind: "mem"; idx: MemIdx | { kind: "global"; idx: GlobalIdx } };
+  | { kind: "table"; type: TableType }
+  | { kind: "memory"; type: MemType }
+  | { kind: "global"; type: GlobalType };
