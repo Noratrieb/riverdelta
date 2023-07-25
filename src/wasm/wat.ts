@@ -4,10 +4,11 @@
 import {
   Blocktype,
   Data,
+  DatamodeActive,
   Elem,
   Export,
   Func,
-  Functype as FuncType,
+  FuncType,
   Global,
   GlobalType,
   Import,
@@ -18,125 +19,198 @@ import {
   Module,
   Start,
   Table,
-  TableType as TableType,
-  Valtype as ValType,
+  TableType,
+  ValType,
 } from "./defs";
 
-const INLINE_SYM = Symbol.for("inline");
-const INLINE_OWN_LINE = Symbol.for("inline_own_line");
+class Formatter {
+  print: (chunk: string) => void;
+  indentation: number;
+  wordsInSexpr: number[];
+  freshLinebreak: boolean;
 
-type Sexpr = string | number | Sexpr[] | { inline: Symbol; items: Sexpr[] };
+  constructor(print: (chunk: string) => void) {
+    this.print = print;
+    this.indentation = 0;
+    this.wordsInSexpr = [];
+    this.freshLinebreak = false;
+  }
 
-export function writeModuleWat(module: Module) {
-  const sexprs = sexprModule(module);
-  console.dir(sexprs, { depth: 100 });
-  console.log(printSexpr(sexprs));
-}
+  linebreak() {
+    this.print("\n");
+    this.print("  ".repeat(this.indentation));
+    this.freshLinebreak = true;
+  }
+  breakIndent() {
+    this.indentation++;
+    this.linebreak();
+  }
+  breakDedent() {
+    this.indentation--;
+    this.linebreak();
+  }
 
-function printSexpr(sexpr: Sexpr): string {
-  if (typeof sexpr === "string") {
-    return sexpr;
-  } else if (typeof sexpr === "number") {
-    return String(sexpr);
-  } else if (typeof sexpr === "object" && "inline" in sexpr) {
-    return sexpr.items.map(printSexpr).join(" ");
-  } else {
-    const all = sexpr.map(printSexpr).join(" ");
-    return `(${all})`;
+  sexpr(f: () => void) {
+    this.startSexpr();
+    f();
+    this.endSexpr();
+  }
+
+  word(word: string | number) {
+    const last = this.wordsInSexpr.length - 1;
+    if (this.wordsInSexpr[last] > 0 && !this.freshLinebreak) {
+      // The first word hugs the left parenthesis.
+      this.print(" ");
+    }
+    this.freshLinebreak = false;
+    this.print(String(word));
+    this.wordsInSexpr[last]++;
+  }
+
+  startSexpr() {
+    this.word("(");
+    this.wordsInSexpr.push(0);
+  }
+  endSexpr() {
+    this.print(")");
+    this.freshLinebreak = false;
+    this.wordsInSexpr.pop();
   }
 }
 
-function inline(items: Sexpr[]): Sexpr {
-  return { inline: INLINE_SYM, items };
+export function writeModuleWatToString(module: Module): string {
+  const parts: string[] = [];
+  const writer = (s: string) => parts.push(s);
+  printModule(module, new Formatter(writer));
+  return parts.join("");
 }
 
-function inlineOwnLine(items: Sexpr[]): Sexpr {
-  return { inline: INLINE_OWN_LINE, items };
+export function writeModuleWat(module: Module, f: Formatter) {
+  printModule(module, f);
 }
-
 // base
 
-function sexprString(s: string): Sexpr {
+function printString(s: string, f: Formatter) {
   // TODO: escaping
-  return `"$${s}"`;
+  f.word(`"${s}"`);
 }
 
-function sexprBinaryString(buf: Uint8Array): Sexpr {
-  todo();
+function printBinaryString(buf: Uint8Array, f: Formatter) {
+  f.word(`"${buf.toString()}"`);
 }
 
-function optArr<T>(elem?: T): T[] {
-  return elem !== undefined ? [elem] : [];
+function printId(id: string | undefined, f: Formatter) {
+  if (id) {
+    f.word(`$${id}`);
+  }
 }
 
 // types
 
-function sexprValtype(type: ValType): Sexpr {
-  return type;
+function printValType(type: ValType, f: Formatter) {
+  f.word(type);
 }
 
-function sexprFuncType(type: FuncType): Sexpr {
-  return ["func", ["param", ...type.params], ["result", ...type.returns]];
+function printFuncType(type: FuncType, f: Formatter) {
+  f.sexpr(() => {
+    f.word("func");
+    f.sexpr(() => {
+      f.word("param");
+      type.params.forEach(f.word.bind(f));
+    });
+    f.sexpr(() => {
+      f.word("result");
+      type.returns.forEach(f.word.bind(f));
+    });
+  });
 }
 
-function sexprLimits(limits: Limits): Sexpr {
-  return inline([limits.min, limits.max]);
+function printLimits(limits: Limits, f: Formatter) {
+  f.word(limits.min);
+  f.word(limits.max);
 }
 
-function sexprTableType(type: TableType): Sexpr {
-  todo();
+function printTableType(type: TableType, f: Formatter) {
+  printLimits(type.limits, f);
+  f.word(type.reftype);
 }
 
-function sexprGlobalType(type: GlobalType): Sexpr {
-  return type.mut === "const"
-    ? sexprValtype(type.type)
-    : ["mut", sexprValtype(type.type)];
+function printGlobalType(type: GlobalType, f: Formatter) {
+  if (type.mut === "const") {
+    printValType(type.type, f);
+  } else {
+    f.sexpr(() => {
+      f.word("mut");
+      printValType(type.type, f);
+    });
+  }
 }
 
 // instrs
 
-function sexprBlockType(type: Blocktype): Sexpr {
-  return type.kind === "typeidx"
-    ? type.idx
-    : type.type
-    ? sexprValtype(type.type)
-    : inline([]);
+function printBlockType(type: Blocktype, f: Formatter) {
+  f.sexpr(() => {
+    f.word("type");
+    if (type.kind === "typeidx") {
+      f.word(type.idx);
+    } else if (type.type !== undefined) {
+      printValType(type.type, f);
+    }
+  });
 }
 
-function sexprMemarg(arg: MemArg): Sexpr {
-  const align = arg.align !== undefined ? `align=${arg.align}` : "";
-  const offset = arg.offset /*0->false*/ ? `offset=${arg.offset}` : "";
-  return inline([offset, align]);
+function printMemarg(arg: MemArg, f: Formatter) {
+  if (arg.align !== undefined) {
+    f.word(`align=${arg.align}`);
+  }
+  if (arg.offset /*0->false*/) {
+    `offset=${arg.offset}`;
+  }
 }
 
-function sexprInstr(instr: Instr): Sexpr {
+/**
+ * Print a list of instructions with one extra indentation.
+ * Start: indented start of first instr
+ * End: start of next line
+ */
+function printInstrBlock(instrs: Instr[], f: Formatter) {
+  instrs.forEach((nested, i) => {
+    printInstr(nested, f);
+    if (i !== instrs.length - 1) {
+      f.linebreak();
+    }
+  });
+  f.breakDedent();
+}
+
+function printInstr(instr: Instr, f: Formatter) {
   switch (instr.kind) {
     case "block":
     case "loop":
-      return inlineOwnLine([
-        instr.kind,
-        sexprBlockType(instr.type),
-        ...instr.instr.map(sexprInstr),
-        "end",
-      ]);
+      f.word(instr.kind);
+      printBlockType(instr.type, f);
+      f.breakIndent();
+      printInstrBlock(instr.instrs, f);
+      f.word("end");
+      break;
     case "if":
       if (instr.else.length === 0) {
-        return inlineOwnLine([
-          instr.kind,
-          sexprBlockType(instr.type),
-          ...instr.then.map(sexprInstr),
-          "end",
-        ]);
+        f.word(instr.kind);
+        printBlockType(instr.type, f);
+        f.breakIndent();
+        printInstrBlock(instr.then, f);
+        f.word("end");
       } else {
-        return inlineOwnLine([
-          instr.kind,
-          sexprBlockType(instr.type),
-          ...instr.then.map(sexprInstr),
-          "else",
-          ...instr.else.map(sexprInstr),
-          "end",
-        ]);
+        f.word(instr.kind);
+        printBlockType(instr.type, f);
+        f.breakIndent();
+        printInstrBlock(instr.then, f);
+        f.word("else");
+        f.breakIndent();
+        printInstrBlock(instr.else, f);
+        f.word("end");
       }
+      break;
     case "unreachable":
     case "nop":
     case "return":
@@ -292,16 +366,27 @@ function sexprInstr(instr: Instr): Sexpr {
     case "i64.extend8_s":
     case "i64.extend16_s":
     case "i64.extend32_s":
-      return instr.kind;
+      f.word(instr.kind);
+      break;
     case "br":
     case "br_if":
-      return inlineOwnLine([instr.kind, instr.label]);
+      f.word(instr.kind);
+      f.word(instr.label);
+      break;
     case "br_table":
-      return inlineOwnLine([instr.kind, ...instr.labels, instr.label]);
+      f.word(instr.kind);
+      instr.labels.forEach(f.word.bind(f));
+      f.word(instr.label);
+      break;
     case "call":
-      return inlineOwnLine([instr.kind, instr.func]);
+      f.word(instr.kind);
+      f.word(instr.func);
+      break;
     case "call_indirect":
-      return inlineOwnLine([instr.kind, instr.table, instr.type]);
+      f.word(instr.kind);
+      f.word(instr.table);
+      f.word(instr.type);
+      break;
     case "i32.const":
     case "i64.const":
     case "f32.const":
@@ -321,15 +406,19 @@ function sexprInstr(instr: Instr): Sexpr {
     case "elem.drop":
     case "memory.init":
     case "data.drop":
-      return inlineOwnLine([instr.kind, instr.imm]);
+      f.word(instr.kind);
+      f.word(instr.imm);
+      break;
     case "select":
-      return inlineOwnLine([
-        instr.kind,
-        ...optArr(instr.type?.map(sexprValtype)),
-      ]);
+      f.word(instr.kind);
+      instr.type?.forEach((type) => printValType(type, f));
+      break;
     case "table.copy":
     case "table.init":
-      return inlineOwnLine([instr.kind, instr.imm1, instr.imm2]);
+      f.word(instr.kind);
+      f.word(instr.imm1);
+      f.word(instr.imm2);
+      break;
     case "i32.load":
     case "i64.load":
     case "f32.load":
@@ -355,124 +444,230 @@ function sexprInstr(instr: Instr): Sexpr {
     case "i64.store32":
     case "v128.load":
     case "v128.store":
-      return inlineOwnLine([instr.kind, sexprMemarg(instr.imm)]);
+      f.word(instr.kind);
+      printMemarg(instr.imm, f);
+      break;
   }
 }
 
 // modules
 
-function sexprType(type: FuncType): Sexpr {
-  return ["type", sexprFuncType(type)];
+function printType(type: FuncType, f: Formatter) {
+  f.sexpr(() => {
+    f.word("type");
+    printFuncType(type, f);
+  });
 }
 
-function sexprImport(import_: Import): Sexpr {
-  const desc = import_.desc;
-  let importDesc: Sexpr;
-  switch (desc.kind) {
-    case "func":
-      importDesc = ["type", desc.type];
-      break;
-    case "table":
-      importDesc = sexprTableType(desc.type);
-      break;
-    case "memory":
-      importDesc = sexprLimits(desc.type);
-      break;
-    case "global":
-      importDesc = sexprGlobalType(desc.type);
-      break;
-  }
+function printImport(import_: Import, f: Formatter) {
+  f.sexpr(() => {
+    f.word("import");
+    printString(import_.module, f);
+    printString(import_.name, f);
 
-  return [
-    "import",
-    sexprString(import_.module),
-    sexprString(import_.name),
-    [desc.kind, importDesc],
-  ];
+    const desc = import_.desc;
+    f.sexpr(() => {
+      f.word(desc.kind);
+      switch (desc.kind) {
+        case "func":
+          f.sexpr(() => {
+            f.word("type");
+            f.word(desc.type);
+          });
+          break;
+        case "table":
+          printTableType(desc.type, f);
+          break;
+        case "memory":
+          printLimits(desc.type, f);
+          break;
+        case "global":
+          printGlobalType(desc.type, f);
+          break;
+      }
+    });
+  });
 }
 
-function sexprFunction(func: Func): Sexpr {
-  return [
-    "func",
-    ...optArr(func._name),
-    ["type", func.type],
-    ...func.locals.map((local) => ["local", sexprValtype(local)]),
-    ...func.body.map((instr) => sexprInstr(instr)),
-  ];
+function printFunction(func: Func, f: Formatter) {
+  f.sexpr(() => {
+    f.word("func");
+    printId(func._name, f);
+
+    f.sexpr(() => {
+      f.word("type");
+      f.word(func.type);
+    });
+
+    f.breakIndent();
+
+    if (func.locals.length > 0) {
+      f.sexpr(() => {
+        f.word("local");
+
+        func.locals.forEach((local) => printValType(local, f));
+      });
+    }
+
+    f.linebreak();
+
+    printInstrBlock(func.body, f);
+  });
 }
 
-function sexprTable(table: Table): Sexpr {
-  return ["table", ...optArr(table._name), sexprTableType(table.type)];
+function printTable(table: Table, f: Formatter) {
+  f.sexpr(() => {
+    f.word("table");
+    printId(table._name, f);
+    printTableType(table.type, f);
+  });
 }
 
-function sexprMem(mem: Mem): Sexpr {
-  return ["memory", ...optArr(mem._name), sexprLimits(mem.type)];
+function printMem(mem: Mem, f: Formatter) {
+  f.sexpr(() => {
+    f.word("memory");
+    printId(mem._name, f);
+
+    printLimits(mem.type, f);
+  });
 }
 
-function sexprGlobal(global: Global): Sexpr {
-  return [
-    "global",
-    ...optArr(global._name),
-    sexprGlobalType(global.type),
-    ...global.init.map(sexprInstr),
-  ];
+function printGlobal(global: Global, f: Formatter) {
+  f.sexpr(() => {
+    f.word("global");
+    printId(global._name, f);
+
+    printGlobalType(global.type, f);
+
+    f.breakIndent();
+    printInstrBlock(global.init, f);
+  });
 }
-function sexprExport(export_: Export): Sexpr {
+
+function printExport(export_: Export, f: Formatter) {
   const desc = export_.desc;
-  let exportDesc;
-  switch (desc.kind) {
-    case "func":
-      exportDesc = ["func", desc.idx];
-      break;
-    case "table":
-      exportDesc = ["table", desc.idx];
-      break;
-    case "mem":
-      exportDesc = ["memory", desc.idx];
-      break;
-    case "global":
-      exportDesc = ["global", desc.idx];
-      break;
-  }
-  return ["export", export_.name, exportDesc];
+
+  f.sexpr(() => {
+    f.word("export");
+    printString(export_.name, f);
+
+    f.sexpr(() => {
+      f.word(desc.kind);
+      f.word(desc.idx);
+    });
+  });
 }
 
-function sexprStart(start: Start): Sexpr {
-  return ["start", start.func];
+function printStart(start: Start, f: Formatter) {
+  f.sexpr(() => {
+    f.word("start");
+    f.word(start.func);
+  });
 }
-function sexprElem(_elem: Elem): Sexpr {
+
+function printElem(_elem: Elem, f: Formatter) {
   todo();
 }
-function sexprData(data: Data): Sexpr {
+
+function printData(data: Data, f: Formatter) {
   let mode = data.mode;
-  if (mode.kind === "passive") {
-    return ["data", ...optArr(data._name), sexprBinaryString(data.init)];
-  } else {
-    return [
-      "data",
-      ...optArr(data._name),
-      ...optArr(mode.memory === 0 ? undefined : ["memory", mode.memory]),
-      ["offset", ...mode.offset.map(sexprInstr)],
-      sexprBinaryString(data.init),
-    ];
-  }
+
+  f.sexpr(() => {
+    f.word("data");
+    printId(data._name, f);
+
+    if (mode.kind === "active") {
+      const active: DatamodeActive = mode;
+      if (active.memory !== 0) {
+        f.sexpr(() => {
+          f.word("memory");
+          f.word(active.memory);
+        });
+      }
+
+      f.sexpr(() => {
+        if (active.offset.length === 1) {
+          printInstr(active.offset[0], f);
+        } else {
+          f.word("offset");
+          f.linebreak();
+          printInstrBlock(active.offset, f);
+        }
+      });
+    }
+
+    printBinaryString(data.init, f);
+  });
 }
 
-function sexprModule(module: Module): Sexpr {
-  return [
-    "module",
-    ...optArr(module._name),
-    ...module.types.map(sexprType),
-    ...module.imports.map(sexprImport),
-    ...module.funcs.map(sexprFunction),
-    ...module.tables.map(sexprTable),
-    ...module.mems.map(sexprMem),
-    ...module.globals.map(sexprGlobal),
-    ...module.exports.map(sexprExport),
-    ...optArr(module.start && sexprStart(module.start)),
-    ...module.elems.map(sexprElem),
-    ...module.datas.map(sexprData),
-  ];
+function printModule(module: Module, f: Formatter) {
+  f.sexpr(() => {
+    f.word("module");
+    printId(module._name, f);
+    f.breakIndent();
+
+    let hasAnything = false;
+    const breakIfAny = () => {
+      if (hasAnything) {
+        f.linebreak();
+      }
+      hasAnything = true;
+    };
+
+    module.types.forEach((type) => {
+      breakIfAny();
+      printType(type, f);
+    });
+
+    module.imports.forEach((import_) => {
+      breakIfAny();
+      printImport(import_, f);
+    });
+
+    module.funcs.forEach((func) => {
+      breakIfAny();
+      printFunction(func, f);
+    });
+
+    module.tables.forEach((table) => {
+      breakIfAny();
+      printTable(table, f);
+    });
+
+    module.mems.forEach((mem) => {
+      breakIfAny();
+      printMem(mem, f);
+    });
+
+    module.globals.forEach((global) => {
+      breakIfAny();
+      printGlobal(global, f);
+    });
+
+    module.exports.forEach((export_) => {
+      breakIfAny();
+      printExport(export_, f);
+    });
+
+    if (module.start) {
+      breakIfAny();
+      printStart(module.start, f);
+    }
+
+    module.elems.forEach((elem) => {
+      breakIfAny();
+      printElem(elem, f);
+    });
+
+    module.datas.forEach((data) => {
+      breakIfAny();
+      printData(data, f);
+    });
+
+    f.breakDedent();
+  });
+
+  f.linebreak();
 }
 
 function todo(): never {

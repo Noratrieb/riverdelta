@@ -19,11 +19,11 @@ export type Vectype = "v128";
 
 export type Reftype = "funcref" | "externref";
 
-export type Valtype = Numtype | Vectype | Reftype;
+export type ValType = Numtype | Vectype | Reftype;
 
-export type ResultType = Vec<Valtype>;
+export type ResultType = Vec<ValType>;
 
-export type Functype = {
+export type FuncType = {
   params: ResultType;
   returns: ResultType;
 };
@@ -42,7 +42,7 @@ export type TableType = {
 
 export type GlobalType = {
   mut: Mut;
-  type: Valtype;
+  type: ValType;
 };
 
 export type Mut = "const" | "var";
@@ -50,7 +50,7 @@ export type Mut = "const" | "var";
 export type Externtype =
   | {
       kind: "func";
-      type: Functype;
+      type: FuncType;
     }
   | {
       kind: "table";
@@ -152,7 +152,7 @@ export type ReferenceInstr =
 
 export type ParametricInstr =
   | { kind: "drop" }
-  | { kind: "select"; type?: Valtype[] };
+  | { kind: "select"; type?: ValType[] };
 
 // . variable
 
@@ -223,7 +223,7 @@ export type MemoryInstr =
 
 export type Blocktype =
   | { kind: "typeidx"; idx: TypeIdx }
-  | { kind: "valtype"; type?: Valtype };
+  | { kind: "valtype"; type?: ValType };
 
 export type ControlInstr =
   | {
@@ -232,7 +232,7 @@ export type ControlInstr =
   | {
       kind: "block" | "loop";
       type: Blocktype;
-      instr: Instr[];
+      instrs: Instr[];
     }
   | {
       kind: "if";
@@ -279,7 +279,7 @@ export type Expr = Instr[];
 // Modules
 
 export type Module = {
-  types: Vec<Functype>;
+  types: Vec<FuncType>;
   funcs: Vec<Func>;
   tables: Vec<Table>;
   mems: Vec<Mem>;
@@ -304,7 +304,7 @@ export type LabelIdx = u32;
 
 export type Func = {
   type: TypeIdx;
-  locals: Vec<Valtype>;
+  locals: Vec<ValType>;
   body: Expr;
   _name?: string;
 };
@@ -333,9 +333,8 @@ export type Data = {
   _name?: string;
 };
 
-export type Datamode =
-  | { kind: "passive" }
-  | { kind: "active"; memory: MemIdx; offset: Expr };
+export type DatamodeActive = { kind: "active"; memory: MemIdx; offset: Expr };
+export type Datamode = { kind: "passive" } | DatamodeActive;
 
 export type Start = {
   func: FuncIdx;
@@ -352,7 +351,7 @@ export type ExportDesc =
       idx: FuncIdx;
     }
   | { kind: "table"; idx: TableIdx }
-  | { kind: "mem"; idx: MemIdx }
+  | { kind: "memory"; idx: MemIdx }
   | { kind: "global"; idx: GlobalIdx };
 
 export type Import = {
