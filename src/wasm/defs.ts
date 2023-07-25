@@ -82,9 +82,9 @@ export type NumericInstr =
   | { kind: `f${BitWidth}.${FUnOp}` }
   | { kind: `i${BitWidth}.${IBinOp}` }
   | { kind: `f${BitWidth}.${FBinOp}` }
-  | { kind: ITestOp }
-  | { kind: IRelOp }
-  | { kind: FRelOp }
+  | { kind: `i${BitWidth}.${ITestOp}` }
+  | { kind: `i${BitWidth}.${IRelOp}` }
+  | { kind: `f${BitWidth}.${FRelOp}` }
   | { kind: `i${BitWidth}.extend8_s` }
   | { kind: `i${BitWidth}.extend16_s` }
   | { kind: `i64.extend32_s` }
@@ -191,8 +191,8 @@ export type TableInstr =
 // . memory
 
 export type MemArg = {
-  offset: u32;
-  align: u32;
+  offset?: u32;
+  align?: u32;
 };
 
 export type MemoryInstr =
@@ -289,7 +289,7 @@ export type Module = {
   start?: Start;
   imports: Vec<Import>;
   exports: Vec<Export>;
-  _name?: string,
+  _name?: string;
 };
 
 export type TypeIdx = u32;
@@ -306,20 +306,23 @@ export type Func = {
   type: TypeIdx;
   locals: Vec<Valtype>;
   body: Expr;
-  _name?: string,
+  _name?: string;
 };
 
 export type Table = {
   type: TableType;
+  _name?: string;
 };
 
 export type Mem = {
   type: MemType;
+  _name?: string;
 };
 
-export type GLobal = {
+export type Global = {
   type: GlobalType;
   init: Expr;
+  _name?: string;
 };
 
 export type Elem = unknown;
@@ -327,6 +330,7 @@ export type Elem = unknown;
 export type Data = {
   init: VecByte;
   mode: Datamode;
+  _name?: string;
 };
 
 export type Datamode =
@@ -348,7 +352,8 @@ export type ExportDesc =
       idx: FuncIdx;
     }
   | { kind: "table"; idx: TableIdx }
-  | { kind: "mem"; idx: MemIdx | { kind: "global"; idx: GlobalIdx } };
+  | { kind: "mem"; idx: MemIdx }
+  | { kind: "global"; idx: GlobalIdx };
 
 export type Import = {
   module: Name;
