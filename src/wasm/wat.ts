@@ -30,6 +30,20 @@ type Sexpr = string | number | Sexpr[] | { inline: Symbol; items: Sexpr[] };
 export function writeModuleWat(module: Module) {
   const sexprs = sexprModule(module);
   console.dir(sexprs, { depth: 100 });
+  console.log(printSexpr(sexprs));
+}
+
+function printSexpr(sexpr: Sexpr): string {
+  if (typeof sexpr === "string") {
+    return sexpr;
+  } else if (typeof sexpr === "number") {
+    return String(sexpr);
+  } else if (typeof sexpr === "object" && "inline" in sexpr) {
+    return sexpr.items.map(printSexpr).join(" ");
+  } else {
+    const all = sexpr.map(printSexpr).join(" ");
+    return `(${all})`;
+  }
 }
 
 function inline(items: Sexpr[]): Sexpr {
