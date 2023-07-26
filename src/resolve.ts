@@ -1,5 +1,7 @@
 import {
   Ast,
+  BUILTINS,
+  BuiltinName,
   DEFAULT_FOLDER,
   Folder,
   Identifier,
@@ -10,14 +12,7 @@ import {
 } from "./ast";
 import { CompilerError } from "./error";
 
-const BUILTINS = new Set<string>([
-  "print",
-  "String",
-  "Int",
-  "Bool",
-  "true",
-  "false",
-]);
+const BUILTIN_SET = new Set<string>(BUILTINS);
 
 export function resolve(ast: Ast): Ast {
   const items = new Map<string, number>();
@@ -40,7 +35,7 @@ export function resolve(ast: Ast): Ast {
     const popped = scopes.pop();
     if (popped !== expected) {
       throw new Error(
-        `Scopes corrupted, wanted to pop ${name} but popped ${popped}`
+        `Scopes corrupted, wanted to pop ${expected} but popped ${popped}`
       );
     }
   };
@@ -66,8 +61,8 @@ export function resolve(ast: Ast): Ast {
       };
     }
 
-    if (BUILTINS.has(ident.name)) {
-      return { kind: "builtin", name: ident.name };
+    if (BUILTIN_SET.has(ident.name)) {
+      return { kind: "builtin", name: ident.name as BuiltinName };
     }
 
     throw new CompilerError(`cannot find ${ident.name}`, ident.span);
@@ -88,7 +83,9 @@ export function resolve(ast: Ast): Ast {
 
           item.node.params.forEach(({ name }) => scopes.push(name));
           const body = superFoldExpr(item.node.body, this);
-          item.node.params.forEach(({ name }) => popScope(name));
+          const revParams = item.node.params.slice();
+          revParams.reverse();
+          revParams.forEach(({ name }) => popScope(name));
 
           return {
             kind: "function",

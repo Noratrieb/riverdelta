@@ -2,3 +2,4 @@
 /target
 *.tsbuildinfo
 /*-example.wat
+/out.wat

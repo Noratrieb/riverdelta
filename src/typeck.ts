@@ -147,7 +147,7 @@ export function typeck(ast: Ast): Ast {
           const returnType = item.node.returnType && {
             ...item.node.returnType,
             ty: fnTy.returnTy,
-          };          
+          };
           return {
             kind: "function",
             node: {
@@ -506,11 +506,11 @@ function checkBinary(expr: Expr & ExprBinary): Expr {
   let lhsTy = expr.lhs.ty!;
   let rhsTy = expr.rhs.ty!;
 
-  if (lhsTy.kind === "int" && rhsTy.kind === "int") {
-    return { ...expr, ty: TY_INT };
-  }
-
   if (COMPARISON_KINDS.includes(expr.binaryKind)) {
+    if (lhsTy.kind === "int" && rhsTy.kind === "int") {
+      return { ...expr, ty: TY_BOOL };
+    }
+
     if (lhsTy.kind === "string" && rhsTy.kind === "string") {
       return { ...expr, ty: TY_BOOL };
     }
@@ -520,6 +520,10 @@ function checkBinary(expr: Expr & ExprBinary): Expr {
         return { ...expr, ty: TY_BOOL };
       }
     }
+  }
+
+  if (lhsTy.kind === "int" && rhsTy.kind === "int") {
+    return { ...expr, ty: TY_INT };
   }
 
   if (LOGICAL_KINDS.includes(expr.binaryKind)) {
@@ -547,7 +551,7 @@ function checkUnary(expr: Expr & ExprUnary): Expr {
   }
 
   if (expr.unaryKind === "-" && rhsTy.kind == "int") {
-    return { ...expr, ty: rhsTy };
+    // Negating an unsigned integer is a bad idea.
   }
 
   throw new CompilerError(

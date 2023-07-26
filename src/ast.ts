@@ -155,8 +155,8 @@ const BINARY_KIND_PREC_CLASS = new Map<BinaryKind, number>([
 
 export function binaryExprPrecedenceClass(k: BinaryKind): number {
   const cls = BINARY_KIND_PREC_CLASS.get(k);
-  if (!cls) {
-    throw new Error(`Invalid binary kind: ${k}`);
+  if (cls === undefined) {
+    throw new Error(`Invalid binary kind: '${k}'`);
   }
   return cls;
 }
@@ -209,8 +209,19 @@ export type Resolution =
     }
   | {
       kind: "builtin";
-      name: string;
+      name: BuiltinName;
     };
+
+export const BUILTINS = [
+  "print",
+  "String",
+  "Int",
+  "Bool",
+  "true",
+  "false",
+] as const;
+
+export type BuiltinName = (typeof BUILTINS)[number];
 
 export type TyString = {
   kind: "string";
@@ -218,6 +229,7 @@ export type TyString = {
 
 export type TyInt = {
   kind: "int";
+  signed: boolean;
 };
 
 export type TyBool = {
@@ -259,7 +271,7 @@ export function tyIsUnit(ty: Ty): ty is TyUnit {
 export const TY_UNIT: Ty = { kind: "tuple", elems: [] };
 export const TY_STRING: Ty = { kind: "string" };
 export const TY_BOOL: Ty = { kind: "bool" };
-export const TY_INT: Ty = { kind: "int" };
+export const TY_INT: Ty = { kind: "int", signed: false };
 
 // folders
 

@@ -100,7 +100,7 @@ class Formatter {
   }
 }
 
-export function writeModuleWatToString(module: Module, color = true): string {
+export function writeModuleWatToString(module: Module, color = false): string {
   const parts: string[] = [];
   const writer = (s: string) => parts.push(s);
   printModule(module, new Formatter(writer, color));
