@@ -10,7 +10,8 @@ import fs from "fs";
 import { exec } from "child_process";
 
 const input = `
-function main(i: Int, j: Int): Bool = false == (i == 0);
+function main() = ();
+function test(i: Int, j: Int): Bool = false == (i == 0);
 `;
 
 function main() {

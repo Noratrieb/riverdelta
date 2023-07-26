@@ -102,7 +102,7 @@ export function typeck(ast: Ast): Ast {
       throw Error(`cycle computing type of #G${index}`);
     }
     itemTys.set(index, null);
-    const item = ast[index];
+    const item = ast.items[index];
     switch (item.kind) {
       case "function": {
         const args = item.node.params.map((arg) => lowerAstTy(arg.type));
@@ -168,7 +168,38 @@ export function typeck(ast: Ast): Ast {
     },
   };
 
-  return foldAst(ast, checker);
+  const typecked = foldAst(ast, checker);
+
+  const main = typecked.items.find((item) => {
+    if (item.kind === "function" && item.node.name === "main") {
+      const func = item.node;
+      if (func.returnType !== undefined) {
+        const ty = func.returnType.ty!;
+        if (ty.kind !== "tuple" || ty.elems.length !== 0) {
+          throw new CompilerError(
+            `\`main\` has an invalid signature. main takes no arguments and returns nothing`,
+            item.span
+          );
+        }
+      }
+
+      return true;
+    }
+    return false;
+  });
+
+  if (!main) {
+    throw new CompilerError(`\`main\` function not found`, {
+      start: 0,
+      end: 1,
+    });
+  }
+
+  typecked.typeckResults = {
+    main: main.id,
+  };
+
+  return typecked;
 }
 
 type TyVarRes =

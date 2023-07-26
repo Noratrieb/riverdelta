@@ -11,7 +11,7 @@ import {
 } from "./ast";
 
 export function printAst(ast: Ast): string {
-  return ast.map(printItem).join("\n");
+  return ast.items.map(printItem).join("\n");
 }
 
 function printItem(item: Item): string {

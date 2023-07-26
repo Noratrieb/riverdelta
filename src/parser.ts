@@ -29,7 +29,7 @@ export function parse(t: Token[]): Ast {
 
   const withIds = items.map((item, i) => ({ ...item, id: i }));
 
-  return withIds;
+  return { items: withIds };
 }
 
 function parseItem(t: Token[]): [Token[], Item] {

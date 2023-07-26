@@ -1,9 +1,10 @@
+import { AST } from "prettier";
 import { Ast, Expr, FunctionDef, Item, Ty, TyFn, varUnreachable } from "./ast";
 import * as wasm from "./wasm/defs";
 
 type StringifiedForMap<T> = string;
 
-type Context = {
+export type Context = {
   mod: wasm.Module;
   funcTypes: Map<StringifiedForMap<wasm.FuncType>, wasm.TypeIdx>;
   funcIndices: Map<number, wasm.FuncIdx>;
@@ -34,15 +35,29 @@ export function lower(ast: Ast): wasm.Module {
     exports: [],
   };
 
+  mod.mems.push({ _name: "memory", type: { min: 1024, max: 1024 } });
+  mod.exports.push({ name: "memory", desc: { kind: "memory", idx: 0 } });
+
+  mod.tables.push({
+    _name: "__indirect_function_table",
+    type: { limits: { min: 0, max: 0 }, reftype: "funcref" },
+  });
+  mod.exports.push({
+    name: "__indirect_function_table",
+    desc: { kind: "table", idx: 0 },
+  });
+
   const cx: Context = { mod, funcTypes: new Map(), funcIndices: new Map() };
 
-  ast.forEach((item) => {
+  ast.items.forEach((item) => {
     switch (item.kind) {
       case "function": {
         lowerFunc(cx, item, item.node);
       }
     }
   });
+
+  addRt(cx, ast);
 
   return mod;
 }
@@ -384,6 +399,26 @@ function todo(msg: string): never {
   throw new Error(`TODO: ${msg}`);
 }
 
-function exists<T>(val: T | undefined): val is T {
-  return val !== undefined;
+// Make the program runnable using wasi-preview-1
+function addRt(cx: Context, ast: Ast) {
+  const { mod } = cx;
+
+  console.log(cx.funcIndices);
+
+  const main = cx.funcIndices.get(ast.typeckResults!.main);
+  if (main === undefined) {
+    throw new Error(`main function (${main}) was not compiled.`);
+  }
+
+  const start: wasm.Func = {
+    _name: "_start",
+    type: internFuncType(cx, { params: [], returns: [] }),
+    locals: [],
+    body: [{ kind: "call", func: main }],
+  };
+
+  const startIdx = mod.funcs.length;
+  mod.funcs.push(start);
+
+  mod.exports.push({ name: "_start", desc: { kind: "func", idx: startIdx } });
 }

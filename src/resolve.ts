@@ -17,8 +17,8 @@ const BUILTIN_SET = new Set<string>(BUILTINS);
 export function resolve(ast: Ast): Ast {
   const items = new Map<string, number>();
 
-  for (let i = 0; i < ast.length; i++) {
-    const item = ast[i];
+  for (let i = 0; i < ast.items.length; i++) {
+    const item = ast.items[i];
     const existing = items.get(item.node.name);
     if (existing !== undefined) {
       throw new CompilerError(

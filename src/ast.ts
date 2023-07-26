@@ -1,6 +1,6 @@
 import { Span } from "./error";
 
-export type Ast = Item[];
+export type Ast = { items: Item[]; typeckResults?: TypeckResults };
 
 export type Identifier = {
   name: string;
@@ -273,6 +273,10 @@ export const TY_STRING: Ty = { kind: "string" };
 export const TY_BOOL: Ty = { kind: "bool" };
 export const TY_INT: Ty = { kind: "int", signed: false };
 
+export type TypeckResults = {
+  main: ItemId;
+};
+
 // folders
 
 export type FoldFn<T> = (value: T) => T;
@@ -300,7 +304,10 @@ export const DEFAULT_FOLDER: Folder = {
 };
 
 export function foldAst(ast: Ast, folder: Folder): Ast {
-  return ast.map((item) => folder.item(item));
+  return {
+    items: ast.items.map((item) => folder.item(item)),
+    typeckResults: ast.typeckResults,
+  };
 }
 
 export function superFoldItem(item: Item, folder: Folder): Item {
