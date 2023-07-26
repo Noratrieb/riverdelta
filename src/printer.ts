@@ -23,7 +23,7 @@ function printItem(item: Item): string {
 }
 
 function printFunction(func: FunctionDef): string {
-  const args = func.args
+  const args = func.params
     .map(({ name, type }) => `${name}: ${printType(type)}`)
     .join(", ");
   const ret = func.returnType ? `: ${printType(func.returnType)}` : "";

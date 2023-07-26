@@ -20,9 +20,10 @@ export type Item = ItemKind & {
 
 export type FunctionDef = {
   name: string;
-  args: FunctionArg[];
+  params: FunctionArg[];
   body: Expr;
   returnType?: Type;
+  ty?: TyFn;
 };
 
 export type FunctionArg = {
@@ -253,6 +254,11 @@ export function tyIsUnit(ty: Ty): ty is TyUnit {
   return ty.kind === "tuple" && ty.elems.length === 0;
 }
 
+export const TY_UNIT: Ty = { kind: "tuple", elems: [] };
+export const TY_STRING: Ty = { kind: "string" };
+export const TY_BOOL: Ty = { kind: "bool" };
+export const TY_INT: Ty = { kind: "int" };
+
 // folders
 
 export type FoldFn<T> = (value: T) => T;
@@ -279,14 +285,14 @@ export const DEFAULT_FOLDER: Folder = {
   },
 };
 
-export function fold_ast(ast: Ast, folder: Folder): Ast {
+export function foldAst(ast: Ast, folder: Folder): Ast {
   return ast.map((item) => folder.item(item));
 }
 
 export function superFoldItem(item: Item, folder: Folder): Item {
   switch (item.kind) {
     case "function": {
-      const args = item.node.args.map(({ name, type, span }) => ({
+      const args = item.node.params.map(({ name, type, span }) => ({
         name,
         type: folder.type(type),
         span,
@@ -297,7 +303,7 @@ export function superFoldItem(item: Item, folder: Folder): Item {
         span: item.span,
         node: {
           name: item.node.name,
-          args,
+          params: args,
           body: folder.expr(item.node.body),
           returnType: item.node.returnType && folder.type(item.node.returnType),
         },
@@ -398,4 +404,8 @@ export function superFoldType(type: Type, folder: Folder): Type {
       };
     }
   }
+}
+
+export function varUnreachable(): never {
+  throw new Error("Type variables must not occur after type checking");
 }

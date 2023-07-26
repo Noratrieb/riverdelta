@@ -76,7 +76,7 @@ function parseItem(t: Token[]): [Token[], Item] {
 
     const def: FunctionDef = {
       name: name.ident,
-      args,
+      params: args,
       returnType,
       body,
     };

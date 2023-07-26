@@ -1,28 +1,27 @@
 import {
   Ast,
+  binaryExprPrecedenceClass,
   COMPARISON_KINDS,
   DEFAULT_FOLDER,
   EQUALITY_KINDS,
   Expr,
   ExprBinary,
   ExprUnary,
+  foldAst,
   Folder,
   Identifier,
   LOGICAL_KINDS,
   Resolution,
   Ty,
+  TY_BOOL,
+  TY_INT,
+  TY_STRING,
+  TY_UNIT,
   TyFn,
   Type,
-  binaryExprPrecedenceClass,
-  fold_ast,
 } from "./ast";
 import { CompilerError, Span } from "./error";
 import { printTy } from "./printer";
-
-const TY_UNIT: Ty = { kind: "tuple", elems: [] };
-const TY_STRING: Ty = { kind: "string" };
-const TY_BOOL: Ty = { kind: "bool" };
-const TY_INT: Ty = { kind: "int" };
 
 function builtinAsTy(name: string, span: Span): Ty {
   switch (name) {
@@ -30,7 +29,7 @@ function builtinAsTy(name: string, span: Span): Ty {
       return TY_STRING;
     }
     case "Int": {
-      return TY_INT;
+      return TY_BOOL;
     }
     case "Bool": {
       return TY_BOOL;
@@ -105,7 +104,7 @@ export function typeck(ast: Ast): Ast {
     const item = ast[index];
     switch (item.kind) {
       case "function": {
-        const args = item.node.args.map((arg) => lowerAstTy(arg.type));
+        const args = item.node.params.map((arg) => lowerAstTy(arg.type));
         const returnTy: Ty = item.node.returnType
           ? lowerAstTy(item.node.returnType)
           : TY_UNIT;
@@ -153,7 +152,7 @@ export function typeck(ast: Ast): Ast {
             kind: "function",
             node: {
               name: item.node.name,
-              args: item.node.args.map((arg, i) => ({
+              params: item.node.params.map((arg, i) => ({
                 ...arg,
                 type: { ...arg.type, ty: fnTy.params[i] },
               })),
@@ -162,15 +161,14 @@ export function typeck(ast: Ast): Ast {
             },
             span: item.span,
             id: item.id,
+            ty: fnTy,
           };
         }
       }
     },
   };
 
-  const withTypes = fold_ast(ast, checker);
-
-  return withTypes;
+  return foldAst(ast, checker);
 }
 
 type TyVarRes =

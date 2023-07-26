@@ -4,7 +4,7 @@ import {
   Folder,
   Identifier,
   Resolution,
-  fold_ast,
+  foldAst,
   superFoldExpr,
   superFoldItem,
 } from "./ast";
@@ -78,7 +78,7 @@ export function resolve(ast: Ast): Ast {
     item(item) {
       switch (item.kind) {
         case "function": {
-          const args = item.node.args.map(({ name, span, type }) => ({
+          const params = item.node.params.map(({ name, span, type }) => ({
             name,
             span,
             type: this.type(type),
@@ -86,16 +86,16 @@ export function resolve(ast: Ast): Ast {
           const returnType =
             item.node.returnType && this.type(item.node.returnType);
 
-          item.node.args.forEach(({ name }) => scopes.push(name));
+          item.node.params.forEach(({ name }) => scopes.push(name));
           const body = superFoldExpr(item.node.body, this);
-          item.node.args.forEach(({ name }) => popScope(name));
+          item.node.params.forEach(({ name }) => popScope(name));
 
           return {
             kind: "function",
             span: item.span,
             node: {
               name: item.node.name,
-              args,
+              params,
               returnType,
               body,
             },
@@ -132,7 +132,7 @@ export function resolve(ast: Ast): Ast {
     },
   };
 
-  const resolved = fold_ast(ast, resolver);
+  const resolved = foldAst(ast, resolver);
 
   return resolved;
 }
