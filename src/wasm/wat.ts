@@ -74,6 +74,20 @@ class Formatter {
     this.word(word, chalk.green);
   }
 
+  controlFlow(word: string) {
+    this.word(word, chalk.magenta);
+  }
+
+  instruction(kind: string) {
+    if (kind.includes(".")) {
+      const [type, op] = kind.split(".");
+      const word = `${this.getColor(chalk.green)(type)}.${op}`;
+      this.word(word);
+    } else {
+      this.word(kind);
+    }
+  }
+
   word(word: string | number, color: (s: string) => string = identity) {
     const last = this.wordsInSexpr.length - 1;
     if (this.wordsInSexpr[last] > 0 && !this.freshLinebreak) {
@@ -97,6 +111,10 @@ class Formatter {
     this.print(")");
     this.freshLinebreak = false;
     this.wordsInSexpr.pop();
+  }
+
+  getColor(color: (s: string) => string): (s: string) => string {
+    return this.color ? color : identity;
   }
 }
 
@@ -209,28 +227,28 @@ function printInstr(instr: Instr, f: Formatter) {
   switch (instr.kind) {
     case "block":
     case "loop":
-      f.word(instr.kind);
+      f.controlFlow(instr.kind);
       printBlockType(instr.type, f);
       f.breakIndent();
       printInstrBlock(instr.instrs, f);
-      f.word("end");
+      f.controlFlow("end");
       break;
     case "if":
       if (instr.else.length === 0) {
-        f.word(instr.kind);
+        f.controlFlow(instr.kind);
         printBlockType(instr.type, f);
         f.breakIndent();
         printInstrBlock(instr.then, f);
-        f.word("end");
+        f.controlFlow("end");
       } else {
-        f.word(instr.kind);
+        f.controlFlow(instr.kind);
         printBlockType(instr.type, f);
         f.breakIndent();
         printInstrBlock(instr.then, f);
-        f.word("else");
+        f.controlFlow("else");
         f.breakIndent();
         printInstrBlock(instr.else, f);
-        f.word("end");
+        f.controlFlow("end");
       }
       break;
     case "unreachable":
@@ -388,24 +406,24 @@ function printInstr(instr: Instr, f: Formatter) {
     case "i64.extend8_s":
     case "i64.extend16_s":
     case "i64.extend32_s":
-      f.word(instr.kind);
+      f.instruction(instr.kind);
       break;
     case "br":
     case "br_if":
-      f.word(instr.kind);
+      f.controlFlow(instr.kind);
       f.word(instr.label);
       break;
     case "br_table":
-      f.word(instr.kind);
+      f.controlFlow(instr.kind);
       instr.labels.forEach((label) => f.word(label));
       f.word(instr.label);
       break;
     case "call":
-      f.word(instr.kind);
+      f.controlFlow(instr.kind);
       f.word(instr.func);
       break;
     case "call_indirect":
-      f.word(instr.kind);
+      f.controlFlow(instr.kind);
       f.word(instr.table);
       f.word(instr.type);
       break;
@@ -428,7 +446,7 @@ function printInstr(instr: Instr, f: Formatter) {
     case "elem.drop":
     case "memory.init":
     case "data.drop":
-      f.word(instr.kind);
+      f.instruction(instr.kind);
       f.word(instr.imm);
       break;
     case "select":
@@ -437,7 +455,7 @@ function printInstr(instr: Instr, f: Formatter) {
       break;
     case "table.copy":
     case "table.init":
-      f.word(instr.kind);
+      f.instruction(instr.kind);
       f.word(instr.imm1);
       f.word(instr.imm2);
       break;
@@ -466,7 +484,7 @@ function printInstr(instr: Instr, f: Formatter) {
     case "i64.store32":
     case "v128.load":
     case "v128.store":
-      f.word(instr.kind);
+      f.instruction(instr.kind);
       printMemarg(instr.imm, f);
       break;
   }
