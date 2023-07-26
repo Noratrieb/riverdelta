@@ -403,8 +403,6 @@ function todo(msg: string): never {
 function addRt(cx: Context, ast: Ast) {
   const { mod } = cx;
 
-  console.log(cx.funcIndices);
-
   const main = cx.funcIndices.get(ast.typeckResults!.main);
   if (main === undefined) {
     throw new Error(`main function (${main}) was not compiled.`);
