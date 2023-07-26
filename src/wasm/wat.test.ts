@@ -79,7 +79,7 @@ const EXAMPLE_MODULE: Module = {
 };
 
 it("should print a Wasm module with the correct formatting", () => {
-  const wat = writeModuleWatToString(EXAMPLE_MODULE);
+  const wat = writeModuleWatToString(EXAMPLE_MODULE, false);
 
   expect(wat).toMatchInlineSnapshot(`
     "(module $example

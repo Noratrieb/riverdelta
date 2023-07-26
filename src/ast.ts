@@ -8,6 +8,8 @@ export type Identifier = {
   res?: Resolution;
 };
 
+export type ItemId = number;
+
 export type ItemKind = {
   kind: "function";
   node: FunctionDef;
@@ -15,7 +17,7 @@ export type ItemKind = {
 
 export type Item = ItemKind & {
   span: Span;
-  id: number;
+  id: ItemId;
 };
 
 export type FunctionDef = {

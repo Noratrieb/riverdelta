@@ -10,6 +10,7 @@ import {
   foldAst,
   Folder,
   Identifier,
+  ItemId,
   LOGICAL_KINDS,
   Resolution,
   Ty,
@@ -29,7 +30,7 @@ function builtinAsTy(name: string, span: Span): Ty {
       return TY_STRING;
     }
     case "Int": {
-      return TY_BOOL;
+      return TY_INT;
     }
     case "Bool": {
       return TY_BOOL;
@@ -92,7 +93,7 @@ function lowerAstTyBase(
 
 export function typeck(ast: Ast): Ast {
   const itemTys = new Map<number, Ty | null>();
-  function typeOfItem(index: number): Ty {
+  function typeOfItem(index: ItemId): Ty {
     const ty = itemTys.get(index);
     if (ty) {
       return ty;
@@ -146,8 +147,7 @@ export function typeck(ast: Ast): Ast {
           const returnType = item.node.returnType && {
             ...item.node.returnType,
             ty: fnTy.returnTy,
-          };
-
+          };          
           return {
             kind: "function",
             node: {
@@ -158,10 +158,10 @@ export function typeck(ast: Ast): Ast {
               })),
               body,
               returnType,
+              ty: fnTy,
             },
             span: item.span,
             id: item.id,
-            ty: fnTy,
           };
         }
       }

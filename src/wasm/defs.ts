@@ -3,7 +3,6 @@
 
 // Base types.
 
-export type Vec<T> = T[];
 export type u32 = number;
 export type u64 = number;
 export type f32 = number;
@@ -21,7 +20,7 @@ export type Reftype = "funcref" | "externref";
 
 export type ValType = Numtype | Vectype | Reftype;
 
-export type ResultType = Vec<ValType>;
+export type ResultType = ValType[];
 
 export type FuncType = {
   params: ResultType;
@@ -279,16 +278,16 @@ export type Expr = Instr[];
 // Modules
 
 export type Module = {
-  types: Vec<FuncType>;
-  funcs: Vec<Func>;
-  tables: Vec<Table>;
-  mems: Vec<Mem>;
-  globals: Vec<Global>;
-  elems: Vec<Elem>;
-  datas: Vec<Data>;
+  types: FuncType[];
+  funcs: Func[];
+  tables: Table[];
+  mems: Mem[];
+  globals: Global[];
+  elems: Elem[];
+  datas: Data[];
   start?: Start;
-  imports: Vec<Import>;
-  exports: Vec<Export>;
+  imports: Import[];
+  exports: Export[];
   _name?: string;
 };
 
@@ -304,7 +303,7 @@ export type LabelIdx = u32;
 
 export type Func = {
   type: TypeIdx;
-  locals: Vec<ValType>;
+  locals: ValType[];
   body: Expr;
   _name?: string;
 };

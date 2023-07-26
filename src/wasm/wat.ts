@@ -1,6 +1,7 @@
 // This module converts the Wasm definitions to the WAT
 // WebAssembly text format for easier debugging and inspection.
 
+import chalk from "chalk";
 import {
   Blocktype,
   Data,
@@ -23,17 +24,21 @@ import {
   ValType,
 } from "./defs";
 
+const identity = (s: string) => s;
+
 class Formatter {
   print: (chunk: string) => void;
   indentation: number;
   wordsInSexpr: number[];
   freshLinebreak: boolean;
+  color: boolean;
 
-  constructor(print: (chunk: string) => void) {
+  constructor(print: (chunk: string) => void, color = true) {
     this.print = print;
     this.indentation = 0;
     this.wordsInSexpr = [];
     this.freshLinebreak = false;
+    this.color = color;
   }
 
   linebreak() {
@@ -47,6 +52,11 @@ class Formatter {
   }
   breakDedent() {
     this.indentation--;
+    if (this.indentation < 0) {
+      throw new Error(
+        "Cannot dedent from 0 indents, there are more dedents than indents"
+      );
+    }
     this.linebreak();
   }
 
@@ -56,14 +66,26 @@ class Formatter {
     this.endSexpr();
   }
 
-  word(word: string | number) {
+  keyword(word: string) {
+    this.word(word, chalk.blue);
+  }
+
+  type(word: string | number) {
+    this.word(word, chalk.green);
+  }
+
+  word(word: string | number, color: (s: string) => string = identity) {
     const last = this.wordsInSexpr.length - 1;
     if (this.wordsInSexpr[last] > 0 && !this.freshLinebreak) {
       // The first word hugs the left parenthesis.
       this.print(" ");
     }
     this.freshLinebreak = false;
-    this.print(String(word));
+    if (this.color) {
+      this.print(color(String(word)));
+    } else {
+      this.print(String(word));
+    }
     this.wordsInSexpr[last]++;
   }
 
@@ -78,10 +100,10 @@ class Formatter {
   }
 }
 
-export function writeModuleWatToString(module: Module): string {
+export function writeModuleWatToString(module: Module, color = true): string {
   const parts: string[] = [];
   const writer = (s: string) => parts.push(s);
-  printModule(module, new Formatter(writer));
+  printModule(module, new Formatter(writer, color));
   return parts.join("");
 }
 
@@ -108,19 +130,19 @@ function printId(id: string | undefined, f: Formatter) {
 // types
 
 function printValType(type: ValType, f: Formatter) {
-  f.word(type);
+  f.type(type);
 }
 
 function printFuncType(type: FuncType, f: Formatter) {
   f.sexpr(() => {
-    f.word("func");
+    f.keyword("func");
     f.sexpr(() => {
-      f.word("param");
-      type.params.forEach(f.word.bind(f));
+      f.keyword("param");
+      type.params.forEach((param) => printValType(param, f));
     });
     f.sexpr(() => {
-      f.word("result");
-      type.returns.forEach(f.word.bind(f));
+      f.keyword("result");
+      type.returns.forEach((type) => printValType(type, f));
     });
   });
 }
@@ -132,7 +154,7 @@ function printLimits(limits: Limits, f: Formatter) {
 
 function printTableType(type: TableType, f: Formatter) {
   printLimits(type.limits, f);
-  f.word(type.reftype);
+  printValType(type.reftype, f);
 }
 
 function printGlobalType(type: GlobalType, f: Formatter) {
@@ -140,7 +162,7 @@ function printGlobalType(type: GlobalType, f: Formatter) {
     printValType(type.type, f);
   } else {
     f.sexpr(() => {
-      f.word("mut");
+      f.keyword("mut");
       printValType(type.type, f);
     });
   }
@@ -150,9 +172,9 @@ function printGlobalType(type: GlobalType, f: Formatter) {
 
 function printBlockType(type: Blocktype, f: Formatter) {
   f.sexpr(() => {
-    f.word("type");
+    f.keyword("type");
     if (type.kind === "typeidx") {
-      f.word(type.idx);
+      f.type(type.idx);
     } else if (type.type !== undefined) {
       printValType(type.type, f);
     }
@@ -375,7 +397,7 @@ function printInstr(instr: Instr, f: Formatter) {
       break;
     case "br_table":
       f.word(instr.kind);
-      instr.labels.forEach(f.word.bind(f));
+      instr.labels.forEach((label) => f.word(label));
       f.word(instr.label);
       break;
     case "call":
@@ -454,14 +476,14 @@ function printInstr(instr: Instr, f: Formatter) {
 
 function printType(type: FuncType, f: Formatter) {
   f.sexpr(() => {
-    f.word("type");
+    f.keyword("type");
     printFuncType(type, f);
   });
 }
 
 function printImport(import_: Import, f: Formatter) {
   f.sexpr(() => {
-    f.word("import");
+    f.keyword("import");
     printString(import_.module, f);
     printString(import_.name, f);
 
@@ -471,8 +493,8 @@ function printImport(import_: Import, f: Formatter) {
       switch (desc.kind) {
         case "func":
           f.sexpr(() => {
-            f.word("type");
-            f.word(desc.type);
+            f.keyword("type");
+            f.type(desc.type);
           });
           break;
         case "table":
@@ -491,33 +513,35 @@ function printImport(import_: Import, f: Formatter) {
 
 function printFunction(func: Func, f: Formatter) {
   f.sexpr(() => {
-    f.word("func");
+    f.keyword("func");
     printId(func._name, f);
 
     f.sexpr(() => {
-      f.word("type");
-      f.word(func.type);
+      f.keyword("type");
+      f.type(func.type);
     });
 
-    f.breakIndent();
+    if (func.locals.length > 0 || func.body.length > 0) {
+      f.breakIndent();
+    }
 
     if (func.locals.length > 0) {
       f.sexpr(() => {
-        f.word("local");
+        f.keyword("local");
 
         func.locals.forEach((local) => printValType(local, f));
       });
+      f.linebreak();
     }
-
-    f.linebreak();
-
-    printInstrBlock(func.body, f);
+    if (func.body.length > 0) {
+      printInstrBlock(func.body, f);
+    }
   });
 }
 
 function printTable(table: Table, f: Formatter) {
   f.sexpr(() => {
-    f.word("table");
+    f.keyword("table");
     printId(table._name, f);
     printTableType(table.type, f);
   });
@@ -525,7 +549,7 @@ function printTable(table: Table, f: Formatter) {
 
 function printMem(mem: Mem, f: Formatter) {
   f.sexpr(() => {
-    f.word("memory");
+    f.keyword("memory");
     printId(mem._name, f);
 
     printLimits(mem.type, f);
@@ -534,7 +558,7 @@ function printMem(mem: Mem, f: Formatter) {
 
 function printGlobal(global: Global, f: Formatter) {
   f.sexpr(() => {
-    f.word("global");
+    f.keyword("global");
     printId(global._name, f);
 
     printGlobalType(global.type, f);
@@ -548,7 +572,7 @@ function printExport(export_: Export, f: Formatter) {
   const desc = export_.desc;
 
   f.sexpr(() => {
-    f.word("export");
+    f.keyword("export");
     printString(export_.name, f);
 
     f.sexpr(() => {
@@ -560,7 +584,7 @@ function printExport(export_: Export, f: Formatter) {
 
 function printStart(start: Start, f: Formatter) {
   f.sexpr(() => {
-    f.word("start");
+    f.keyword("start");
     f.word(start.func);
   });
 }
@@ -573,14 +597,14 @@ function printData(data: Data, f: Formatter) {
   let mode = data.mode;
 
   f.sexpr(() => {
-    f.word("data");
+    f.keyword("data");
     printId(data._name, f);
 
     if (mode.kind === "active") {
       const active: DatamodeActive = mode;
       if (active.memory !== 0) {
         f.sexpr(() => {
-          f.word("memory");
+          f.keyword("memory");
           f.word(active.memory);
         });
       }
@@ -589,7 +613,7 @@ function printData(data: Data, f: Formatter) {
         if (active.offset.length === 1) {
           printInstr(active.offset[0], f);
         } else {
-          f.word("offset");
+          f.keyword("offset");
           f.linebreak();
           printInstrBlock(active.offset, f);
         }
@@ -602,7 +626,7 @@ function printData(data: Data, f: Formatter) {
 
 function printModule(module: Module, f: Formatter) {
   f.sexpr(() => {
-    f.word("module");
+    f.keyword("module");
     printId(module._name, f);
     f.breakIndent();
 
