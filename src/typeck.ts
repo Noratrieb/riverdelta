@@ -253,19 +253,138 @@ type TyVarRes =
       kind: "unknown";
     };
 
+export class InferContext {
+  tyVars: TyVarRes[] = [];
+
+  public newVar(): Ty {
+    const index = this.tyVars.length;
+    this.tyVars.push({ kind: "unknown" });
+    return { kind: "var", index };
+  }
+
+  private tryResolveVar(variable: number): Ty | undefined {
+    const varRes = this.tyVars[variable];
+    switch (varRes.kind) {
+      case "final": {
+        return varRes.ty;
+      }
+      case "unified": {
+        const ty = this.tryResolveVar(varRes.index);
+        if (ty) {
+          this.tyVars[variable] = { kind: "final", ty };
+          return ty;
+        } else {
+          return undefined;
+        }
+      }
+      case "unknown": {
+        return undefined;
+      }
+    }
+  }
+
+  /**
+   * Try to constrain a type variable to be of a specific type.
+   * INVARIANT: Both sides must not be of res "final", use resolveIfPossible
+   * before calling this.
+   */
+  private constrainVar(variable: number, ty: Ty) {
+    let root = variable;
+    let nextVar;
+    while ((nextVar = this.tyVars[root]).kind === "unified") {
+      root = nextVar.index;
+    }
+
+    if (ty.kind === "var") {
+      // Point the lhs to the rhs.
+      this.tyVars[root] = { kind: "unified", index: ty.index };
+    } else {
+      this.tyVars[root] = { kind: "final", ty };
+    }
+  }
+
+  public resolveIfPossible(ty: Ty): Ty {
+    if (ty.kind === "var") {
+      return this.tryResolveVar(ty.index) ?? ty;
+    } else {
+      return ty;
+    }
+  }
+
+  public assign(lhs_: Ty, rhs_: Ty, span: Span) {
+    const lhs = this.resolveIfPossible(lhs_);
+    const rhs = this.resolveIfPossible(rhs_);
+
+    if (lhs.kind === "var") {
+      this.constrainVar(lhs.index, rhs);
+      return;
+    }
+    if (rhs.kind === "var") {
+      this.constrainVar(rhs.index, lhs);
+      return;
+    }
+    // type variable handling here
+
+    switch (lhs.kind) {
+      case "string": {
+        if (rhs.kind === "string") return;
+        break;
+      }
+      case "int": {
+        if (rhs.kind === "int") return;
+        break;
+      }
+      case "bool": {
+        if (rhs.kind === "bool") return;
+        break;
+      }
+      case "list": {
+        if (rhs.kind === "list") {
+          this.assign(lhs.elem, rhs.elem, span);
+          return;
+        }
+        break;
+      }
+      case "tuple": {
+        if (rhs.kind === "tuple" && lhs.elems.length === rhs.elems.length) {
+          lhs.elems.forEach((lhs, i) => this.assign(lhs, rhs.elems[i], span));
+          return;
+        }
+        break;
+      }
+      case "fn": {
+        if (rhs.kind === "fn" && lhs.params.length === rhs.params.length) {
+          // swapping because of contravariance in the future maybe
+          lhs.params.forEach((lhs, i) => this.assign(rhs.params[i], lhs, span));
+
+          this.assign(lhs.returnTy, rhs.returnTy, span);
+
+          return;
+        }
+        break;
+      }
+      case "struct": {
+        if (rhs.kind === "struct" && lhs.name === rhs.name) {
+          return;
+        }
+      }
+    }
+
+    throw new CompilerError(
+      `cannot assign ${printTy(rhs)} to ${printTy(lhs)}`,
+      span
+    );
+  }
+}
+
 export function checkBody(
   body: Expr,
   fnTy: TyFn,
   typeOfItem: (index: number) => Ty
 ): Expr {
   const localTys = [...fnTy.params];
-  const tyVars: TyVarRes[] = [];
 
-  function newVar(): Ty {
-    const index = tyVars.length;
-    tyVars.push({ kind: "unknown" });
-    return { kind: "var", index };
-  }
+  const infcx = new InferContext();
 
   function typeOf(res: Resolution, span: Span): Ty {
     switch (res.kind) {
@@ -292,120 +411,6 @@ export function checkBody(
     );
   }
 
-  function tryResolveVar(variable: number): Ty | undefined {
-    const varRes = tyVars[variable];
-    switch (varRes.kind) {
-      case "final": {
-        return varRes.ty;
-      }
-      case "unified": {
-        const ty = tryResolveVar(varRes.index);
-        if (ty) {
-          tyVars[variable] = { kind: "final", ty };
-          return ty;
-        } else {
-          return undefined;
-        }
-      }
-      case "unknown": {
-        return undefined;
-      }
-    }
-  }
-
-  /**
-   * Try to constrain a type variable to be of a specific type.
-   * INVARIANT: Both sides must not be of res "final", use resolveIfPossible
-   * before calling this.
-   */
-  function constrainVar(variable: number, ty: Ty) {
-    let root = variable;
-    let nextVar;
-    while ((nextVar = tyVars[root]).kind === "unified") {
-      root = nextVar.index;
-    }
-
-    if (ty.kind === "var") {
-      // Point the lhs to the rhs.
-      tyVars[root] = { kind: "unified", index: ty.index };
-    } else {
-      tyVars[root] = { kind: "final", ty };
-    }
-  }
-
-  function resolveIfPossible(ty: Ty): Ty {
-    if (ty.kind === "var") {
-      return tryResolveVar(ty.index) ?? ty;
-    } else {
-      return ty;
-    }
-  }
-
-  function assign(lhs_: Ty, rhs_: Ty, span: Span) {
-    const lhs = resolveIfPossible(lhs_);
-    const rhs = resolveIfPossible(rhs_);
-
-    if (lhs.kind === "var") {
-      constrainVar(lhs.index, rhs);
-      return;
-    }
-    if (rhs.kind === "var") {
-      constrainVar(rhs.index, lhs);
-      return;
-    }
-    // type variable handling here
-
-    switch (lhs.kind) {
-      case "string": {
-        if (rhs.kind === "string") return;
-        break;
-      }
-      case "int": {
-        if (rhs.kind === "int") return;
-        break;
-      }
-      case "bool": {
-        if (rhs.kind === "bool") return;
-        break;
-      }
-      case "list": {
-        if (rhs.kind === "list") {
-          assign(lhs.elem, rhs.elem, span);
-          return;
-        }
-        break;
-      }
-      case "tuple": {
-        if (rhs.kind === "tuple" && lhs.elems.length === rhs.elems.length) {
-          lhs.elems.forEach((lhs, i) => assign(lhs, rhs.elems[i], span));
-          return;
-        }
-        break;
-      }
-      case "fn": {
-        if (rhs.kind === "fn" && lhs.params.length === rhs.params.length) {
-          // swapping because of contravariance in the future maybe
-          lhs.params.forEach((lhs, i) => assign(rhs.params[i], lhs, span));
-
-          assign(lhs.returnTy, rhs.returnTy, span);
-
-          return;
-        }
-        break;
-      }
-      case "struct": {
-        if (rhs.kind === "struct" && lhs.name === rhs.name) {
-          return;
-        }
-      }
-    }
-
-    throw new CompilerError(
-      `cannot assign ${printTy(rhs)} to ${printTy(lhs)}`,
-      span
-    );
-  }
-
   const checker: Folder = {
     ...DEFAULT_FOLDER,
     expr(expr) {
@@ -415,10 +420,10 @@ export function checkBody(
         }
         case "let": {
           const loweredBindingTy = expr.type && lowerAstTy(expr.type);
-          let bindingTy = loweredBindingTy ? loweredBindingTy : newVar();
+          let bindingTy = loweredBindingTy ? loweredBindingTy : infcx.newVar();
 
           const rhs = this.expr(expr.rhs);
-          assign(bindingTy, rhs.ty!, expr.span);
+          infcx.assign(bindingTy, rhs.ty!, expr.span);
 
           localTys.push(bindingTy);
           const after = this.expr(expr.after);
@@ -474,19 +479,19 @@ export function checkBody(
           const lhs = this.expr(expr.lhs);
           const rhs = this.expr(expr.rhs);
 
-          lhs.ty = resolveIfPossible(lhs.ty!);
-          rhs.ty = resolveIfPossible(rhs.ty!);
+          lhs.ty = infcx.resolveIfPossible(lhs.ty!);
+          rhs.ty = infcx.resolveIfPossible(rhs.ty!);
 
           return checkBinary({ ...expr, lhs, rhs });
         }
         case "unary": {
           const rhs = this.expr(expr.rhs);
-          rhs.ty = resolveIfPossible(rhs.ty!);
+          rhs.ty = infcx.resolveIfPossible(rhs.ty!);
           return checkUnary({ ...expr, rhs });
         }
         case "call": {
           const lhs = this.expr(expr.lhs);
-          lhs.ty = resolveIfPossible(lhs.ty!);
+          lhs.ty = infcx.resolveIfPossible(lhs.ty!);
           const lhsTy = lhs.ty!;
           if (lhsTy.kind !== "fn") {
             throw new CompilerError(
@@ -506,7 +511,7 @@ export function checkBody(
             }
             const arg = checker.expr(args[i]);
 
-            assign(param, arg.ty!, args[i].span);
+            infcx.assign(param, arg.ty!, args[i].span);
           });
 
           if (args.length > lhsTy.params.length) {
@@ -523,14 +528,14 @@ export function checkBody(
           const then = this.expr(expr.then);
           const elsePart = expr.else && this.expr(expr.else);
 
-          assign(TY_BOOL, cond.ty!, cond.span);
+          infcx.assign(TY_BOOL, cond.ty!, cond.span);
 
           let ty;
           if (elsePart) {
-            assign(then.ty!, elsePart.ty!, elsePart.span);
+            infcx.assign(then.ty!, elsePart.ty!, elsePart.span);
             ty = then.ty!;
           } else {
-            assign(TY_UNIT, then.ty!, then.span);
+            infcx.assign(TY_UNIT, then.ty!, then.span);
           }
 
           return { ...expr, cond, then, else: elsePart, ty };
@@ -560,7 +565,7 @@ export function checkBody(
                 name.span
               );
             }
-            assign(fieldTy[1], field.ty!, field.span);
+            infcx.assign(fieldTy[1], field.ty!, field.span);
             assignedFields.add(name.name);
           });
 
@@ -585,12 +590,12 @@ export function checkBody(
 
   const checked = checker.expr(body);
 
-  assign(fnTy.returnTy, checked.ty!, body.span);
+  infcx.assign(fnTy.returnTy, checked.ty!, body.span);
 
   const resolver: Folder = {
     ...DEFAULT_FOLDER,
     expr(expr) {
-      const ty = resolveIfPossible(expr.ty!);
+      const ty = infcx.resolveIfPossible(expr.ty!);
       if (!ty) {
         throw new CompilerError("cannot infer type", expr.span);
       }

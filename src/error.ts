@@ -10,6 +10,8 @@ export function spanMerge(a: Span, b: Span): Span {
   };
 }
 
+export const DUMMY_SPAN = { start: 0, end: 0 };
+
 export class CompilerError extends Error {
   msg: string;
   span: Span;
