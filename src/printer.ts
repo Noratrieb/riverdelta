@@ -126,6 +126,11 @@ function printExpr(expr: Expr, indent: number): string {
         indent + 1
       )}${elsePart}`;
     }
+    case "structLiteral": {
+      return `${printIdent(expr.name)} { ${expr.fields
+        .map(([name, expr]) => `${name.name}: ${printExpr(expr, indent + 1)}`)
+        .join(", ")} }`;
+    }
   }
 }
 

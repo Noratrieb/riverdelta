@@ -84,15 +84,16 @@ function lowerAstTyBase(
 export function typeck(ast: Ast): Ast {
   const itemTys = new Map<number, Ty | null>();
   function typeOfItem(index: ItemId): Ty {
+    const item = ast.items[index];
+
     const ty = itemTys.get(index);
     if (ty) {
       return ty;
     }
     if (ty === null) {
-      throw Error(`cycle computing type of #G${index}`);
+      throw new CompilerError(`cycle computing type of #G${index}`, item.span);
     }
     itemTys.set(index, null);
-    const item = ast.items[index];
     switch (item.kind) {
       case "function": {
         const args = item.node.params.map((arg) => lowerAstTy(arg.type));
@@ -100,15 +101,28 @@ export function typeck(ast: Ast): Ast {
           ? lowerAstTy(item.node.returnType)
           : TY_UNIT;
 
-        return { kind: "fn", params: args, returnTy };
+        const ty: Ty = { kind: "fn", params: args, returnTy };
+        itemTys.set(item.id, ty);
+        return ty;
       }
       case "type": {
+        const ty: Ty = {
+          kind: "struct",
+          name: item.node.name,
+          fields: [
+            /*dummy*/
+          ],
+        };
+
+        itemTys.set(item.id, ty);
+
         const fields = item.node.fields.map<[string, Ty]>(({ name, type }) => [
           name.name,
           lowerAstTy(type),
         ]);
 
-        return { kind: "struct", name: item.node.name, fields };
+        ty.fields = fields;
+        return ty;
       }
     }
   }
@@ -379,6 +393,11 @@ export function checkBody(
         }
         break;
       }
+      case "struct": {
+        if (rhs.kind === "struct" && lhs.name === rhs.name) {
+          return;
+        }
+      }
     }
 
     throw new CompilerError(
@@ -515,6 +534,50 @@ export function checkBody(
           }
 
           return { ...expr, cond, then, else: elsePart, ty };
+        }
+        case "structLiteral": {
+          const fields = expr.fields.map<[Identifier, Expr]>(([name, expr]) => [
+            name,
+            this.expr(expr),
+          ]);
+
+          const structTy = typeOf(expr.name.res!, expr.name.span);
+
+          if (structTy.kind !== "struct") {
+            throw new CompilerError(
+              `struct literal is only allowed for struct types`,
+              expr.span
+            );
+          }
+
+          const assignedFields = new Set();
+
+          fields.forEach(([name, field], i) => {
+            const fieldTy = structTy.fields.find((def) => def[0] === name.name);
+            if (!fieldTy) {
+              throw new CompilerError(
+                `field ${name.name} doesn't exist on type ${expr.name.name}`,
+                name.span
+              );
+            }
+            assign(fieldTy[1], field.ty!, field.span);
+            assignedFields.add(name.name);
+          });
+
+          const missing: string[] = [];
+          structTy.fields.forEach(([name]) => {
+            if (!assignedFields.has(name)) {
+              missing.push(name);
+            }
+          });
+          if (missing.length > 0) {
+            throw new CompilerError(
+              `missing fields in literal: ${missing.join(", ")}`,
+              expr.span
+            );
+          }
+
+          return { ...expr, fields, ty: structTy };
         }
       }
     },

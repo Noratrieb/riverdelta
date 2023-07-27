@@ -10,6 +10,8 @@ export type DatalessToken =
   | "type"
   | "("
   | ")"
+  | "{"
+  | "}"
   | "["
   | "]"
   | ";"
@@ -54,6 +56,8 @@ export type BaseToken = { kind: Token["kind"] };
 const SINGLE_PUNCT: string[] = [
   "(",
   ")",
+  "}",
+  "{",
   "[",
   "]",
   ";",

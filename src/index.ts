@@ -12,9 +12,12 @@ import { exec } from "child_process";
 const input = `
 type Uwu = (
   meow: String,
+  oops: Int,
+  aaa: (),
 );
 
-function main(a: Int, b: Uwu) = ();
+function aa(a: Int, b: Uwu): Uwu = Uwu {meow: "",oops:0,aaa:()};
+function main() = ();
 `;
 
 function main() {

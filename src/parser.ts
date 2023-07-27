@@ -5,9 +5,11 @@ import {
   BinaryKind,
   COMPARISON_KINDS,
   Expr,
+  ExprStructLiteral,
   FieldDef,
   FunctionArg,
   FunctionDef,
+  Identifier,
   Item,
   LOGICAL_KINDS,
   Type,
@@ -98,10 +100,16 @@ function parseItem(t: Token[]): [Token[], Item] {
       [t] = expectNext(t, ":");
       let type;
       [t, type] = parseType(t);
-      return [t, { name: {
-        name: name.ident,
-        span: name.span,
-      }, type }];
+      return [
+        t,
+        {
+          name: {
+            name: name.ident,
+            span: name.span,
+          },
+          type,
+        },
+      ];
     });
 
     [t] = expectNext(t, ";");
@@ -137,8 +145,9 @@ function parseExpr(t: Token[]): [Token[], Expr] {
 
   CALL = ATOM { "(" EXPR_LIST ")" }
 
-  ATOM = "(" { EXPR ";" } EXPR ")" | IDENT | LITERAL | EMPTY
+  ATOM = "(" { EXPR ";" } EXPR ")" | IDENT { STRUCT_INIT } | LITERAL | EMPTY
   EMPTY =
+  STRUCT_INIT = "{" { NAME ":" EXPR } { "," NAME ":" EXPR } { "," } "}"
   EXPR_LIST = { EXPR { "," EXPR } { "," } }
   */
   const [, peak] = next(t);
@@ -309,6 +318,22 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
   }
 
   if (tok.kind === "identifier") {
+    console.log(t);
+
+    if (maybeNextT(t)[1]?.kind === "{") {
+      let fields;
+      [t, fields] = parseStructInit(t);
+      return [
+        t,
+        {
+          kind: "structLiteral",
+          name: { name: tok.ident, span },
+          fields,
+          span,
+        },
+      ];
+    }
+
     return [
       t,
       {
@@ -321,6 +346,23 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
 
   // Parse nothing at all.
   return [startT, { kind: "empty", span }];
+}
+
+function parseStructInit(t: Token[]): [Token[], ExprStructLiteral["fields"]] {
+  [t] = expectNext(t, "{");
+
+  let fields;
+  [t, fields] = parseCommaSeparatedList<[Identifier, Expr]>(t, "}", (t) => {
+    let name;
+    [t, name] = expectNext<TokenIdent>(t, "identifier");
+    [t] = expectNext(t, ":");
+    let expr;
+    [t, expr] = parseExpr(t);
+
+    return [t, [{ name: name.ident, span: name.span }, expr]];
+  });
+
+  return [t, fields];
 }
 
 function parseType(t: Token[]): [Token[], Type] {

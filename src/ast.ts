@@ -101,6 +101,12 @@ export type ExprIf = {
   else?: Expr;
 };
 
+export type ExprStructLiteral = {
+  kind: "structLiteral";
+  name: Identifier;
+  fields: [Identifier, Expr][];
+};
+
 export type ExprKind =
   | ExprEmpty
   | ExprLet
@@ -110,7 +116,8 @@ export type ExprKind =
   | ExprBinary
   | ExprUnary
   | ExprCall
-  | ExprIf;
+  | ExprIf
+  | ExprStructLiteral;
 
 export type Expr = ExprKind & {
   span: Span;
@@ -385,19 +392,19 @@ export function superFoldExpr(expr: Expr, folder: Folder): Expr {
     }
     case "let": {
       return {
+        ...expr,
         kind: "let",
         name: expr.name,
         type: expr.type && folder.type(expr.type),
         rhs: folder.expr(expr.rhs),
         after: folder.expr(expr.after),
-        span,
       };
     }
     case "block": {
       return {
+        ...expr,
         kind: "block",
         exprs: expr.exprs.map((expr) => folder.expr(expr)),
-        span,
       };
     }
     case "literal": {
@@ -408,36 +415,44 @@ export function superFoldExpr(expr: Expr, folder: Folder): Expr {
     }
     case "binary": {
       return {
+        ...expr,
         kind: "binary",
         binaryKind: expr.binaryKind,
         lhs: folder.expr(expr.lhs),
         rhs: folder.expr(expr.rhs),
-        span,
       };
     }
     case "unary": {
       return {
+        ...expr,
         kind: "unary",
         unaryKind: expr.unaryKind,
         rhs: folder.expr(expr.rhs),
-        span,
       };
     }
     case "call": {
       return {
+        ...expr,
         kind: "call",
         lhs: folder.expr(expr.lhs),
         args: expr.args.map((expr) => folder.expr(expr)),
-        span,
       };
     }
     case "if": {
       return {
+        ...expr,
         kind: "if",
         cond: folder.expr(expr.cond),
         then: folder.expr(expr.then),
         else: expr.else && folder.expr(expr.else),
-        span,
+      };
+    }
+    case "structLiteral": {
+      return {
+        ...expr,
+        kind: "structLiteral",
+        name: folder.ident(expr.name),
+        fields: expr.fields.map(([name, expr]) => [name, folder.expr(expr)]),
       };
     }
   }
