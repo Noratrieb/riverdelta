@@ -7,6 +7,7 @@ export type DatalessToken =
   | "if"
   | "then"
   | "else"
+  | "type"
   | "("
   | ")"
   | "["
@@ -209,6 +210,7 @@ const keywords = new Set<string>([
   "if",
   "then",
   "else",
+  "type",
 ]);
 function isKeyword(kw: string): DatalessToken | undefined {
   return keywords.has(kw) ? (kw as DatalessToken) : undefined;

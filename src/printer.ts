@@ -7,6 +7,7 @@ import {
   Resolution,
   Ty,
   Type,
+  TypeDef,
   tyIsUnit,
 } from "./ast";
 
@@ -19,6 +20,9 @@ function printItem(item: Item): string {
     case "function": {
       return printFunction(item.node);
     }
+    case "type": {
+      return printTypeDef(item.node);
+    }
   }
 }
 
@@ -27,7 +31,18 @@ function printFunction(func: FunctionDef): string {
     .map(({ name, type }) => `${name}: ${printType(type)}`)
     .join(", ");
   const ret = func.returnType ? `: ${printType(func.returnType)}` : "";
-  return `function ${func.name}(${args})${ret} = ${printExpr(func.body, 0)}`;
+  return `function ${func.name}(${args})${ret} = ${printExpr(func.body, 0)};`;
+}
+
+function printTypeDef(type: TypeDef): string {
+  const fields = type.fields.map(
+    ({ name, type }) => `${ind(1)}${name.name}: ${printType(type)},`
+  );
+
+  const fieldPart =
+    type.fields.length === 0 ? "()" : `(\n${fields.join("\n")}\n)`;
+
+  return `type ${type.name} = ${fieldPart};`;
 }
 
 function printExpr(expr: Expr, indent: number): string {
@@ -164,6 +179,9 @@ export function printTy(ty: Ty): string {
     }
     case "var": {
       return `?${ty.index}`;
+    }
+    case "struct": {
+      return ty.name;
     }
   }
 }

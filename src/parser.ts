@@ -5,16 +5,18 @@ import {
   BinaryKind,
   COMPARISON_KINDS,
   Expr,
+  FieldDef,
   FunctionArg,
   FunctionDef,
   Item,
   LOGICAL_KINDS,
   Type,
+  TypeDef,
   UNARY_KINDS,
   UnaryKind,
 } from "./ast";
 import { CompilerError, Span, todo } from "./error";
-import { BaseToken, Token, TokenIdent } from "./lexer";
+import { BaseToken, DatalessToken, Token, TokenIdent } from "./lexer";
 
 type Parser<T> = (t: Token[]) => [Token[], T];
 
@@ -41,24 +43,16 @@ function parseItem(t: Token[]): [Token[], Item] {
 
     [t] = expectNext(t, "(");
 
-    const args: FunctionArg[] = [];
-    let first = true;
-    while (next(t)[1]?.kind !== ")") {
-      if (!first) {
-        [t] = expectNext(t, ",");
-      }
-      first = false;
-
+    let args: FunctionArg[];
+    [t, args] = parseCommaSeparatedList(t, ")", (t) => {
       let name;
       [t, name] = expectNext<TokenIdent & { span: Span }>(t, "identifier");
       [t] = expectNext(t, ":");
       let type;
       [t, type] = parseType(t);
 
-      args.push({ name: name.ident, type, span: name.span });
-    }
-
-    [t] = expectNext(t, ")");
+      return [t, { name: name.ident, type, span: name.span }];
+    });
 
     let colon;
     let returnType = undefined;
@@ -91,6 +85,33 @@ function parseItem(t: Token[]): [Token[], Item] {
         id: 0,
       },
     ];
+  } else if (tok.kind === "type") {
+    let name;
+    [t, name] = expectNext<TokenIdent>(t, "identifier");
+    [t] = expectNext(t, "=");
+    [t] = expectNext(t, "(");
+
+    let fields;
+    [t, fields] = parseCommaSeparatedList<FieldDef>(t, ")", (t) => {
+      let name;
+      [t, name] = expectNext<TokenIdent>(t, "identifier");
+      [t] = expectNext(t, ":");
+      let type;
+      [t, type] = parseType(t);
+      return [t, { name: {
+        name: name.ident,
+        span: name.span,
+      }, type }];
+    });
+
+    [t] = expectNext(t, ";");
+
+    const def: TypeDef = {
+      name: name.ident,
+      fields,
+    };
+
+    return [t, { kind: "type", node: def, span: name.span, id: 0 }];
   } else {
     unexpectedToken(tok);
   }
@@ -125,7 +146,7 @@ function parseExpr(t: Token[]): [Token[], Expr] {
   if (peak.kind === "let") {
     [t] = expectNext(t, "let");
     let name;
-    [t, name] = expectNext<TokenIdent & Token>(t, "identifier");
+    [t, name] = expectNext<TokenIdent>(t, "identifier");
 
     let type = undefined;
     let colon;
@@ -236,15 +257,9 @@ function parseExprCall(t: Token[]): [Token[], Expr] {
   while (next(t)[1].kind === "(") {
     let popen;
     [t, popen] = next(t);
-    const args = [];
-    while (next(t)[1].kind !== ")") {
-      let arg;
-      [t, arg] = parseExpr(t);
-      args.push(arg);
-      // TODO i think this is incorrect
-      [t] = eat(t, ",");
-    }
-    [t] = expectNext(t, ")");
+
+    let args;
+    [t, args] = parseCommaSeparatedList(t, ")", parseExpr);
 
     lhs = { kind: "call", span: popen.span, lhs, args };
   }
@@ -331,20 +346,23 @@ function parseType(t: Token[]): [Token[], Type] {
       return [t, { kind: "list", elem, span }];
     }
     case "(": {
-      let first = true;
-      const elems = [];
-      while (next(t)[1]?.kind !== ")") {
-        if (!first) {
-          [t] = expectNext(t, ",");
-        }
-        first = false;
-        let type;
-        [t, type] = parseType(t);
-        elems.push(type);
+      if (next(t)[1]?.kind === ")") {
+        [t] = next(t);
+        return [t, { kind: "tuple", elems: [], span }];
       }
-      [t] = expectNext(t, ")");
+      let head;
+      [t, head] = parseType(t);
 
-      return [t, { kind: "tuple", elems, span }];
+      if (next(t)[1]?.kind === ")") {
+        [t] = next(t);
+        // Just a type inside parens, not a tuple. `(T,)` is a tuple.
+        return [t, head];
+      }
+
+      let tail;
+      [t, tail] = parseCommaSeparatedList(t, ")", parseType);
+
+      return [t, { kind: "tuple", elems: [head, ...tail], span }];
     }
     default: {
       throw new CompilerError(
@@ -356,6 +374,42 @@ function parseType(t: Token[]): [Token[], Type] {
 }
 
 // helpers
+
+function parseCommaSeparatedList<R>(
+  t: Token[],
+  terminator: Token["kind"],
+  parser: Parser<R>
+): [Token[], R[]] {
+  const items: R[] = [];
+
+  // () | (a) | (a,) | (a, b)
+
+  while (true) {
+    if (next(t)[1]?.kind === terminator) {
+      break;
+    }
+
+    let nextValue;
+    [t, nextValue] = parser(t);
+
+    items.push(nextValue);
+
+    let comma;
+    [t, comma] = eat(t, ",");
+    if (!comma) {
+      // No comma? Fine, you don't like trailing commas.
+      // But this better be the end.
+      if (next(t)[1]?.kind !== terminator) {
+        unexpectedToken(next(t)[1]);
+      }
+      break;
+    }
+  }
+
+  [t] = expectNext(t, terminator);
+
+  return [t, items];
+}
 
 function eat<T extends BaseToken>(
   t: Token[],
@@ -371,13 +425,13 @@ function eat<T extends BaseToken>(
 function expectNext<T extends BaseToken>(
   t: Token[],
   kind: T["kind"]
-): [Token[], T] {
+): [Token[], T & Token] {
   let tok;
   [t, tok] = next(t);
   if (tok.kind !== kind) {
     throw new CompilerError(`expected ${kind}, found ${tok.kind}`, tok.span);
   }
-  return [t, tok as unknown as T];
+  return [t, tok as unknown as T & Token];
 }
 
 function next(t: Token[]): [Token[], Token] {

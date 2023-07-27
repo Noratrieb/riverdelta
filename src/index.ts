@@ -10,8 +10,11 @@ import fs from "fs";
 import { exec } from "child_process";
 
 const input = `
-function main() = ();
-function test(i: Int, j: Int): Bool = false == (i == 0);
+type Uwu = (
+  meow: String,
+);
+
+function main(a: Int, b: Uwu) = ();
 `;
 
 function main() {
@@ -37,8 +40,9 @@ function main() {
     console.log(resolvedPrinted);
 
     console.log("-----AST typecked------");
-
     const typecked = typeck(resolved);
+
+    return;
 
     console.log("-----wasm--------------");
     const wasmModule = lowerToWasm(typecked);

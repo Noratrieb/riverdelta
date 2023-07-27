@@ -303,6 +303,8 @@ function computeAbi(ty: TyFn): Abi {
           return paramAbi(param.elems[0]);
         }
         todo("complex tuple abi");
+      case "struct":
+        todo("struct ABI");
       case "var":
         varUnreachable();
     }
@@ -333,6 +335,8 @@ function computeAbi(ty: TyFn): Abi {
         break;
       }
       todo("complex tuple abi");
+    case "struct":
+      todo("struct ABI");
     case "var":
       varUnreachable();
   }

@@ -20,6 +20,7 @@ import {
   TY_UNIT,
   TyFn,
   Type,
+  TyStruct,
 } from "./ast";
 import { CompilerError, Span } from "./error";
 import { printTy } from "./printer";
@@ -61,18 +62,7 @@ function lowerAstTyBase(
 ): Ty {
   switch (type.kind) {
     case "ident": {
-      const res = type.value.res!;
-      switch (res.kind) {
-        case "local": {
-          throw new Error("Cannot resolve local here");
-        }
-        case "item": {
-          return typeOfItem(res.index);
-        }
-        case "builtin": {
-          return builtinAsTy(res.name, type.value.span);
-        }
-      }
+      return lowerIdentTy(type.value);
     }
     case "list": {
       return {
@@ -112,6 +102,14 @@ export function typeck(ast: Ast): Ast {
 
         return { kind: "fn", params: args, returnTy };
       }
+      case "type": {
+        const fields = item.node.fields.map<[string, Ty]>(({ name, type }) => [
+          name.name,
+          lowerAstTy(type),
+        ]);
+
+        return { kind: "struct", name: item.node.name, fields };
+      }
     }
   }
 
@@ -122,7 +120,7 @@ export function typeck(ast: Ast): Ast {
         const res = ident.res!;
         switch (res.kind) {
           case "local": {
-            throw new Error("Cannot resolve local here");
+            throw new Error("Item type cannot refer to local variable");
           }
           case "item": {
             return typeOfItem(res.index);
@@ -149,7 +147,7 @@ export function typeck(ast: Ast): Ast {
             ty: fnTy.returnTy,
           };
           return {
-            kind: "function",
+            ...item,
             node: {
               name: item.node.name,
               params: item.node.params.map((arg, i) => ({
@@ -160,8 +158,34 @@ export function typeck(ast: Ast): Ast {
               returnType,
               ty: fnTy,
             },
-            span: item.span,
-            id: item.id,
+          };
+        }
+        case "type": {
+          const fieldNames = new Set();
+          item.node.fields.forEach(({ name }) => {
+            if (fieldNames.has(name)) {
+              throw new CompilerError(
+                `type ${item.node.name} has a duplicate field: ${name.name}`,
+                name.span
+              );
+            }
+            fieldNames.add(name);
+          });
+
+          const ty = typeOfItem(item.id) as TyStruct;
+
+          return {
+            ...item,
+            node: {
+              name: item.node.name,
+              fields: item.node.fields.map((field, i) => ({
+                name: field.name,
+                type: {
+                  ...field.type,
+                  ty: ty.fields[i][1],
+                },
+              })),
+            },
           };
         }
       }

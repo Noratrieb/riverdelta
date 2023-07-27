@@ -10,10 +10,15 @@ export type Identifier = {
 
 export type ItemId = number;
 
-export type ItemKind = {
-  kind: "function";
-  node: FunctionDef;
-};
+export type ItemKind =
+  | {
+      kind: "function";
+      node: FunctionDef;
+    }
+  | {
+      kind: "type";
+      node: TypeDef;
+    };
 
 export type Item = ItemKind & {
   span: Span;
@@ -32,6 +37,17 @@ export type FunctionArg = {
   name: string;
   type: Type;
   span: Span;
+};
+
+export type TypeDef = {
+  name: string;
+  fields: FieldDef[];
+  ty?: TyStruct;
+};
+
+export type FieldDef = {
+  name: Identifier;
+  type: Type;
 };
 
 export type ExprEmpty = { kind: "empty" };
@@ -262,7 +278,21 @@ export type TyVar = {
   index: number;
 };
 
-export type Ty = TyString | TyInt | TyBool | TyList | TyTuple | TyFn | TyVar;
+export type TyStruct = {
+  kind: "struct";
+  name: string;
+  fields: [string, Ty][];
+};
+
+export type Ty =
+  | TyString
+  | TyInt
+  | TyBool
+  | TyList
+  | TyTuple
+  | TyFn
+  | TyVar
+  | TyStruct;
 
 export function tyIsUnit(ty: Ty): ty is TyUnit {
   return ty.kind === "tuple" && ty.elems.length === 0;
@@ -328,6 +358,19 @@ export function superFoldItem(item: Item, folder: Folder): Item {
           body: folder.expr(item.node.body),
           returnType: item.node.returnType && folder.type(item.node.returnType),
         },
+        id: item.id,
+      };
+    }
+    case "type": {
+      const fields = item.node.fields.map(({ name, type }) => ({
+        name,
+        type: folder.type(type),
+      }));
+
+      return {
+        kind: "type",
+        span: item.span,
+        node: { name: item.node.name, fields },
         id: item.id,
       };
     }
