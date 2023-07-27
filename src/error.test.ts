@@ -1,4 +1,4 @@
-import { Span, lines } from "./error";
+import { lines } from "./error";
 
 it("should extract lines correctly", () => {
   const input = "AAA\nmeow\n:3\n\n";

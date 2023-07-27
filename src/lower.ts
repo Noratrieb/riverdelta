@@ -1,4 +1,3 @@
-import { AST } from "prettier";
 import { Ast, Expr, FunctionDef, Item, Ty, TyFn, varUnreachable } from "./ast";
 import * as wasm from "./wasm/defs";
 
