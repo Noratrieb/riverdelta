@@ -10,14 +10,15 @@ import fs from "fs";
 import { exec } from "child_process";
 
 const input = `
-function main() = uwu(10);
+function main() = (
+  loop (no(break););
+  uwu(10);
+);
 
-function print_a(
-  a: String,
-): String = a;
+function no(a: !): String = a;
 
 function uwu(a: Int) = if a != 0 then (
-  print(print_a("uwu\n")); 
+  print("uwu\n");
   uwu(a - 1);
 );
 `;

@@ -19,10 +19,7 @@ const USIZE: wasm.ValType = "i32";
 const POINTER: wasm.ValType = USIZE;
 
 const STRING_TYPES: wasm.ValType[] = [POINTER, USIZE];
-const STRING_ABI: ArgRetAbi = {
-  kind: "aggregate",
-  types: STRING_TYPES,
-};
+const STRING_ABI: ArgRetAbi = STRING_TYPES;
 
 const WASM_PAGE = 65536;
 
@@ -173,10 +170,7 @@ type FuncContext = {
 
 type FnAbi = { params: ArgRetAbi[]; ret: ArgRetAbi };
 
-type ArgRetAbi =
-  | { kind: "scalar"; type: wasm.ValType }
-  | { kind: "zst" }
-  | { kind: "aggregate"; types: wasm.ValType[] };
+type ArgRetAbi = wasm.ValType[];
 
 type VarLocation = { localIdx: number; types: wasm.ValType[] };
 
@@ -482,6 +476,11 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       const _: never = expr;
     }
   }
+
+  if (ty.kind === "never") {
+    instrs.push({ kind: "unreachable" });
+    return;
+  }
 }
 
 function lowerExprBlockBody(
@@ -517,72 +516,34 @@ function loadVariable(instrs: wasm.Instr[], loc: VarLocation) {
 }
 
 function computeAbi(ty: TyFn): FnAbi {
-  const scalar = (type: wasm.ValType): ArgRetAbi =>
-    ({ kind: "scalar", type } as const);
-  const zst: ArgRetAbi = { kind: "zst" };
-
-  function paramAbi(param: Ty): ArgRetAbi {
+  function argRetAbi(param: Ty): ArgRetAbi {
     switch (param.kind) {
       case "string":
         return STRING_ABI;
       case "fn":
         todo("fn abi");
       case "int":
-        return scalar("i64");
+        return ["i64"];
       case "bool":
-        return scalar("i32");
+        return ["i32"];
       case "list":
         todo("list abi");
       case "tuple":
         if (param.elems.length === 0) {
-          return zst;
-        } else if (param.elems.length === 1) {
-          return paramAbi(param.elems[0]);
+          return [];
         }
         todo("complex tuple abi");
       case "struct":
         todo("struct ABI");
       case "never":
-        return zst;
+        return [];
       case "var":
         varUnreachable();
     }
   }
 
-  const params = ty.params.map(paramAbi);
-
-  let ret: ArgRetAbi;
-  switch (ty.returnTy.kind) {
-    case "string":
-      ret = STRING_ABI;
-      break;
-    case "fn":
-      todo("fn abi");
-    case "int":
-      ret = scalar("i64");
-      break;
-    case "bool":
-      ret = scalar("i32");
-      break;
-    case "list":
-      todo("list abi");
-    case "tuple":
-      if (ty.returnTy.elems.length === 0) {
-        ret = zst;
-        break;
-      } else if (ty.returnTy.elems.length === 1) {
-        ret = paramAbi(ty.returnTy.elems[0]);
-        break;
-      }
-      todo("complex tuple abi");
-    case "struct":
-      todo("struct ABI");
-    case "never":
-      ret = zst;
-      break;
-    case "var":
-      varUnreachable();
-  }
+  const params = ty.params.map(argRetAbi);
+  const ret = argRetAbi(ty.returnTy);
 
   return { params, ret };
 }
@@ -595,39 +556,14 @@ function wasmTypeForAbi(abi: FnAbi): {
   const paramLocations: VarLocation[] = [];
 
   abi.params.forEach((arg) => {
-    switch (arg.kind) {
-      case "scalar":
-        paramLocations.push({
-          localIdx: params.length,
-          types: [arg.type],
-        });
-        params.push(arg.type);
-        break;
-      case "zst":
-        paramLocations.push({ localIdx: /* dummy */ 0, types: [] });
-        break;
-      case "aggregate":
-        paramLocations.push({
-          localIdx: params.length,
-          types: arg.types,
-        });
-        params.push(...arg.types);
-        break;
-    }
+    paramLocations.push({
+      localIdx: params.length,
+      types: arg,
+    });
+    params.push(...arg);
   });
-  let returns: wasm.ValType[];
-  switch (abi.ret.kind) {
-    case "scalar":
-      returns = [abi.ret.type];
-      break;
-    case "zst":
-      returns = [];
-      break;
-    case "aggregate":
-      returns = abi.ret.types;
-  }
 
-  return { type: { params, returns }, paramLocations };
+  return { type: { params, returns: abi.ret }, paramLocations };
 }
 
 function wasmTypeForBody(ty: Ty): wasm.ValType[] {
