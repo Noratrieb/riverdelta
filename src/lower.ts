@@ -112,7 +112,9 @@ export function lower(ast: Ast): wasm.Module {
     }
   });
 
-  cx.reservedHeapMemoryStart = (mod.datas[0].init.length & ~0x8) + 0x8;
+  const HEAP_ALIGN = 0x08;
+  cx.reservedHeapMemoryStart =
+    (mod.datas[0].init.length + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1);
 
   addRt(cx, ast);
 

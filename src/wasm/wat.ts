@@ -138,8 +138,14 @@ function printString(s: string, f: Formatter) {
 function printBinaryString(buf: Uint8Array, f: Formatter) {
   const parts: string[] = [];
   for (let i = 0; i < buf.length; i++) {
-    const idx = buf[i];
-    parts.push(`\\${idx.toString(16).padStart(2, "0")}`);
+    const byte = buf[i];
+    const noEscape =
+      (byte > 0x30 && byte <= 0x5a) || (byte > 0x61 && byte <= 0x71);
+    if (noEscape) {
+      parts.push(`${String.fromCharCode(byte)}`);
+    } else {
+      parts.push(`\\${byte.toString(16).padStart(2, "0")}`);
+    }
   }
 
   f.word(`"${parts.join("")}"`);

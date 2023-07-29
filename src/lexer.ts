@@ -134,6 +134,7 @@ export function tokenize(input: string): Token[] {
           break;
         }
         case '"': {
+          const result = [];
           while (true) {
             const next = input[i + 1];
             span.end++;
@@ -141,11 +142,48 @@ export function tokenize(input: string): Token[] {
             if (next === '"') {
               break;
             }
+
+            if (next === "\\") {
+              span.end++;
+              i++;
+              switch (input[i]) {
+                case "\\":
+                  result.push("\\");
+                  break;
+                case '"':
+                  result.push('"');
+                  break;
+                case "n":
+                  result.push("\n");
+                  break;
+                case "r":
+                  result.push("\r");
+                  break;
+                case "t":
+                  result.push("\t");
+                  break;
+                case "a":
+                  result.push("\x07");
+                  break;
+                case "3":
+                  // device control 3 for callie's big project
+                  result.push("\x13");
+                  break;
+                default:
+                  throw new CompilerError(
+                    `invalid escape character: ${input[i]}`,
+                    { start: span.end - 1, end: span.end }
+                  );
+              }
+              continue;
+            }
+
+            result.push(next);
             if (next === undefined) {
               throw new CompilerError(`Unterminated string literal`, span);
             }
           }
-          const value = input.slice(span.start + 1, span.end - 1);
+          const value = result.join("");
           tokens.push({ kind: "lit_string", span, value });
           break;
         }
