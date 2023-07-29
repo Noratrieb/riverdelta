@@ -169,6 +169,10 @@ export function tokenize(input: string): Token[] {
                   // device control 3 for callie's big project
                   result.push("\x13");
                   break;
+                case "M":
+                  // end of medium for callie's big project
+                  result.push("\x19");
+                  break;
                 default:
                   throw new CompilerError(
                     `invalid escape character: ${input[i]}`,
