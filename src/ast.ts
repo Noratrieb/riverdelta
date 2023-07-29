@@ -58,7 +58,7 @@ export type ExprLet = {
   type?: Type;
   rhs: Expr;
   // IMPORTANT: This is (sadly) shared with ExprBlock.
-  local?: LocalInfo,
+  local?: LocalInfo;
 };
 
 export type ExprBlock = {

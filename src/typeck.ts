@@ -316,7 +316,7 @@ export class InferContext {
 
   public resolveIfPossible(ty: Ty): Ty {
     // TODO: dont be shallow resolve
-    // note that fixing this will cause cycles. fix those cycles instead using 
+    // note that fixing this will cause cycles. fix those cycles instead using
     // he fancy occurs check as errs called it.
     if (ty.kind === "var") {
       return this.tryResolveVar(ty.index) ?? ty;

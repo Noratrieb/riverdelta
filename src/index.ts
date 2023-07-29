@@ -42,8 +42,7 @@ function main() {
 
     console.log("-----AST typecked------");
     const typecked = typeck(resolved);
-    console.dir(typecked, {depth: 8});
-    
+    console.dir(typecked, { depth: 8 });
 
     console.log("-----wasm--------------");
     const wasmModule = lowerToWasm(typecked);

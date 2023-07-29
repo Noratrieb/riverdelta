@@ -629,7 +629,7 @@ function addRt(cx: Context, ast: Ast) {
       { kind: "local.get", imm: 0 },
       { kind: "i32.store", imm: { offset: 0, align: 4 } },
       // get the length and store it in the iovec
-      { kind: "i32.const", imm: iovecArray + 4 }, 
+      { kind: "i32.const", imm: iovecArray + 4 },
       { kind: "local.get", imm: 1 },
       { kind: "i32.store", imm: { offset: 0, align: 4 } },
       // now call stuff
