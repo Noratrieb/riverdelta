@@ -12,10 +12,12 @@ import { exec } from "child_process";
 const input = `
 function main() = uwu(10);
 
-function ___print() = ;
+function print_a(
+  a: String,
+): String = a;
 
 function uwu(a: Int) = if a != 0 then (
-  print("uwu\n"); 
+  print(print_a("uwu\n")); 
   uwu(a - 1);
 );
 `;

@@ -52,9 +52,9 @@ export type Context = {
 };
 
 function escapeIdentName(name: string): string {
-  // this allows the implementation to use an odd number of leading
-  // underscores
-  return name.replace(/_/g, "__");
+  // This allows the implementation to use 2 leading underscores
+  // for any names and it will not conflict.
+  return name.startsWith("__") ? `_${name}` : name;
 }
 
 function internFuncType(cx: Context, type: wasm.FuncType): wasm.TypeIdx {
@@ -178,7 +178,7 @@ type ArgRetAbi =
   | { kind: "zst" }
   | { kind: "aggregate"; types: wasm.ValType[] };
 
-type VarLocation = { kind: "local"; idx: number } | { kind: "zst" };
+type VarLocation = { localIdx: number; types: wasm.ValType[] };
 
 function lowerFunc(cx: Context, item: Item, func: FunctionDef) {
   const abi = computeAbi(func.ty!);
@@ -226,19 +226,17 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
     }
     case "let": {
       lowerExpr(fcx, instrs, expr.rhs);
-      const type = wasmTypeForBody(expr.rhs.ty!);
-      if (type.length === 0) {
-        fcx.varLocations.push({ kind: "zst" });
-      } else if (type.length === 1) {
-        const local = fcx.wasm.locals.length;
-        fcx.wasm.locals.push(type[0]);
+      const types = wasmTypeForBody(expr.rhs.ty!);
 
-        instrs.push({ kind: "local.set", imm: local });
+      const local = fcx.wasm.locals.length;
 
-        fcx.varLocations.push({ kind: "local", idx: local });
-      } else {
-        todo("complex locals");
-      }
+      fcx.wasm.locals.push(...types);
+
+      types.forEach((_, i) => {
+        instrs.push({ kind: "local.set", imm: local + i });
+      });
+
+      fcx.varLocations.push({ localIdx: local, types });
 
       break;
     }
@@ -507,17 +505,15 @@ function lowerExprBlockBody(
 }
 
 function loadVariable(instrs: wasm.Instr[], loc: VarLocation) {
-  switch (loc.kind) {
-    case "local": {
-      instrs.push({ kind: "local.get", imm: loc.idx });
-      break;
-    }
-    case "zst":
-      // Load the ZST:
-      // ...
-      // 🪄 poof, the ZST is on the stack now.
-      break;
-  }
+  // If the type is a ZST we'll have no types and do the following:
+  // Load the ZST:
+  // ...
+  // 🪄 poof, the ZST is on the stack now.
+  // --
+  // Otherwise, load each part.
+  loc.types.forEach((_, i) => {
+    instrs.push({ kind: "local.get", imm: loc.localIdx + i });
+  });
 }
 
 function computeAbi(ty: TyFn): FnAbi {
@@ -601,14 +597,20 @@ function wasmTypeForAbi(abi: FnAbi): {
   abi.params.forEach((arg) => {
     switch (arg.kind) {
       case "scalar":
-        paramLocations.push({ kind: "local", idx: params.length });
+        paramLocations.push({
+          localIdx: params.length,
+          types: [arg.type],
+        });
         params.push(arg.type);
         break;
       case "zst":
-        paramLocations.push({ kind: "zst" });
+        paramLocations.push({ localIdx: /* dummy */ 0, types: [] });
         break;
       case "aggregate":
-        paramLocations.push({ kind: "local", idx: params.length });
+        paramLocations.push({
+          localIdx: params.length,
+          types: arg.types,
+        });
         params.push(...arg.types);
         break;
     }
