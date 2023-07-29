@@ -3,8 +3,10 @@ import {
   BUILTINS,
   BuiltinName,
   DEFAULT_FOLDER,
+  Expr,
   Folder,
   Identifier,
+  LocalInfo,
   Resolution,
   foldAst,
   superFoldExpr,
@@ -68,6 +70,8 @@ export function resolve(ast: Ast): Ast {
     throw new CompilerError(`cannot find ${ident.name}`, ident.span);
   };
 
+  const blockLocals: LocalInfo[][] = [];
+
   const resolver: Folder = {
     ...DEFAULT_FOLDER,
     item(item) {
@@ -82,7 +86,7 @@ export function resolve(ast: Ast): Ast {
             item.node.returnType && this.type(item.node.returnType);
 
           item.node.params.forEach(({ name }) => scopes.push(name));
-          const body = superFoldExpr(item.node.body, this);
+          const body = this.expr(item.node.body);
           const revParams = item.node.params.slice();
           revParams.reverse();
           revParams.forEach(({ name }) => popScope(name));
@@ -104,24 +108,39 @@ export function resolve(ast: Ast): Ast {
       return superFoldItem(item, this);
     },
     expr(expr) {
-      if (expr.kind === "let") {
-        const rhs = this.expr(expr.rhs);
-        const type = expr.type && this.type(expr.type);
-        scopes.push(expr.name);
-        const after = this.expr(expr.after);
-        popScope(expr.name);
+      if (expr.kind === "block") {
+        const prevScopeLength = scopes.length;
+        blockLocals.push([]);
+
+        const exprs = expr.exprs.map<Expr>((inner) => this.expr(inner));
+
+        scopes.length = prevScopeLength;
+        const locals = blockLocals.pop();
 
         return {
-          kind: "let",
-          name: expr.name,
-          rhs,
-          after,
-          type,
+          kind: "block",
+          exprs,
+          locals,
           span: expr.span,
         };
-      }
+      } else if (expr.kind === "let") {
+        let rhs = this.expr(expr.rhs);
+        let type = expr.type && this.type(expr.type);
 
-      return superFoldExpr(expr, this);
+        scopes.push(expr.name.name);
+        const local = { name: expr.name.name, span: expr.name.span };
+        blockLocals[blockLocals.length - 1].push(local);
+
+        return {
+          ...expr,
+          name: expr.name,
+          local,
+          type,
+          rhs,
+        };
+      } else {
+        return superFoldExpr(expr, this);
+      }
     },
     ident(ident) {
       const res = resolveIdent(ident);

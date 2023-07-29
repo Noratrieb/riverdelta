@@ -10,14 +10,13 @@ import fs from "fs";
 import { exec } from "child_process";
 
 const input = `
-type Uwu = (
-  meow: String,
-  oops: Int,
-  aaa: (),
-);
+function printInt(a: Int) = ;
 
-function aa(a: Int, b: Uwu): Uwu = Uwu {meow: "",oops:0,aaa:()};
-function main() = ();
+function main() = (
+  let a = 0;
+  let b = 0;
+  printInt(a + b);
+);
 `;
 
 function main() {
@@ -44,8 +43,8 @@ function main() {
 
     console.log("-----AST typecked------");
     const typecked = typeck(resolved);
-
-    return;
+    console.dir(typecked, {depth: 8});
+    
 
     console.log("-----wasm--------------");
     const wasmModule = lowerToWasm(typecked);

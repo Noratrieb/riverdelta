@@ -52,8 +52,13 @@ function renderError(input: string, e: CompilerError) {
   console.error(`${lineIdx} | ${spanToSnippet(input, line)}`);
   const startRelLine =
     e.span.start === Number.MAX_SAFE_INTEGER ? 0 : e.span.start - line.start;
+
+  const spanLength = min(e.span.end, line.end) - e.span.start;
+
   console.error(
-    `${" ".repeat(String(lineIdx).length)}   ${" ".repeat(startRelLine)}^`
+    `${" ".repeat(String(lineIdx).length)}   ${" ".repeat(
+      startRelLine
+    )}${"^".repeat(spanLength)}`
   );
 }
 
@@ -80,4 +85,8 @@ export function lines(input: string): Span[] {
 
 export function todo(msg: string): never {
   throw new CompilerError(`TODO: ${msg}`, { start: 0, end: 0 });
+}
+
+function min(a: number, b: number): number {
+  return a < b ? a : b;
 }

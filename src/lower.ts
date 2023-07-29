@@ -121,6 +121,8 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
     case "block":
       if (expr.exprs.length === 1) {
         lowerExpr(fcx, instrs, expr.exprs[0]);
+      } else {
+        todo("complex blocks");
       }
       break;
     case "literal":

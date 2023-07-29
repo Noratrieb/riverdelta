@@ -3,7 +3,6 @@ import { CompilerError, Span } from "./error";
 export type DatalessToken =
   | "function"
   | "let"
-  | "in"
   | "if"
   | "then"
   | "else"
@@ -78,6 +77,14 @@ export function tokenize(input: string): Token[] {
   finish: while (i < input.length) {
     const next = input[i];
     const span: Span = { start: i, end: i + 1 };
+
+    if (next === "/" && input[i + 1] === "/") {
+      while (input[i] !== "\n") {
+        i++;
+      }
+
+      continue;
+    }
 
     if (SINGLE_PUNCT.includes(next)) {
       tokens.push({ kind: next as DatalessToken, span });
@@ -207,15 +214,16 @@ function isWhitespace(char: string): boolean {
   return char === " " || char === "\t" || char === "\n" || char === "\r";
 }
 
-const keywords = new Set<string>([
+const KEYOWRDS: DatalessToken[] = [
   "function",
   "let",
-  "in",
   "if",
   "then",
   "else",
   "type",
-]);
+];
+
+const KEYWORD_SET = new Set<string>(KEYOWRDS);
 function isKeyword(kw: string): DatalessToken | undefined {
-  return keywords.has(kw) ? (kw as DatalessToken) : undefined;
+  return KEYWORD_SET.has(kw) ? (kw as DatalessToken) : undefined;
 }

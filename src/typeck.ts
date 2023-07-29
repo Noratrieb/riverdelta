@@ -425,9 +425,11 @@ export function checkBody(
           const rhs = this.expr(expr.rhs);
           infcx.assign(bindingTy, rhs.ty!, expr.span);
 
+          // AST validation ensures that lets can only be in blocks, where
+          // the types will be popped.
           localTys.push(bindingTy);
-          const after = this.expr(expr.after);
-          localTys.pop();
+
+          expr.local!.ty = bindingTy;
 
           const type: Type | undefined = loweredBindingTy && {
             ...expr.type!,
@@ -439,20 +441,23 @@ export function checkBody(
             name: expr.name,
             type,
             rhs,
-            after,
-            ty: after.ty!,
+            ty: TY_UNIT,
             span: expr.span,
           };
         }
         case "block": {
+          const prevLocalTysLen = localTys.length;
+
           const exprs = expr.exprs.map((expr) => this.expr(expr));
+
           const ty = exprs.length > 0 ? exprs[exprs.length - 1].ty! : TY_UNIT;
 
+          localTys.length = prevLocalTysLen;
+
           return {
-            kind: "block",
+            ...expr,
             exprs,
             ty,
-            span: expr.span,
           };
         }
         case "literal": {
@@ -592,13 +597,25 @@ export function checkBody(
 
   infcx.assign(fnTy.returnTy, checked.ty!, body.span);
 
+  const resolveTy = (ty: Ty, span: Span) => {
+    const resTy = infcx.resolveIfPossible(ty);
+    if (!resTy) {
+      throw new CompilerError("cannot infer type", span);
+    }
+    return resTy;
+  };
+
   const resolver: Folder = {
     ...DEFAULT_FOLDER,
     expr(expr) {
-      const ty = infcx.resolveIfPossible(expr.ty!);
-      if (!ty) {
-        throw new CompilerError("cannot infer type", expr.span);
+      const ty = resolveTy(expr.ty!, expr.span);
+
+      if (expr.kind === "block") {
+        expr.locals!.forEach((local) => {
+          local.ty = resolveTy(local.ty!, local.span);
+        });
       }
+
       return { ...expr, ty };
     },
   };

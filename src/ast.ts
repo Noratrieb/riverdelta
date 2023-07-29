@@ -54,15 +54,18 @@ export type ExprEmpty = { kind: "empty" };
 
 export type ExprLet = {
   kind: "let";
-  name: string;
+  name: Identifier;
   type?: Type;
   rhs: Expr;
-  after: Expr;
+  // IMPORTANT: This is (sadly) shared with ExprBlock.
+  local?: LocalInfo,
 };
 
 export type ExprBlock = {
   kind: "block";
   exprs: Expr[];
+  // IMPORTANT: This is (sadly) shared with ExprLet.
+  locals?: LocalInfo[];
 };
 
 export type ExprLiteral = {
@@ -206,13 +209,15 @@ export type Type = TypeKind & {
   ty?: Ty;
 };
 
+// name resolution stuff
+
 export type Resolution =
   | {
       kind: "local";
       /**
        * The index of the local variable, from inside out.
        * ```
-       * let a in let b in (a, b);
+       * let a = 0; let b; (a, b);
        *     ^        ^
        *     1        0
        * ```
@@ -245,6 +250,14 @@ export const BUILTINS = [
 ] as const;
 
 export type BuiltinName = (typeof BUILTINS)[number];
+
+export type LocalInfo = {
+  name: string;
+  span: Span;
+  ty?: Ty;
+};
+
+// types
 
 export type TyString = {
   kind: "string";
@@ -397,7 +410,6 @@ export function superFoldExpr(expr: Expr, folder: Folder): Expr {
         name: expr.name,
         type: expr.type && folder.type(expr.type),
         rhs: folder.expr(expr.rhs),
-        after: folder.expr(expr.after),
       };
     }
     case "block": {

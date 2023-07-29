@@ -4,9 +4,11 @@ import {
   Ast,
   BinaryKind,
   COMPARISON_KINDS,
+  DEFAULT_FOLDER,
   Expr,
   ExprStructLiteral,
   FieldDef,
+  Folder,
   FunctionArg,
   FunctionDef,
   Identifier,
@@ -16,9 +18,11 @@ import {
   TypeDef,
   UNARY_KINDS,
   UnaryKind,
+  foldAst,
+  superFoldExpr,
 } from "./ast";
-import { CompilerError, Span, todo } from "./error";
-import { BaseToken, DatalessToken, Token, TokenIdent } from "./lexer";
+import { CompilerError, Span, spanMerge } from "./error";
+import { BaseToken, Token, TokenIdent } from "./lexer";
 
 type Parser<T> = (t: Token[]) => [Token[], T];
 
@@ -33,7 +37,11 @@ export function parse(t: Token[]): Ast {
 
   const withIds = items.map((item, i) => ({ ...item, id: i }));
 
-  return { items: withIds };
+  const ast = { items: withIds };
+
+  validateAst(ast);
+
+  return ast;
 }
 
 function parseItem(t: Token[]): [Token[], Item] {
@@ -127,7 +135,7 @@ function parseItem(t: Token[]): [Token[], Item] {
 
 function parseExpr(t: Token[]): [Token[], Expr] {
   /*
-  EXPR = { LET | COMPARISON | IF }
+  EXPR = COMPARISON
 
   LET = "let" NAME { ":" TYPE } "=" EXPR "in" EXPR
   IF = "if" EXPR "then" EXPR { "else" EXPR }
@@ -145,56 +153,11 @@ function parseExpr(t: Token[]): [Token[], Expr] {
 
   CALL = ATOM { "(" EXPR_LIST ")" }
 
-  ATOM = "(" { EXPR ";" } EXPR ")" | IDENT { STRUCT_INIT } | LITERAL | EMPTY
+  ATOM = "(" { EXPR ";" } EXPR ")" | IDENT { STRUCT_INIT } | LITERAL | EMPTY | LET | IF
   EMPTY =
   STRUCT_INIT = "{" { NAME ":" EXPR } { "," NAME ":" EXPR } { "," } "}"
   EXPR_LIST = { EXPR { "," EXPR } { "," } }
   */
-  const [, peak] = next(t);
-
-  if (peak.kind === "let") {
-    [t] = expectNext(t, "let");
-    let name;
-    [t, name] = expectNext<TokenIdent>(t, "identifier");
-
-    let type = undefined;
-    let colon;
-    [t, colon] = eat(t, ":");
-    if (colon) {
-      [t, type] = parseType(t);
-    }
-
-    [t] = expectNext(t, "=");
-    let rhs;
-    [t, rhs] = parseExpr(t);
-    [t] = expectNext(t, "in");
-    let after;
-    [t, after] = parseExpr(t);
-
-    return [
-      t,
-      { kind: "let", name: name.ident, type, rhs, after, span: name.span },
-    ];
-  }
-
-  if (peak.kind === "if") {
-    [t] = expectNext(t, "if");
-    let cond;
-    [t, cond] = parseExpr(t);
-    [t] = expectNext(t, "then");
-    let then;
-    [t, then] = parseExpr(t);
-
-    let elseTok;
-    [t, elseTok] = eat(t, "else");
-    let elsePart = undefined;
-    if (elseTok) {
-      [t, elsePart] = parseExpr(t);
-    }
-
-    return [t, { kind: "if", cond, then, else: elsePart, span: peak.span }];
-  }
-
   return parseExprComparison(t);
 }
 
@@ -206,15 +169,15 @@ function mkParserExprBinary(
     let lhs;
     [t, lhs] = lower(t);
 
-    const [, peak] = next(t);
-    if (kinds.includes(peak.kind)) {
+    const [, peek] = next(t);
+    if (kinds.includes(peek.kind)) {
       [t] = next(t);
       let rhs;
       [t, rhs] = parser(t);
-      const span = peak.span;
+      const span = spanMerge(lhs.span, rhs.span);
       return [
         t,
-        { kind: "binary", binaryKind: peak.kind as BinaryKind, lhs, rhs, span },
+        { kind: "binary", binaryKind: peek.kind as BinaryKind, lhs, rhs, span },
       ];
     }
 
@@ -318,8 +281,6 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
   }
 
   if (tok.kind === "identifier") {
-    console.log(t);
-
     if (maybeNextT(t)[1]?.kind === "{") {
       let fields;
       [t, fields] = parseStructInit(t);
@@ -342,6 +303,52 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
         value: { name: tok.ident, span },
       },
     ];
+  }
+
+  if (tok.kind === "let") {
+    let name;
+    [t, name] = expectNext<TokenIdent>(t, "identifier");
+
+    let type = undefined;
+    let colon;
+    [t, colon] = eat(t, ":");
+    if (colon) {
+      [t, type] = parseType(t);
+    }
+
+    [t] = expectNext(t, "=");
+    let rhs;
+    [t, rhs] = parseExpr(t);
+
+    const nameIdent: Identifier = { name: name.ident, span: name.span };
+
+    return [
+      t,
+      {
+        kind: "let",
+        name: nameIdent,
+        type,
+        rhs,
+        span: name.span,
+      },
+    ];
+  }
+
+  if (tok.kind === "if") {
+    let cond;
+    [t, cond] = parseExpr(t);
+    [t] = expectNext(t, "then");
+    let then;
+    [t, then] = parseExpr(t);
+
+    let elseTok;
+    [t, elseTok] = eat(t, "else");
+    let elsePart = undefined;
+    if (elseTok) {
+      [t, elsePart] = parseExpr(t);
+    }
+
+    return [t, { kind: "if", cond, then, else: elsePart, span: tok.span }];
   }
 
   // Parse nothing at all.
@@ -495,4 +502,31 @@ function maybeNextT(t: Token[]): [Token[], Token | undefined] {
 
 function unexpectedToken(token: Token): never {
   throw new CompilerError("unexpected token", token.span);
+}
+
+function validateAst(ast: Ast) {
+  const validator: Folder = {
+    ...DEFAULT_FOLDER,
+    expr(value: Expr): Expr {
+      if (value.kind === "block") {
+        value.exprs.forEach((expr) => {
+          if (expr.kind === "let") {
+            this.expr(expr.rhs);
+            if (expr.type) {
+              this.type(expr.type);
+            }
+          } else {
+            this.expr(expr);
+          }
+        });
+        return value;
+      } else if (value.kind === "let") {
+        throw new CompilerError("let is only allowed in blocks", value.span);
+      } else {
+        return superFoldExpr(value, this);
+      }
+    },
+  };
+
+  foldAst(ast, validator);
 }

@@ -53,10 +53,10 @@ function printExpr(expr: Expr, indent: number): string {
     case "let": {
       const type = expr.type ? `: ${printType(expr.type)}` : "";
 
-      return `let ${expr.name}${type} = ${printExpr(
+      return `let ${expr.name.name}${type} = ${printExpr(
         expr.rhs,
         indent + 1
-      )} in${linebreak(indent)}${printExpr(expr.after, indent)}`;
+      )}`;
     }
     case "block": {
       const exprs = expr.exprs.map((expr) => printExpr(expr, indent + 1));
