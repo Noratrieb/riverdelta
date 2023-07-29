@@ -126,6 +126,13 @@ function printExpr(expr: Expr, indent: number): string {
         indent + 1
       )}${elsePart}`;
     }
+    case "loop": {
+      return `loop ${printExpr(expr.body, indent + 1)}`;
+    }
+    case "break": {
+      const target = expr.target !== undefined ? `#${expr.target}` : "";
+      return `break${target}`;
+    }
     case "structLiteral": {
       return `${printIdent(expr.name)} { ${expr.fields
         .map(([name, expr]) => `${name.name}: ${printExpr(expr, indent + 1)}`)
@@ -142,6 +149,8 @@ function printType(type: Type): string {
       return `[${printType(type.elem)}]`;
     case "tuple":
       return `(${type.elems.map(printType).join(", ")})`;
+    case "never":
+      return "!";
   }
 }
 
@@ -187,6 +196,9 @@ export function printTy(ty: Ty): string {
     }
     case "struct": {
       return ty.name;
+    }
+    case "never": {
+      return "!";
     }
   }
 }

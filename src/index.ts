@@ -10,8 +10,13 @@ import fs from "fs";
 import { exec } from "child_process";
 
 const input = `
-function main() = (
-  1 + 2 * 3;
+function main() = uwu(10);
+
+function a() = ;
+
+function uwu(a: Int) = if a != 0 then (
+  print("uwu\n");
+  uwu(a - 1);
 );
 `;
 
@@ -39,7 +44,8 @@ function main() {
 
     console.log("-----AST typecked------");
     const typecked = typeck(resolved);
-    console.dir(typecked, { depth: 8 });
+    const typeckPrinted = printAst(typecked);
+    console.log(typeckPrinted);
 
     console.log("-----wasm--------------");
     const wasmModule = lowerToWasm(typecked);

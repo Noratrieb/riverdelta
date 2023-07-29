@@ -7,6 +7,8 @@ export type DatalessToken =
   | "then"
   | "else"
   | "type"
+  | "loop"
+  | "break"
   | "("
   | ")"
   | "{"
@@ -263,6 +265,8 @@ const KEYOWRDS: DatalessToken[] = [
   "then",
   "else",
   "type",
+  "loop",
+  "break",
 ];
 
 const KEYWORD_SET = new Set<string>(KEYOWRDS);

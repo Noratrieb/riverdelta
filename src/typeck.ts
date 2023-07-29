@@ -16,6 +16,7 @@ import {
   Ty,
   TY_BOOL,
   TY_INT,
+  TY_NEVER,
   TY_STRING,
   TY_UNIT,
   TyFn,
@@ -77,6 +78,9 @@ function lowerAstTyBase(
           lowerAstTyBase(type, lowerIdentTy, typeOfItem)
         ),
       };
+    }
+    case "never": {
+      return TY_NEVER;
     }
   }
 }
@@ -234,7 +238,7 @@ export function typeck(ast: Ast): Ast {
   }
 
   typecked.typeckResults = {
-    main: main.id,
+    main: { kind: "item", index: main.id },
   };
 
   return typecked;
@@ -337,7 +341,10 @@ export class InferContext {
       this.constrainVar(rhs.index, lhs);
       return;
     }
-    // type variable handling here
+
+    if (rhs.kind === "never") {
+      return;
+    }
 
     switch (lhs.kind) {
       case "string": {
@@ -397,6 +404,8 @@ export function checkBody(
   typeOfItem: (index: number) => Ty
 ): Expr {
   const localTys = [...fnTy.params];
+  const loopState: { hasBreak: boolean; nestingDepth: number }[] = [];
+  let currentNestingDepth = 0;
 
   const infcx = new InferContext();
 
@@ -460,6 +469,7 @@ export function checkBody(
           };
         }
         case "block": {
+          currentNestingDepth++;
           const prevLocalTysLen = localTys.length;
 
           const exprs = expr.exprs.map((expr) => this.expr(expr));
@@ -467,6 +477,8 @@ export function checkBody(
           const ty = exprs.length > 0 ? exprs[exprs.length - 1].ty! : TY_UNIT;
 
           localTys.length = prevLocalTysLen;
+
+          currentNestingDepth--;
 
           return {
             ...expr,
@@ -544,8 +556,10 @@ export function checkBody(
         }
         case "if": {
           const cond = this.expr(expr.cond);
+          currentNestingDepth++;
           const then = this.expr(expr.then);
           const elsePart = expr.else && this.expr(expr.else);
+          currentNestingDepth--;
 
           infcx.assign(TY_BOOL, cond.ty!, cond.span);
 
@@ -559,6 +573,42 @@ export function checkBody(
           }
 
           return { ...expr, cond, then, else: elsePart, ty };
+        }
+        case "loop": {
+          currentNestingDepth++;
+          loopState.push({
+            hasBreak: false,
+            nestingDepth: currentNestingDepth,
+          });
+
+          const body = this.expr(expr.body);
+          infcx.assign(TY_UNIT, body.ty!, body.span);
+
+          const hadBreak = loopState.pop();
+          const ty = hadBreak ? TY_UNIT : TY_NEVER;
+
+          currentNestingDepth--;
+
+          return {
+            ...expr,
+            body,
+            ty,
+          };
+        }
+        case "break": {
+          if (loopState.length === 0) {
+            throw new CompilerError("break outside loop", expr.span);
+          }
+          const loopDepth = loopState[loopState.length - 1].nestingDepth;
+          loopState[loopState.length - 1].hasBreak = true;
+
+          const target = currentNestingDepth - loopDepth;
+
+          return {
+            ...expr,
+            ty: TY_NEVER,
+            target,
+          };
         }
         case "structLiteral": {
           const fields = expr.fields.map<[Identifier, Expr]>(([name, expr]) => [

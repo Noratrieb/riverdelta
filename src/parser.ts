@@ -130,7 +130,7 @@ function parseItem(t: Token[]): [Token[], Item] {
 
     return [t, { kind: "type", node: def, span: name.span, id: 0 }];
   } else {
-    unexpectedToken(tok);
+    unexpectedToken(tok, "item");
   }
 }
 
@@ -140,6 +140,8 @@ function parseExpr(t: Token[]): [Token[], Expr] {
 
   LET = "let" NAME { ":" TYPE } "=" EXPR "in" EXPR
   IF = "if" EXPR "then" EXPR { "else" EXPR }
+  LOOP = "loop" EXPR
+  BREAK = "break"
 
   // The precende here is pretty arbitrary since we forbid mixing of operators
   // with different precedence classes anyways.
@@ -154,7 +156,7 @@ function parseExpr(t: Token[]): [Token[], Expr] {
 
   CALL = ATOM { "(" EXPR_LIST ")" }
 
-  ATOM = "(" { EXPR ";" } EXPR ")" | IDENT { STRUCT_INIT } | LITERAL | EMPTY | LET | IF
+  ATOM = "(" { EXPR ";" } EXPR ")" | IDENT { STRUCT_INIT } | LITERAL | EMPTY | LET | IF | LOOP | BREAK
   EMPTY =
   STRUCT_INIT = "{" { NAME ":" EXPR } { "," NAME ":" EXPR } { "," } "}"
   EXPR_LIST = { EXPR { "," EXPR } { "," } }
@@ -338,6 +340,7 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
   if (tok.kind === "if") {
     let cond;
     [t, cond] = parseExpr(t);
+    
     [t] = expectNext(t, "then");
     let then;
     [t, then] = parseExpr(t);
@@ -350,6 +353,16 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
     }
 
     return [t, { kind: "if", cond, then, else: elsePart, span: tok.span }];
+  }
+
+  if (tok.kind === "loop") {
+    let body;
+    [t, body] = parseExpr(t);
+    return [t, { kind: "loop", body, span: tok.span }];
+  }
+
+  if (tok.kind === "break") {
+    return [t, { kind: "break", span: tok.span }];
   }
 
   // Parse nothing at all.
@@ -379,6 +392,9 @@ function parseType(t: Token[]): [Token[], Type] {
   const span = tok.span;
 
   switch (tok.kind) {
+    case "!": {
+      return [t, { kind: "never", span }];
+    }
     case "identifier": {
       return [
         t,
@@ -450,7 +466,7 @@ function parseCommaSeparatedList<R>(
       // No comma? Fine, you don't like trailing commas.
       // But this better be the end.
       if (next(t)[1]?.kind !== terminator) {
-        unexpectedToken(next(t)[1]);
+        unexpectedToken(next(t)[1], `, or ${terminator}`);
       }
       break;
     }
@@ -501,8 +517,8 @@ function maybeNextT(t: Token[]): [Token[], Token | undefined] {
   return [rest, next];
 }
 
-function unexpectedToken(token: Token): never {
-  throw new CompilerError("unexpected token", token.span);
+function unexpectedToken(token: Token, expected: string): never {
+  throw new CompilerError(`unexpected token, expected ${expected}`, token.span);
 }
 
 function validateAst(ast: Ast) {

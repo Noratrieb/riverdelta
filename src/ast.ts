@@ -104,6 +104,20 @@ export type ExprIf = {
   else?: Expr;
 };
 
+export type ExprLoop = {
+  kind: "loop";
+  body: Expr;
+};
+
+export type ExprBreak = {
+  kind: "break";
+  /**
+   * The break target block.
+   * May be any control flow block, labelled from inside out.
+   */
+  target?: number,
+};
+
 export type ExprStructLiteral = {
   kind: "structLiteral";
   name: Identifier;
@@ -120,6 +134,8 @@ export type ExprKind =
   | ExprUnary
   | ExprCall
   | ExprIf
+  | ExprLoop
+  | ExprBreak
   | ExprStructLiteral;
 
 export type Expr = ExprKind & {
@@ -202,7 +218,8 @@ export type TypeKind =
   | {
       kind: "tuple";
       elems: Type[];
-    };
+    }
+  | { kind: "never" };
 
 export type Type = TypeKind & {
   span: Span;
@@ -217,9 +234,9 @@ export type Resolution =
       /**
        * The index of the local variable, from inside out.
        * ```
-       * let a = 0; let b; (a, b);
-       *     ^        ^
-       *     1        0
+       * let a; let b; (a, b);
+       *     ^      ^
+       *     1      0
        * ```
        * When traversing resolutions, a stack of locals has to be kept.
        * It's similar to a De Bruijn index.
@@ -304,6 +321,10 @@ export type TyStruct = {
   fields: [string, Ty][];
 };
 
+export type TyNever = {
+  kind: "never";
+};
+
 export type Ty =
   | TyString
   | TyInt
@@ -312,7 +333,8 @@ export type Ty =
   | TyTuple
   | TyFn
   | TyVar
-  | TyStruct;
+  | TyStruct
+  | TyNever;
 
 export function tyIsUnit(ty: Ty): ty is TyUnit {
   return ty.kind === "tuple" && ty.elems.length === 0;
@@ -322,9 +344,10 @@ export const TY_UNIT: Ty = { kind: "tuple", elems: [] };
 export const TY_STRING: Ty = { kind: "string" };
 export const TY_BOOL: Ty = { kind: "bool" };
 export const TY_INT: Ty = { kind: "int", signed: false };
+export const TY_NEVER: Ty = { kind: "never" };
 
 export type TypeckResults = {
-  main: ItemId;
+  main: Resolution;
 };
 
 // folders
@@ -459,6 +482,19 @@ export function superFoldExpr(expr: Expr, folder: Folder): Expr {
         else: expr.else && folder.expr(expr.else),
       };
     }
+    case "loop": {
+      return {
+        ...expr,
+        kind: "loop",
+        body: folder.expr(expr.body),
+      };
+    }
+    case "break": {
+      return {
+        ...expr,
+        kind: "break",
+      };
+    }
     case "structLiteral": {
       return {
         ...expr,
@@ -493,6 +529,9 @@ export function superFoldType(type: Type, folder: Folder): Type {
         elems: type.elems.map((type) => folder.type(type)),
         span,
       };
+    }
+    case "never": {
+      return { ...type, kind: "never" };
     }
   }
 }

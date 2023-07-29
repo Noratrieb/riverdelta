@@ -4,11 +4,11 @@ import {
   ExprBlock,
   FunctionDef,
   Item,
+  Resolution,
   Ty,
   TyFn,
   varUnreachable,
 } from "./ast";
-import { CompilerError } from "./error";
 import { encodeUtf8 } from "./utils";
 import * as wasm from "./wasm/defs";
 
@@ -19,30 +19,46 @@ const USIZE: wasm.ValType = "i32";
 const POINTER: wasm.ValType = USIZE;
 
 const STRING_TYPES: wasm.ValType[] = [POINTER, USIZE];
-const STRING_ABI: ArgAbi & RetAbi = {
+const STRING_ABI: ArgRetAbi = {
   kind: "aggregate",
   types: STRING_TYPES,
 };
 
 const WASM_PAGE = 65536;
 
+type Relocation = {
+  kind: "funccall";
+  instr: wasm.Instr & { func: wasm.FuncIdx };
+} & { res: Resolution };
+
+function setMap<K, V>(map: Map<StringifiedForMap<K>, V>, key: K, value: V) {
+  map.set(JSON.stringify(key), value);
+}
+
+function getMap<K, V>(
+  map: Map<StringifiedForMap<K>, V>,
+  key: K
+): V | undefined {
+  return map.get(JSON.stringify(key));
+}
+
 export type Context = {
   mod: wasm.Module;
   funcTypes: Map<StringifiedForMap<wasm.FuncType>, wasm.TypeIdx>;
   reservedHeapMemoryStart: number;
-  funcIndices: Map<number, wasm.FuncIdx>;
+  funcIndices: Map<StringifiedForMap<Resolution>, wasm.FuncIdx>;
   ast: Ast;
+  relocations: Relocation[];
 };
 
 function internFuncType(cx: Context, type: wasm.FuncType): wasm.TypeIdx {
-  const s = JSON.stringify(type);
-  const existing = cx.funcTypes.get(s);
+  const existing = getMap(cx.funcTypes, type);
   if (existing !== undefined) {
     return existing;
   }
   const idx = cx.mod.types.length;
   cx.mod.types.push(type);
-  cx.funcTypes.set(s, idx);
+  setMap(cx.funcTypes, type, idx);
   return idx;
 }
 
@@ -102,6 +118,7 @@ export function lower(ast: Ast): wasm.Module {
     funcIndices: new Map(),
     reservedHeapMemoryStart: 0,
     ast,
+    relocations: [],
   };
 
   ast.items.forEach((item) => {
@@ -120,6 +137,23 @@ export function lower(ast: Ast): wasm.Module {
 
   addRt(cx, ast);
 
+  // THE LINKER
+  const offset = cx.mod.imports.length;
+  cx.relocations.forEach((rel) => {
+    switch (rel.kind) {
+      case "funccall": {
+        const idx = getMap<Resolution, number>(cx.funcIndices, rel.res);
+        if (idx === undefined) {
+          throw new Error(
+            `no function found for relocation '${JSON.stringify(rel.res)}'`
+          );
+        }
+        rel.instr.func = offset + idx;
+      }
+    }
+  });
+  // END OF THE LINKER
+
   return mod;
 }
 
@@ -131,13 +165,9 @@ type FuncContext = {
   varLocations: VarLocation[];
 };
 
-type Abi = { params: ArgAbi[]; ret: RetAbi };
+type FnAbi = { params: ArgRetAbi[]; ret: ArgRetAbi };
 
-type ArgAbi =
-  | { kind: "scalar"; type: wasm.ValType }
-  | { kind: "zst" }
-  | { kind: "aggregate"; types: wasm.ValType[] };
-type RetAbi =
+type ArgRetAbi =
   | { kind: "scalar"; type: wasm.ValType }
   | { kind: "zst" }
   | { kind: "aggregate"; types: wasm.ValType[] };
@@ -168,7 +198,11 @@ function lowerFunc(cx: Context, item: Item, func: FunctionDef) {
 
   const idx = fcx.cx.mod.funcs.length;
   fcx.cx.mod.funcs.push(wasmFunc);
-  fcx.cx.funcIndices.set(fcx.item.id, idx);
+  setMap<Resolution, number>(
+    fcx.cx.funcIndices,
+    { kind: "item", index: fcx.item.id },
+    idx
+  );
 }
 
 /*
@@ -372,18 +406,17 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       if (expr.lhs.kind !== "ident") {
         todo("non constant calls");
       }
-      if (expr.lhs.value.res!.kind !== "builtin") {
-        todo("youre not a builtin, fuck you");
-      }
-      const printIdx =
-        fcx.cx.ast.items.filter((item) => item.kind === "function").length +
-        /*import*/ 1 +
-        /*_start*/ 1;
+      const callInstr: wasm.Instr = { kind: "call", func: 9999999999 };
+      fcx.cx.relocations.push({
+        kind: "funccall",
+        instr: callInstr,
+        res: expr.lhs.value.res!,
+      });
+
       expr.args.forEach((arg) => {
         lowerExpr(fcx, instrs, arg);
       });
-      instrs.push({ kind: "call", func: printIdx });
-
+      instrs.push(callInstr);
       break;
     }
     case "if": {
@@ -406,6 +439,43 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       });
 
       break;
+    }
+    case "loop": {
+      const outerBlockInstrs: wasm.Instr[] = [];
+
+      const bodyInstrs: wasm.Instr[] = [];
+      lowerExpr(fcx, bodyInstrs, expr.body);
+      bodyInstrs.push({
+        kind: "br",
+        label: /*innermost control structure, the loop*/ 0,
+      });
+
+      outerBlockInstrs.push({
+        kind: "loop",
+        instrs: bodyInstrs,
+        type: blockTypeForBody(fcx.cx, expr.ty!),
+      });
+
+      instrs.push({
+        kind: "block",
+        instrs: outerBlockInstrs,
+        type: blockTypeForBody(fcx.cx, expr.ty!),
+      });
+
+      break;
+    }
+    case "break": {
+      instrs.push({
+        kind: "br",
+        label: expr.target! + /* the block outside the loop */ 1,
+      });
+      break;
+    }
+    case "structLiteral": {
+      todo("struct literal");
+    }
+    default: {
+      const _: never = expr;
     }
   }
 }
@@ -444,12 +514,12 @@ function loadVariable(instrs: wasm.Instr[], loc: VarLocation) {
   }
 }
 
-function computeAbi(ty: TyFn): Abi {
-  const scalar = (type: wasm.ValType): ArgAbi & RetAbi =>
+function computeAbi(ty: TyFn): FnAbi {
+  const scalar = (type: wasm.ValType): ArgRetAbi =>
     ({ kind: "scalar", type } as const);
-  const zst: ArgAbi & RetAbi = { kind: "zst" };
+  const zst: ArgRetAbi = { kind: "zst" };
 
-  function paramAbi(param: Ty): ArgAbi {
+  function paramAbi(param: Ty): ArgRetAbi {
     switch (param.kind) {
       case "string":
         return STRING_ABI;
@@ -470,6 +540,8 @@ function computeAbi(ty: TyFn): Abi {
         todo("complex tuple abi");
       case "struct":
         todo("struct ABI");
+      case "never":
+        return zst;
       case "var":
         varUnreachable();
     }
@@ -477,7 +549,7 @@ function computeAbi(ty: TyFn): Abi {
 
   const params = ty.params.map(paramAbi);
 
-  let ret: RetAbi;
+  let ret: ArgRetAbi;
   switch (ty.returnTy.kind) {
     case "string":
       ret = STRING_ABI;
@@ -503,6 +575,9 @@ function computeAbi(ty: TyFn): Abi {
       todo("complex tuple abi");
     case "struct":
       todo("struct ABI");
+    case "never":
+      ret = zst;
+      break;
     case "var":
       varUnreachable();
   }
@@ -510,7 +585,7 @@ function computeAbi(ty: TyFn): Abi {
   return { params, ret };
 }
 
-function wasmTypeForAbi(abi: Abi): {
+function wasmTypeForAbi(abi: FnAbi): {
   type: wasm.FuncType;
   paramLocations: VarLocation[];
 } {
@@ -568,6 +643,8 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
       todo("fn types");
     case "struct":
       todo("struct types");
+    case "never":
+      return [];
     case "var":
       varUnreachable();
   }
@@ -588,20 +665,26 @@ function todo(msg: string): never {
 // Make the program runnable using wasi-preview-1
 function addRt(cx: Context, ast: Ast) {
   const { mod } = cx;
-  const main = cx.funcIndices.get(ast.typeckResults!.main);
-  if (main === undefined) {
-    throw new Error(`main function (${main}) was not compiled.`);
-  }
+
+  const mainCall: wasm.Instr = { kind: "call", func: 9999999 };
+  cx.relocations.push({
+    kind: "funccall",
+    instr: mainCall,
+    res: ast.typeckResults!.main,
+  });
 
   const start: wasm.Func = {
     _name: "_start",
     type: internFuncType(cx, { params: [], returns: [] }),
     locals: [],
-    body: [{ kind: "call", func: main + 1 }],
+    body: [mainCall],
   };
 
   const startIdx = mod.funcs.length;
   mod.funcs.push(start);
+  console.log(mod.funcs.map(({ _name }) => _name));
+
+  console.log(startIdx);
 
   const reserveMemory = (amount: number) => {
     const start = cx.reservedHeapMemoryStart;
@@ -645,8 +728,16 @@ function addRt(cx: Context, ast: Ast) {
       { kind: "drop" },
     ],
   };
-
+  const printIdx = cx.mod.funcs.length;
   cx.mod.funcs.push(print);
 
-  mod.exports.push({ name: "_start", desc: { kind: "func", idx: startIdx } });
+  cx.funcIndices.set(
+    JSON.stringify({ kind: "builtin", name: "print" }),
+    printIdx
+  );
+
+  mod.exports.push({
+    name: "_start",
+    desc: { kind: "func", idx: startIdx + mod.imports.length },
+  });
 }
