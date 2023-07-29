@@ -10,13 +10,15 @@ import fs from "fs";
 import { exec } from "child_process";
 
 const input = `
-function printInt(a: Int) = ;
-
-function main() = (
-  let a = 0;
-  let b = 0;
-  printInt(a + b);
+function printInt(a: Int) = (
+  0;
+  (
+    0;
+    1
+  );
 );
+
+function main() = ;
 `;
 
 function main() {

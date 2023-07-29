@@ -1,4 +1,4 @@
-import { Ast, Expr, FunctionDef, Item, Ty, TyFn, varUnreachable } from "./ast";
+import { Ast, Expr, ExprBlock, FunctionDef, Item, Ty, TyFn, varUnreachable } from "./ast";
 import * as wasm from "./wasm/defs";
 
 type StringifiedForMap<T> = string;
@@ -111,6 +111,7 @@ Expression lowering.
 function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
   const ty = expr.ty!;
 
+  
   switch (expr.kind) {
     case "empty":
       // A ZST, do nothing.
@@ -119,10 +120,23 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       // Let, that's complicated.
       todo("let");
     case "block":
-      if (expr.exprs.length === 1) {
+      if (expr.exprs.length === 0) {
+        // do nothing
+      } else if (expr.exprs.length === 1) {
         lowerExpr(fcx, instrs, expr.exprs[0]);
       } else {
-        todo("complex blocks");
+        const typeIdx = internFuncType(fcx.cx, {
+          params: [],
+          returns: wasmTypeForBody(expr.ty!),
+        });
+
+        const instr: wasm.Instr = {
+          kind: "block",
+          instrs: lowerExprBlockBody(fcx, expr),
+          type: { kind: "typeidx", idx: typeIdx },
+        };
+
+        instrs.push(instr);
       }
       break;
     case "literal":
@@ -266,6 +280,23 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
   }
 }
 
+function lowerExprBlockBody(fcx: FuncContext, expr: ExprBlock & Expr): wasm.Instr[] {
+  const innerInstrs: wasm.Instr[] = [];
+
+  const headExprs = expr.exprs.slice(0, -1);
+  const tailExpr = expr.exprs[expr.exprs.length - 1];
+
+  headExprs.forEach((inner) => {
+    lowerExpr(fcx, innerInstrs, inner);
+    const types = wasmTypeForBody(inner.ty!);
+    types.forEach(() => innerInstrs.push({ kind: "drop" }));
+  });
+
+  lowerExpr(fcx, innerInstrs, tailExpr);
+
+  return innerInstrs;
+}
+
 function loadVariable(instrs: wasm.Instr[], loc: VarLocation) {
   switch (loc.kind) {
     case "local": {
@@ -376,25 +407,27 @@ function wasmTypeForAbi(abi: Abi): {
   return { type: { params, returns }, paramLocations };
 }
 
-function wasmTypeForBody(ty: Ty): wasm.ValType | undefined {
+function wasmTypeForBody(ty: Ty): wasm.ValType[] {
   switch (ty.kind) {
     case "string":
       todo("string types");
     case "int":
-      return "i64";
+      return ["i64"];
     case "bool":
-      return "i32";
+      return ["i32"];
     case "list":
       todo("list types");
     case "tuple":
       if (ty.elems.length === 0) {
-        return undefined;
+        return [];
       } else if (ty.elems.length === 1) {
         return wasmTypeForBody(ty.elems[0]);
       }
       todo("complex tuples");
     case "fn":
       todo("fn types");
+    case "struct":
+      todo("struct types");
     case "var":
       varUnreachable();
   }
