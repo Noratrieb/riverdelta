@@ -283,21 +283,32 @@ export class InferContext {
     }
   }
 
+  private findRoot(variable: number): number {
+    let root = variable;
+    let nextVar;
+    while ((nextVar = this.tyVars[root]).kind === "unified") {
+      root = nextVar.index;
+    }
+    return root;
+  }
+
   /**
    * Try to constrain a type variable to be of a specific type.
    * INVARIANT: Both sides must not be of res "final", use resolveIfPossible
    * before calling this.
    */
   private constrainVar(variable: number, ty: Ty) {
-    let root = variable;
-    let nextVar;
-    while ((nextVar = this.tyVars[root]).kind === "unified") {
-      root = nextVar.index;
-    }
+    let root = this.findRoot(variable);
 
     if (ty.kind === "var") {
-      // Point the lhs to the rhs.
-      this.tyVars[root] = { kind: "unified", index: ty.index };
+      // Now we point our root to the other root to unify the two graphs.
+      const otherRoot = this.findRoot(ty.index);
+
+      // If both types have the same root, we don't need to do anything
+      // as they're already part of the same graph.
+      if (root != otherRoot) {
+        this.tyVars[root] = { kind: "unified", index: otherRoot };
+      }
     } else {
       this.tyVars[root] = { kind: "final", ty };
     }

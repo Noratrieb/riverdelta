@@ -1,4 +1,4 @@
-import { TY_INT, TY_STRING } from "./ast";
+import { TY_INT, TY_STRING, TY_UNIT } from "./ast";
 import { DUMMY_SPAN as SPAN } from "./error";
 import { InferContext } from "./typeck";
 
@@ -33,4 +33,22 @@ it("should conflict assignments to resolvable type vars", () => {
   infcx.assign(b, TY_INT, SPAN);
 
   expect(() => infcx.assign(a, TY_STRING, SPAN)).toThrow();
+});
+
+it("should not cycle", () => {
+  const infcx = new InferContext();
+
+  const a = infcx.newVar();
+  const b = infcx.newVar();
+
+  infcx.assign(a, b, SPAN);
+  infcx.assign(b, a, SPAN);
+
+  const aType = infcx.resolveIfPossible(a);
+  expect(aType.kind).toEqual("var");
+
+  infcx.assign(a, TY_UNIT, SPAN);
+
+  const bType = infcx.resolveIfPossible(b);
+  expect(bType.kind).toEqual("tuple");
 });
