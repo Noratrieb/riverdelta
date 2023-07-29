@@ -51,6 +51,12 @@ export type Context = {
   relocations: Relocation[];
 };
 
+function escapeIdentName(name: string): string {
+  // this allows the implementation to use an odd number of leading
+  // underscores
+  return name.replace(/_/g, "__");
+}
+
 function internFuncType(cx: Context, type: wasm.FuncType): wasm.TypeIdx {
   const existing = getMap(cx.funcTypes, type);
   if (existing !== undefined) {
@@ -180,7 +186,7 @@ function lowerFunc(cx: Context, item: Item, func: FunctionDef) {
   const type = internFuncType(cx, wasmType);
 
   const wasmFunc: wasm.Func = {
-    _name: func.name,
+    _name: escapeIdentName(func.name),
     type,
     locals: [],
     body: [],
@@ -682,9 +688,6 @@ function addRt(cx: Context, ast: Ast) {
 
   const startIdx = mod.funcs.length;
   mod.funcs.push(start);
-  console.log(mod.funcs.map(({ _name }) => _name));
-
-  console.log(startIdx);
 
   const reserveMemory = (amount: number) => {
     const start = cx.reservedHeapMemoryStart;
@@ -707,7 +710,7 @@ function addRt(cx: Context, ast: Ast) {
   const iovecArray = reserveMemory(8);
 
   const print: wasm.Func = {
-    _name: "____print",
+    _name: "___print",
     locals: [],
     type: internFuncType(cx, { params: [POINTER, USIZE], returns: [] }),
     body: [
