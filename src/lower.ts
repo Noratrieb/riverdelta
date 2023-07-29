@@ -137,6 +137,8 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
         instrs.push({ kind: "local.set", imm: local });
 
         fcx.varLocations.push({ kind: "local", idx: local });
+      } else {
+        todo("complex locals");
       }
 
       break;
@@ -149,15 +151,10 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       } else if (expr.exprs.length === 1) {
         lowerExpr(fcx, instrs, expr.exprs[0]);
       } else {
-        const typeIdx = internFuncType(fcx.cx, {
-          params: [],
-          returns: wasmTypeForBody(expr.ty!),
-        });
-
         const instr: wasm.Instr = {
           kind: "block",
           instrs: lowerExprBlockBody(fcx, expr),
-          type: { kind: "typeidx", idx: typeIdx },
+          type: blockTypeForBody(fcx.cx, expr.ty!),
         };
 
         instrs.push(instr);
@@ -306,8 +303,27 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
     }
     case "call":
       todo("call");
-    case "if":
-      todo("ifs");
+    case "if": {
+      lowerExpr(fcx, instrs, expr.cond!);
+
+      const thenInstrs: wasm.Instr[] = [];
+      lowerExpr(fcx, thenInstrs, expr.then);
+
+      const elseInstrs: wasm.Instr[] = [];
+      // If there is no else, the type is (), so an empty instr array is correct.
+      if (expr.else) {
+        lowerExpr(fcx, elseInstrs, expr.else);
+      }
+
+      instrs.push({
+        kind: "if",
+        then: thenInstrs,
+        else: elseInstrs,
+        type: blockTypeForBody(fcx.cx, expr.ty!),
+      });
+
+      break;
+    }
   }
 }
 
@@ -465,6 +481,14 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
     case "var":
       varUnreachable();
   }
+}
+
+function blockTypeForBody(cx: Context, ty: Ty): wasm.Blocktype {
+  const typeIdx = internFuncType(cx, {
+    params: [],
+    returns: wasmTypeForBody(ty),
+  });
+  return { kind: "typeidx", idx: typeIdx };
 }
 
 function todo(msg: string): never {

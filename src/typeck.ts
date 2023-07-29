@@ -546,12 +546,13 @@ export function checkBody(
 
           infcx.assign(TY_BOOL, cond.ty!, cond.span);
 
-          let ty;
+          let ty: Ty;
           if (elsePart) {
             infcx.assign(then.ty!, elsePart.ty!, elsePart.span);
             ty = then.ty!;
           } else {
             infcx.assign(TY_UNIT, then.ty!, then.span);
+            ty = TY_UNIT;
           }
 
           return { ...expr, cond, then, else: elsePart, ty };
