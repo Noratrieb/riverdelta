@@ -1,4 +1,13 @@
-import { Ast, Expr, ExprBlock, FunctionDef, Item, Ty, TyFn, varUnreachable } from "./ast";
+import {
+  Ast,
+  Expr,
+  ExprBlock,
+  FunctionDef,
+  Item,
+  Ty,
+  TyFn,
+  varUnreachable,
+} from "./ast";
 import * as wasm from "./wasm/defs";
 
 type StringifiedForMap<T> = string;
@@ -111,15 +120,30 @@ Expression lowering.
 function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
   const ty = expr.ty!;
 
-  
   switch (expr.kind) {
-    case "empty":
+    case "empty": {
       // A ZST, do nothing.
       return;
-    case "let":
-      // Let, that's complicated.
-      todo("let");
-    case "block":
+    }
+    case "let": {
+      lowerExpr(fcx, instrs, expr.rhs);
+      const type = wasmTypeForBody(expr.rhs.ty!);
+      if (type.length === 0) {
+        fcx.varLocations.push({ kind: "zst" });
+      } else if (type.length === 1) {
+        const local = fcx.wasm.locals.length;
+        fcx.wasm.locals.push(type[0]);
+
+        instrs.push({ kind: "local.set", imm: local });
+
+        fcx.varLocations.push({ kind: "local", idx: local });
+      }
+
+      break;
+    }
+    case "block": {
+      const prevVarLocationLengths = fcx.varLocations.length;
+
       if (expr.exprs.length === 0) {
         // do nothing
       } else if (expr.exprs.length === 1) {
@@ -138,8 +162,11 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
 
         instrs.push(instr);
       }
+
+      fcx.varLocations.length = prevVarLocationLengths;
       break;
-    case "literal":
+    }
+    case "literal": {
       switch (expr.value.kind) {
         case "str":
           todo("strings");
@@ -147,7 +174,8 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
           instrs.push({ kind: "i64.const", imm: expr.value.value });
       }
       break;
-    case "ident":
+    }
+    case "ident": {
       const res = expr.value.res!;
       switch (res.kind) {
         case "local": {
@@ -175,7 +203,8 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       }
 
       break;
-    case "binary":
+    }
+    case "binary": {
       // By evaluating the LHS first, the RHS is on top, which
       // is correct as it's popped first. Evaluating the LHS first
       // is correct for the source language too so great, no swapping.
@@ -256,7 +285,8 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       }
 
       break;
-    case "unary":
+    }
+    case "unary": {
       lowerExpr(fcx, instrs, expr.rhs);
       switch (expr.unaryKind) {
         case "!":
@@ -273,6 +303,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
           todo("negation");
       }
       break;
+    }
     case "call":
       todo("call");
     case "if":
@@ -280,7 +311,10 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
   }
 }
 
-function lowerExprBlockBody(fcx: FuncContext, expr: ExprBlock & Expr): wasm.Instr[] {
+function lowerExprBlockBody(
+  fcx: FuncContext,
+  expr: ExprBlock & Expr
+): wasm.Instr[] {
   const innerInstrs: wasm.Instr[] = [];
 
   const headExprs = expr.exprs.slice(0, -1);

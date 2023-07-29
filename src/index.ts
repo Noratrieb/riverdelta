@@ -11,11 +11,13 @@ import { exec } from "child_process";
 
 const input = `
 function printInt(a: Int) = (
-  0;
-  (
-    0;
-    1
-  );
+  let a = 0;
+  let b = 0;
+  let c = ();
+
+  a + b;
+
+  c
 );
 
 function main() = ;
