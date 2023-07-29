@@ -8,14 +8,30 @@ import {
   TyFn,
   varUnreachable,
 } from "./ast";
+import { CompilerError } from "./error";
+import { encodeUtf8 } from "./utils";
 import * as wasm from "./wasm/defs";
 
 type StringifiedForMap<T> = string;
 
+const USIZE: wasm.ValType = "i32";
+// POINTERS ARE JUST INTEGERS
+const POINTER: wasm.ValType = USIZE;
+
+const STRING_TYPES: wasm.ValType[] = [POINTER, USIZE];
+const STRING_ABI: ArgAbi & RetAbi = {
+  kind: "aggregate",
+  types: STRING_TYPES,
+};
+
+const WASM_PAGE = 65536;
+
 export type Context = {
   mod: wasm.Module;
   funcTypes: Map<StringifiedForMap<wasm.FuncType>, wasm.TypeIdx>;
+  reservedHeapMemoryStart: number;
   funcIndices: Map<number, wasm.FuncIdx>;
+  ast: Ast;
 };
 
 function internFuncType(cx: Context, type: wasm.FuncType): wasm.TypeIdx {
@@ -28,6 +44,31 @@ function internFuncType(cx: Context, type: wasm.FuncType): wasm.TypeIdx {
   cx.mod.types.push(type);
   cx.funcTypes.set(s, idx);
   return idx;
+}
+
+function appendData(cx: Context, newData: Uint8Array): number {
+  const datas = cx.mod.datas;
+
+  if (datas.length === 0) {
+    datas.push({
+      init: newData,
+      mode: {
+        kind: "active",
+        memory: 0,
+        offset: [{ kind: "i32.const", imm: 0 }],
+      },
+      _name: "staticdata",
+    });
+    return 0;
+  } else {
+    const data = datas[0];
+    const idx = data.init.length;
+    const init = new Uint8Array(data.init.length + newData.length);
+    init.set(data.init, 0);
+    init.set(newData, data.init.length);
+    data.init = init;
+    return idx;
+  }
 }
 
 export function lower(ast: Ast): wasm.Module {
@@ -43,7 +84,7 @@ export function lower(ast: Ast): wasm.Module {
     exports: [],
   };
 
-  mod.mems.push({ _name: "memory", type: { min: 1024, max: 1024 } });
+  mod.mems.push({ _name: "memory", type: { min: WASM_PAGE, max: WASM_PAGE } });
   mod.exports.push({ name: "memory", desc: { kind: "memory", idx: 0 } });
 
   mod.tables.push({
@@ -55,7 +96,13 @@ export function lower(ast: Ast): wasm.Module {
     desc: { kind: "table", idx: 0 },
   });
 
-  const cx: Context = { mod, funcTypes: new Map(), funcIndices: new Map() };
+  const cx: Context = {
+    mod,
+    funcTypes: new Map(),
+    funcIndices: new Map(),
+    reservedHeapMemoryStart: 0,
+    ast,
+  };
 
   ast.items.forEach((item) => {
     switch (item.kind) {
@@ -64,6 +111,8 @@ export function lower(ast: Ast): wasm.Module {
       }
     }
   });
+
+  cx.reservedHeapMemoryStart = (mod.datas[0].init.length & ~0x8) + 0x8;
 
   addRt(cx, ast);
 
@@ -80,8 +129,14 @@ type FuncContext = {
 
 type Abi = { params: ArgAbi[]; ret: RetAbi };
 
-type ArgAbi = { kind: "scalar"; type: wasm.ValType } | { kind: "zst" };
-type RetAbi = { kind: "scalar"; type: wasm.ValType } | { kind: "zst" };
+type ArgAbi =
+  | { kind: "scalar"; type: wasm.ValType }
+  | { kind: "zst" }
+  | { kind: "aggregate"; types: wasm.ValType[] };
+type RetAbi =
+  | { kind: "scalar"; type: wasm.ValType }
+  | { kind: "zst" }
+  | { kind: "aggregate"; types: wasm.ValType[] };
 
 type VarLocation = { kind: "local"; idx: number } | { kind: "zst" };
 
@@ -166,9 +221,16 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
     case "literal": {
       switch (expr.value.kind) {
         case "str":
-          todo("strings");
+          const utf8 = encodeUtf8(expr.value.value);
+          const idx = appendData(fcx.cx, utf8);
+
+          instrs.push({ kind: "i32.const", imm: idx });
+          instrs.push({ kind: "i32.const", imm: utf8.length });
+
+          break;
         case "int":
           instrs.push({ kind: "i64.const", imm: expr.value.value });
+          break;
       }
       break;
     }
@@ -234,6 +296,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
             break;
           case ">":
             kind = "i64.gt_u";
+            // errs
             break;
           case "==":
             kind = "i64.eq";
@@ -301,8 +364,24 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       }
       break;
     }
-    case "call":
-      todo("call");
+    case "call": {
+      if (expr.lhs.kind !== "ident") {
+        todo("non constant calls");
+      }
+      if (expr.lhs.value.res!.kind !== "builtin") {
+        todo("youre not a builtin, fuck you");
+      }
+      const printIdx =
+        fcx.cx.ast.items.filter((item) => item.kind === "function").length +
+        /*import*/ 1 +
+        /*_start*/ 1;
+      expr.args.forEach((arg) => {
+        lowerExpr(fcx, instrs, arg);
+      });
+      instrs.push({ kind: "call", func: printIdx });
+
+      break;
+    }
     case "if": {
       lowerExpr(fcx, instrs, expr.cond!);
 
@@ -369,7 +448,7 @@ function computeAbi(ty: TyFn): Abi {
   function paramAbi(param: Ty): ArgAbi {
     switch (param.kind) {
       case "string":
-        todo("string abi");
+        return STRING_ABI;
       case "fn":
         todo("fn abi");
       case "int":
@@ -397,7 +476,8 @@ function computeAbi(ty: TyFn): Abi {
   let ret: RetAbi;
   switch (ty.returnTy.kind) {
     case "string":
-      todo("string abi");
+      ret = STRING_ABI;
+      break;
     case "fn":
       todo("fn abi");
     case "int":
@@ -441,7 +521,11 @@ function wasmTypeForAbi(abi: Abi): {
         break;
       case "zst":
         paramLocations.push({ kind: "zst" });
-        return undefined;
+        break;
+      case "aggregate":
+        paramLocations.push({ kind: "local", idx: params.length });
+        params.push(...arg.types);
+        break;
     }
   });
   let returns: wasm.ValType[];
@@ -452,6 +536,8 @@ function wasmTypeForAbi(abi: Abi): {
     case "zst":
       returns = [];
       break;
+    case "aggregate":
+      returns = abi.ret.types;
   }
 
   return { type: { params, returns }, paramLocations };
@@ -460,7 +546,7 @@ function wasmTypeForAbi(abi: Abi): {
 function wasmTypeForBody(ty: Ty): wasm.ValType[] {
   switch (ty.kind) {
     case "string":
-      todo("string types");
+      return STRING_TYPES;
     case "int":
       return ["i64"];
     case "bool":
@@ -498,7 +584,6 @@ function todo(msg: string): never {
 // Make the program runnable using wasi-preview-1
 function addRt(cx: Context, ast: Ast) {
   const { mod } = cx;
-
   const main = cx.funcIndices.get(ast.typeckResults!.main);
   if (main === undefined) {
     throw new Error(`main function (${main}) was not compiled.`);
@@ -508,11 +593,56 @@ function addRt(cx: Context, ast: Ast) {
     _name: "_start",
     type: internFuncType(cx, { params: [], returns: [] }),
     locals: [],
-    body: [{ kind: "call", func: main }],
+    body: [{ kind: "call", func: main + 1 }],
   };
 
   const startIdx = mod.funcs.length;
   mod.funcs.push(start);
+
+  const reserveMemory = (amount: number) => {
+    const start = cx.reservedHeapMemoryStart;
+    cx.reservedHeapMemoryStart += amount;
+    return start;
+  };
+
+  const fd_write_type = internFuncType(cx, {
+    params: ["i32", "i32", "i32", "i32"],
+    returns: ["i32"],
+  });
+
+  cx.mod.imports.push({
+    module: "wasi_snapshot_preview1",
+    name: "fd_write",
+    desc: { kind: "func", type: fd_write_type },
+  });
+
+  const printReturnValue = reserveMemory(4);
+  const iovecArray = reserveMemory(8);
+
+  const print: wasm.Func = {
+    _name: "____print",
+    locals: [],
+    type: internFuncType(cx, { params: [POINTER, USIZE], returns: [] }),
+    body: [
+      // get the pointer and store it in the iovec
+      { kind: "i32.const", imm: iovecArray },
+      { kind: "local.get", imm: 0 },
+      { kind: "i32.store", imm: { offset: 0, align: 4 } },
+      // get the length and store it in the iovec
+      { kind: "i32.const", imm: iovecArray + 4 }, 
+      { kind: "local.get", imm: 1 },
+      { kind: "i32.store", imm: { offset: 0, align: 4 } },
+      // now call stuff
+      { kind: "i32.const", imm: /*stdout*/ 1 },
+      { kind: "i32.const", imm: iovecArray },
+      { kind: "i32.const", imm: /*iovec len*/ 1 },
+      { kind: "i32.const", imm: /*out ptr*/ printReturnValue },
+      { kind: "call", func: 0 },
+      { kind: "drop" },
+    ],
+  };
+
+  cx.mod.funcs.push(print);
 
   mod.exports.push({ name: "_start", desc: { kind: "func", idx: startIdx } });
 }

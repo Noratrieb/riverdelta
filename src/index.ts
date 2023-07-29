@@ -10,15 +10,12 @@ import fs from "fs";
 import { exec } from "child_process";
 
 const input = `
-function printInt(a: Int): Int = (
-  if true then (
-    0;
-    1;
-  );
-  0
+function main() = (
+  print("uwu
+");
+  print("owo
+");
 );
-
-function main() = ;
 `;
 
 function main() {

@@ -136,7 +136,13 @@ function printString(s: string, f: Formatter) {
 }
 
 function printBinaryString(buf: Uint8Array, f: Formatter) {
-  f.word(`"${buf.toString()}"`);
+  const parts: string[] = [];
+  for (let i = 0; i < buf.length; i++) {
+    const idx = buf[i];
+    parts.push(`\\${idx.toString(16).padStart(2, "0")}`);
+  }
+
+  f.word(`"${parts.join("")}"`);
 }
 
 function printId(id: string | undefined, f: Formatter) {
@@ -200,11 +206,11 @@ function printBlockType(type: Blocktype, f: Formatter) {
 }
 
 function printMemarg(arg: MemArg, f: Formatter) {
+  if (arg.offset /*0->false*/) {
+    f.word(`offset=${arg.offset}`);
+  }
   if (arg.align !== undefined) {
     f.word(`align=${arg.align}`);
-  }
-  if (arg.offset /*0->false*/) {
-    `offset=${arg.offset}`;
   }
 }
 
