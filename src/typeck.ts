@@ -641,23 +641,6 @@ export function checkBody(
 }
 
 function checkBinary(expr: Expr & ExprBinary): Expr {
-  const checkPrecedence = (inner: Expr, side: string) => {
-    if (inner.kind === "binary") {
-      const ourClass = binaryExprPrecedenceClass(expr.binaryKind);
-      const innerClass = binaryExprPrecedenceClass(inner.binaryKind);
-
-      if (ourClass !== innerClass) {
-        throw new CompilerError(
-          `mixing operators without parentheses is not allowed. ${side} is ${inner.binaryKind}, which is different from ${expr.binaryKind}`,
-          expr.span
-        );
-      }
-    }
-  };
-
-  checkPrecedence(expr.lhs, "left");
-  checkPrecedence(expr.rhs, "right");
-
   let lhsTy = expr.lhs.ty!;
   let rhsTy = expr.rhs.ty!;
 

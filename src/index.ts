@@ -11,8 +11,7 @@ import { exec } from "child_process";
 
 const input = `
 function main() = (
-  print("\\3AAA\\n");
-  print("meow\\n");
+  1 + 2 * 3;
 );
 `;
 

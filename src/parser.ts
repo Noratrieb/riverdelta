@@ -18,6 +18,7 @@ import {
   TypeDef,
   UNARY_KINDS,
   UnaryKind,
+  binaryExprPrecedenceClass,
   foldAst,
   superFoldExpr,
 } from "./ast";
@@ -507,23 +508,42 @@ function unexpectedToken(token: Token): never {
 function validateAst(ast: Ast) {
   const validator: Folder = {
     ...DEFAULT_FOLDER,
-    expr(value: Expr): Expr {
-      if (value.kind === "block") {
-        value.exprs.forEach((expr) => {
-          if (expr.kind === "let") {
-            this.expr(expr.rhs);
-            if (expr.type) {
-              this.type(expr.type);
+    expr(expr: Expr): Expr {
+      if (expr.kind === "block") {
+        expr.exprs.forEach((inner) => {
+          if (inner.kind === "let") {
+            this.expr(inner.rhs);
+            if (inner.type) {
+              this.type(inner.type);
             }
           } else {
-            this.expr(expr);
+            this.expr(inner);
           }
         });
-        return value;
-      } else if (value.kind === "let") {
-        throw new CompilerError("let is only allowed in blocks", value.span);
+        return expr;
+      } else if (expr.kind === "let") {
+        throw new CompilerError("let is only allowed in blocks", expr.span);
+      } else if (expr.kind === "binary") {
+        const checkPrecedence = (inner: Expr, side: string) => {
+          if (inner.kind === "binary") {
+            const ourClass = binaryExprPrecedenceClass(expr.binaryKind);
+            const innerClass = binaryExprPrecedenceClass(inner.binaryKind);
+
+            if (ourClass !== innerClass) {
+              throw new CompilerError(
+                `mixing operators without parentheses is not allowed. ${side} is ${inner.binaryKind}, which is different from ${expr.binaryKind}`,
+                expr.span
+              );
+            }
+          }
+        };
+
+        checkPrecedence(expr.lhs, "left");
+        checkPrecedence(expr.rhs, "right");
+
+        return superFoldExpr(expr, this);
       } else {
-        return superFoldExpr(value, this);
+        return superFoldExpr(expr, this);
       }
     },
   };
