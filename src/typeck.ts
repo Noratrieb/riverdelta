@@ -61,6 +61,8 @@ function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
       return TY_BOOL;
     case "print":
       return mkTyFn([TY_STRING], TY_UNIT);
+    case "trap":
+      return mkTyFn([], TY_NEVER);
     case "__i32_store":
       return mkTyFn([TY_I32, TY_I32], TY_UNIT);
     case "__i64_store":

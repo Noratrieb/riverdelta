@@ -300,6 +300,7 @@ export const BUILTINS = [
   "Bool",
   "true",
   "false",
+  "trap",
   // Intrinsics:
   "__i32_store",
   "__i64_store",

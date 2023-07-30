@@ -203,6 +203,7 @@ type FuncContext = {
   cx: Context;
   item: Item;
   func: FunctionDef;
+  wasmType: wasm.FuncType;
   wasm: wasm.Func;
   varLocations: VarLocation[];
   loopDepths: Map<LoopId, number>;
@@ -231,6 +232,7 @@ function lowerFunc(cx: Context, item: Item, func: FunctionDef) {
     cx,
     item,
     func,
+    wasmType,
     wasm: wasmFunc,
     varLocations: paramLocations,
     loopDepths: new Map(),
@@ -265,7 +267,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       lowerExpr(fcx, instrs, expr.rhs);
       const types = wasmTypeForBody(expr.rhs.ty!);
 
-      const local = fcx.wasm.locals.length;
+      const local = fcx.wasm.locals.length + fcx.wasmType.params.length;
 
       fcx.wasm.locals.push(...types);
 
@@ -498,6 +500,10 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
 
       if (expr.lhs.value.res!.kind === "builtin") {
         switch (expr.lhs.value.res!.name) {
+          case "trap": {
+            instrs.push({ kind: "unreachable" });
+            break exprKind;
+          }
           case "__i32_load": {
             lowerExpr(fcx, instrs, expr.args[0]);
             instrs.push({ kind: "i64.load", imm: {} });

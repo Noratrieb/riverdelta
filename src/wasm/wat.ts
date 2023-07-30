@@ -541,10 +541,12 @@ function printImport(import_: Import, f: Formatter) {
   });
 }
 
-function printFunction(func: Func, f: Formatter) {
+function printFunction(func: Func, idx: number, f: Formatter) {
   f.sexpr(() => {
     f.keyword("func");
     printId(func._name, f);
+
+    f.word(`(;${idx};)`, chalk.gray);
 
     f.sexpr(() => {
       f.keyword("type");
@@ -678,9 +680,9 @@ function printModule(module: Module, f: Formatter) {
       printImport(import_, f);
     });
 
-    module.funcs.forEach((func) => {
+    module.funcs.forEach((func, i) => {
       breakIfAny();
-      printFunction(func, f);
+      printFunction(func, i + module.imports.length, f);
     });
 
     module.tables.forEach((table) => {

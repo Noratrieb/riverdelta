@@ -9,23 +9,84 @@ import { writeModuleWatToString } from "./wasm/wat";
 import fs from "fs";
 import { exec } from "child_process";
 
-const input = `
+const INPUT = `
 function main() = (
-  prInt(0);
-  prInt(1);
-  prInt(9);
-  prInt(10);
-  prInt(100);
+  prIntln(0);
+  prIntln(1);
+  prIntln(9);
+  prIntln(2352353);
+  prIntln(100);
 );
 
-function prInt(a: Int) = (
-
+function prIntln(x: Int) = (
+  prInt(x);
+  print("\n");
 );
 
-function uwu(): (Int, Int) = (0, 0);
+function stringForDigit(x: Int): String = 
+  if x == 0 then "0"
+  else if x == 1 then "1"
+  else if x == 2 then "2"
+  else if x == 3 then "3"
+  else if x == 4 then "4"
+  else if x == 5 then "5"
+  else if x == 6 then "6"
+  else if x == 7 then "7"
+  else if x == 8 then "8"
+  else if x == 9 then "9"
+  else trap();
+
+function log10(x: Int): Int = (
+  let i = 0;
+  loop (
+    if x < 10 then break;
+    i = i + 1;
+    x = x / 10;
+  );
+  i
+);
+
+function pow(base: Int, exp: Int): Int = (
+  let acc = 1;
+  loop (
+    if exp == 0 then break;
+    acc = acc * base;
+    exp = exp - 1;
+  );
+  acc
+);
+
+function prInt(x: Int) = (
+  let mag = log10(x);
+
+  loop (
+    if mag == 0 then break;
+    let base = pow(10, mag);
+
+    let digit = x / base;
+    print(stringForDigit(digit));
+
+    x = x % base;
+    mag = mag - 1;
+  );
+
+  print(stringForDigit(x % 10));
+);
+
+function println(s: String) = (
+  print(s);
+  print("\n");
+);
 `;
 
 function main() {
+  let input: string;
+  if (process.argv.length > 2) {
+    input = fs.readFileSync(process.argv[2], { encoding: "utf-8" });
+  } else {
+    input = INPUT;
+  }
+
   withErrorHandler(input, () => {
     const start = Date.now();
 

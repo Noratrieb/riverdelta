@@ -47,16 +47,17 @@ function renderError(input: string, e: CompilerError) {
     throw Error(`Span out of bounds: ${e.span.start}..${e.span.end}`);
   }
   const lineIdx = lineSpans.indexOf(line);
+  const lineNo = lineIdx + 1;
   console.error(`error: ${e.message}`);
 
-  console.error(`${lineIdx} | ${spanToSnippet(input, line)}`);
+  console.error(`${lineNo} | ${spanToSnippet(input, line)}`);
   const startRelLine =
     e.span.start === Number.MAX_SAFE_INTEGER ? 0 : e.span.start - line.start;
 
   const spanLength = min(e.span.end, line.end) - e.span.start;
 
   console.error(
-    `${" ".repeat(String(lineIdx).length)}   ${" ".repeat(
+    `${" ".repeat(String(lineNo).length)}   ${" ".repeat(
       startRelLine
     )}${"^".repeat(spanLength)}`
   );
