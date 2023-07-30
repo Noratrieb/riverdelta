@@ -15,6 +15,7 @@ import {
   Resolution,
   Ty,
   TY_BOOL,
+  TY_I32,
   TY_INT,
   TY_NEVER,
   TY_STRING,
@@ -33,6 +34,9 @@ function builtinAsTy(name: string, span: Span): Ty {
     }
     case "Int": {
       return TY_INT;
+    }
+    case "I32": {
+      return TY_I32;
     }
     case "Bool": {
       return TY_BOOL;
@@ -353,6 +357,10 @@ export class InferContext {
       }
       case "int": {
         if (rhs.kind === "int") return;
+        break;
+      }
+      case "i32": {
+        if (rhs.kind === "i32") return;
         break;
       }
       case "bool": {

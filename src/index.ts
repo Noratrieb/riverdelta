@@ -10,10 +10,14 @@ import fs from "fs";
 import { exec } from "child_process";
 
 const input = `
+// import "wasi_snapshot_preview1" "fd_write"(a: I32, b: I32, c: I32, d: I32): I32;
+
 function main() = (
   loop (no(break););
   uwu(10);
 );
+
+function meow(a: I32): I32 = a;
 
 function no(a: !): String = a;
 

@@ -524,6 +524,8 @@ function computeAbi(ty: TyFn): FnAbi {
         todo("fn abi");
       case "int":
         return ["i64"];
+      case "i32":
+        return ["i32"];
       case "bool":
         return ["i32"];
       case "list":
@@ -572,6 +574,8 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
       return STRING_TYPES;
     case "int":
       return ["i64"];
+    case "i32":
+      return ["i32"];
     case "bool":
       return ["i32"];
     case "list":

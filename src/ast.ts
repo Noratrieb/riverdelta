@@ -115,7 +115,7 @@ export type ExprBreak = {
    * The break target block.
    * May be any control flow block, labelled from inside out.
    */
-  target?: number,
+  target?: number;
 };
 
 export type ExprStructLiteral = {
@@ -261,6 +261,7 @@ export const BUILTINS = [
   "print",
   "String",
   "Int",
+  "I32",
   "Bool",
   "true",
   "false",
@@ -282,7 +283,10 @@ export type TyString = {
 
 export type TyInt = {
   kind: "int";
-  signed: boolean;
+};
+
+export type TyI32 = {
+  kind: "i32";
 };
 
 export type TyBool = {
@@ -328,6 +332,7 @@ export type TyNever = {
 export type Ty =
   | TyString
   | TyInt
+  | TyI32
   | TyBool
   | TyList
   | TyTuple
@@ -343,7 +348,8 @@ export function tyIsUnit(ty: Ty): ty is TyUnit {
 export const TY_UNIT: Ty = { kind: "tuple", elems: [] };
 export const TY_STRING: Ty = { kind: "string" };
 export const TY_BOOL: Ty = { kind: "bool" };
-export const TY_INT: Ty = { kind: "int", signed: false };
+export const TY_INT: Ty = { kind: "int" };
+export const TY_I32: Ty = { kind: "i32" };
 export const TY_NEVER: Ty = { kind: "never" };
 
 export type TypeckResults = {

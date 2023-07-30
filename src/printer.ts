@@ -178,6 +178,9 @@ export function printTy(ty: Ty): string {
     case "int": {
       return "Int";
     }
+    case "i32": {
+      return "I32";
+    }
     case "bool": {
       return "Bool";
     }
