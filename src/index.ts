@@ -11,7 +11,15 @@ import { exec } from "child_process";
 
 const input = `
 function main() = (
-  let a = (0,);
+  prInt(0);
+  prInt(1);
+  prInt(9);
+  prInt(10);
+  prInt(100);
+);
+
+function prInt(a: Int) = (
+
 );
 
 function uwu(): (Int, Int) = (0, 0);

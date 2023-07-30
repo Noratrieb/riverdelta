@@ -24,6 +24,7 @@ export type DatalessToken =
   | "-"
   | "*"
   | "/"
+  | "%"
   | "&"
   | "|"
   | "!"
@@ -76,6 +77,7 @@ const SINGLE_PUNCT: string[] = [
   "/",
   "&",
   "|",
+  "%",
 ];
 
 export function tokenize(input: string): Token[] {

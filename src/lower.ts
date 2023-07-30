@@ -407,6 +407,9 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
           case "/":
             kind = `${valty}.div_u`;
             break;
+          case "%":
+            kind = `${valty}.rem_u`;
+            break;
           case "&":
             kind = `${valty}.and`;
             break;
@@ -433,7 +436,8 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
             kind = `${valty}.ne`;
             break;
         }
-        instrs.push({ kind });
+        const instr: wasm.NumericInstr = { kind } as any; // Typescript is buggy.
+        instrs.push(instr);
       } else if (lhsTy.kind === "bool" && rhsTy.kind === "bool") {
         let kind: wasm.Instr["kind"];
 
@@ -458,6 +462,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
           case "-":
           case "*":
           case "/":
+          case "%":
             throw new Error(`Invalid bool binary expr: ${expr.binaryKind}`);
         }
 

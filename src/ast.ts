@@ -191,6 +191,7 @@ export type BinaryKind =
   | "-"
   | "*"
   | "/"
+  | "%"
   | "&"
   | "|"
   | "<"
@@ -211,13 +212,14 @@ export const COMPARISON_KINDS: BinaryKind[] = [
 export const EQUALITY_KINDS: BinaryKind[] = ["==", "!="];
 export const LOGICAL_KINDS: BinaryKind[] = ["&", "|"];
 export const ARITH_TERM_KINDS: BinaryKind[] = ["+", "-"];
-export const ARITH_FACTOR_KINDS: BinaryKind[] = ["*", "/"];
+export const ARITH_FACTOR_KINDS: BinaryKind[] = ["*", "/", "%"];
 
 const BINARY_KIND_PREC_CLASS = new Map<BinaryKind, number>([
   ["+", 0],
   ["-", 0],
   ["*", 0],
   ["/", 0],
+  ["%", 0],
   ["&", 1],
   ["|", 2],
   ["<", 3],
