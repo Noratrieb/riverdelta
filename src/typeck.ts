@@ -677,6 +677,76 @@ export function checkBody(
 
           return { ...expr, lhs, args, ty: lhsTy.returnTy };
         }
+        case "fieldAccess": {
+          const lhs = this.expr(expr.lhs);
+          lhs.ty = infcx.resolveIfPossible(lhs.ty!);
+
+          const { field } = expr;
+          let ty: Ty;
+          let fieldIdx: number;
+          switch (lhs.ty.kind) {
+            case "tuple": {
+              const { elems } = lhs.ty;
+              if (typeof field.value === "number") {
+                if (elems.length > field.value) {
+                  ty = elems[field.value];
+                  fieldIdx = field.value;
+                } else {
+                  throw new CompilerError(
+                    `tuple with ${elems.length} elements cannot be indexed with ${field.value}`,
+                    field.span
+                  );
+                }
+              } else {
+                throw new CompilerError(
+                  "tuple fields must be accessed with numbers",
+                  field.span
+                );
+              }
+              break;
+            }
+            case "struct": {
+              if (typeof field.value === "string") {
+                const idx = lhs.ty.fields.findIndex(
+                  ([name]) => name === field.value
+                );
+                if (idx === -1) {
+                  throw new CompilerError(
+                    `field \`${field.value}\` does not exist on ${printTy(
+                      lhs.ty
+                    )}`,
+                    field.span
+                  );
+                }
+
+                ty = lhs.ty.fields[idx][1];
+                fieldIdx = idx;
+              } else {
+                throw new CompilerError(
+                  "struct fields must be accessed with their name",
+                  field.span
+                );
+              }
+              break;
+            }
+            default: {
+              throw new CompilerError(
+                "only tuples and structs have fields",
+                expr.span
+              );
+            }
+          }
+
+          return {
+            ...expr,
+            lhs,
+            field: {
+              ...expr.field,
+              fieldIdx,
+            },
+            ty,
+          };
+        }
         case "if": {
           const cond = this.expr(expr.cond);
           const then = this.expr(expr.then);

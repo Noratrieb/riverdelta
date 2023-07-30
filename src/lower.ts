@@ -9,6 +9,7 @@ import {
   Resolution,
   Ty,
   TyFn,
+  TyTuple,
   varUnreachable,
 } from "./ast";
 import { encodeUtf8, unwrap } from "./utils";
@@ -558,6 +559,68 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       instrs.push(callInstr);
       break;
     }
+    case "fieldAccess": {
+      // We could just naively always evaluate the LHS normally, but that's kinda
+      // stupid as it would cause way too much code for `let a = (0, 0, 0); a.0`
+      // as that operation would first load the entire tuple onto the stack!
+      // Therefore, we are a little clever be peeking into the LHS and doing
+      // something smarter if it's another field access or ident (in the future,
+      // we should be able to generalize this to all "places"/"lvalues").
+
+      // TODO: Actually do this instead of being naive.
+
+      const isPlace = (expr: Expr) =>
+        expr.kind === "ident" || expr.kind === "fieldAccess";
+
+      function project() {}
+
+      lowerExpr(fcx, instrs, expr.lhs);
+
+      switch (expr.lhs.ty!.kind) {
+        case "tuple": {
+          // Tuples have a by-value ABI, so we can simply index.
+          const lhsSize = argRetAbi(expr.lhs.ty!).length;
+          const resultAbi = argRetAbi(expr.ty!);
+          const resultSize = resultAbi.length;
+          const wasmIdx = wasmTypeIdxForTupleField(
+            expr.lhs.ty!,
+            expr.field.fieldIdx!
+          );
+
+          // lhsSize=5, resultSize=2, wasmIdx=2
+          // I I Y Y I
+          // drop, 2xlocal.set, drop, drop, 2xlocal.get
+
+          // TODO: Establish some way of having reusable "scratch locals".
+          const localIdx = fcx.wasm.locals.length + fcx.wasmType.params.length;
+          fcx.wasm.locals.push(...resultAbi);
+
+          Array(lhsSize - wasmIdx - resultSize)
+            .fill(0)
+            .forEach(() => instrs.push({ kind: "drop" }));
+
+          if (expr.field.fieldIdx! > 0) {
+            // Keep the result in scratch space.
+            storeVariable(instrs, { localIdx, types: resultAbi });
+
+            Array(wasmIdx)
+              .fill(0)
+              .forEach(() => instrs.push({ kind: "drop" }));
+
+            loadVariable(instrs, { localIdx, types: resultAbi });
+          }
+
+          break;
+        }
+        case "struct": {
+          todo("struct field accesses");
+        }
+        default:
+          throw new Error("invalid field access lhs");
+      }
+
+      break;
+    }
     case "if": {
       lowerExpr(fcx, instrs, expr.cond!);
 
@@ -690,32 +753,32 @@ function storeVariable(instrs: wasm.Instr[], loc: VarLocation) {
   });
 }
 
-function computeAbi(ty: TyFn): FnAbi {
-  function argRetAbi(param: Ty): ArgRetAbi {
-    switch (param.kind) {
-      case "string":
-        return STRING_ABI;
-      case "fn":
-        todo("fn abi");
-      case "int":
-        return ["i64"];
-      case "i32":
-        return ["i32"];
-      case "bool":
-        return ["i32"];
-      case "list":
-        todo("list abi");
-      case "tuple":
-        return param.elems.flatMap(argRetAbi);
-      case "struct":
-        todo("struct ABI");
-      case "never":
-        return [];
-      case "var":
-        varUnreachable();
-    }
+function argRetAbi(param: Ty): ArgRetAbi {
+  switch (param.kind) {
+    case "string":
+      return STRING_ABI;
+    case "fn":
+      todo("fn abi");
+    case "int":
+      return ["i64"];
+    case "i32":
+      return ["i32"];
+    case "bool":
+      return ["i32"];
+    case "list":
+      todo("list abi");
+    case "tuple":
+      return param.elems.flatMap(argRetAbi);
+    case "struct":
+      todo("struct ABI");
+    case "never":
+      return [];
+    case "var":
+      varUnreachable();
   }
+}
 
+function computeAbi(ty: TyFn): FnAbi {
   const params = ty.params.map(argRetAbi);
   const ret = argRetAbi(ty.returnTy);
 
@@ -771,6 +834,14 @@ function blockTypeForBody(cx: Context, ty: Ty): wasm.Blocktype {
     returns: wasmTypeForBody(ty),
   });
   return { kind: "typeidx", idx: typeIdx };
+}
+
+function wasmTypeIdxForTupleField(ty: TyTuple, idx: number): number {
+  // Tuples are all flattened by value, so we just count the values in
+  // the flattened representation.
+  const layout = ty.elems.map(argRetAbi);
+  const head = layout.slice(0, idx);
+  return head.reduce((a, b) => a + b.length, 0);
 }
 
 function todo(msg: string): never {

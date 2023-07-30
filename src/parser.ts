@@ -188,7 +188,7 @@ function parseExpr(t: Token[]): [Token[], Expr] {
 
   UNARY = { "!" | "-" } CALL
 
-  CALL = ATOM { "(" EXPR_LIST ")" }
+  CALL = ATOM { ( "(" EXPR_LIST ")" ) | ( "." ( IDENT | NUMBER ) ) }
 
   ATOM = "(" { EXPR ";" | "," } EXPR ")" | IDENT { STRUCT_INIT } | LITERAL | EMPTY | LET | IF | LOOP | BREAK
   EMPTY =
@@ -271,14 +271,34 @@ function parseExprCall(t: Token[]): [Token[], Expr] {
   let lhs: Expr;
   [t, lhs] = parseExprAtom(t);
 
-  while (next(t)[1].kind === "(") {
-    let popen;
-    [t, popen] = next(t);
+  while (next(t)[1].kind === "(" || next(t)[1].kind === ".") {
+    let tok;
+    [t, tok] = next(t);
 
-    let args;
-    [t, args] = parseCommaSeparatedList(t, ")", parseExpr);
+    if (tok.kind === "(") {
+      let args;
+      [t, args] = parseCommaSeparatedList(t, ")", parseExpr);
 
-    lhs = { kind: "call", span: popen.span, lhs, args };
+      lhs = { kind: "call", span: tok.span, lhs, args };
+    } else if (tok.kind === ".") {
+      let access;
+      [t, access] = next(t);
+      let value;
+      if (access.kind === "identifier") {
+        value = access.ident;
+      } else if (access.kind === "lit_int") {
+        value = access.value;
+      } else {
+        unexpectedToken(access, "identifier or integer");
+      }
+
+      lhs = {
+        kind: "fieldAccess",
+        lhs,
+        field: { span: access.span, value },
+        span: spanMerge(lhs.span, access.span),
+      };
+    }
   }
 
   return [t, lhs];
@@ -565,7 +585,10 @@ function expectNext<T extends BaseToken>(
   let tok;
   [t, tok] = next(t);
   if (tok.kind !== kind) {
-    throw new CompilerError(`expected \`${kind}\`, found \`${tok.kind}\``, tok.span);
+    throw new CompilerError(
+      `expected \`${kind}\`, found \`${tok.kind}\``,
+      tok.span
+    );
   }
   return [t, tok as unknown as T & Token];
 }

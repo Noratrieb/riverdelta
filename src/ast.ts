@@ -120,6 +120,16 @@ export type ExprCall = {
   args: Expr[];
 };
 
+export type ExprFieldAccess = {
+  kind: "fieldAccess";
+  lhs: Expr;
+  field: {
+    value: string | number;
+    span: Span;
+    fieldIdx?: number;
+  };
+};
+
 export type ExprIf = {
   kind: "if";
   cond: Expr;
@@ -161,6 +171,7 @@ export type ExprKind =
   | ExprBinary
   | ExprUnary
   | ExprCall
+  | ExprFieldAccess
   | ExprIf
   | ExprLoop
   | ExprBreak
@@ -544,6 +555,13 @@ export function superFoldExpr(expr: Expr, folder: Folder): Expr {
         kind: "call",
         lhs: folder.expr(expr.lhs),
         args: expr.args.map((expr) => folder.expr(expr)),
+      };
+    }
+    case "fieldAccess": {
+      return {
+        ...expr,
+        kind: "fieldAccess",
+        lhs: folder.expr(expr.lhs),
       };
     }
     case "if": {

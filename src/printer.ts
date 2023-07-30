@@ -140,6 +140,9 @@ function printExpr(expr: Expr, indent: number): string {
         );
       }
     }
+    case "fieldAccess": {
+      return `${printExpr(expr.lhs, indent)}.${expr.field.value}`;
+    }
     case "if": {
       const elsePart = expr.else
         ? ` else ${printExpr(expr.else, indent + 1)}`

@@ -18,6 +18,7 @@ export type DatalessToken =
   | "]"
   | ";"
   | ":"
+  | "."
   | ","
   | "="
   | "+"
@@ -70,6 +71,7 @@ const SINGLE_PUNCT: string[] = [
   "]",
   ";",
   ":",
+  ".",
   ",",
   "+",
   "-",
@@ -245,7 +247,7 @@ export function tokenize(input: string): Token[] {
           } else if (isWhitespace(next)) {
             // ignore
           } else {
-            throw new CompilerError(`Invalid character: \`${next}\``, span);
+            throw new CompilerError(`invalid character: \`${next}\``, span);
           }
         }
       }
