@@ -577,10 +577,14 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       fcx.currentBlockDepth += 2;
       const bodyInstrs: wasm.Instr[] = [];
       lowerExpr(fcx, bodyInstrs, expr.body);
-      bodyInstrs.push({
-        kind: "br",
-        label: /*innermost control structure, the loop*/ 0,
-      });
+
+      // For diverging bodies, we don't need to bother creating the back edge.
+      if (expr.body.ty!.kind !== "never") {
+        bodyInstrs.push({
+          kind: "br",
+          label: /*innermost control structure, the loop*/ 0,
+        });
+      }
       fcx.currentBlockDepth -= 2;
 
       outerBlockInstrs.push({
@@ -633,11 +637,15 @@ function lowerExprBlockBody(
   const headExprs = expr.exprs.slice(0, -1);
   const tailExpr = expr.exprs[expr.exprs.length - 1];
 
-  headExprs.forEach((inner) => {
+  for (const inner of headExprs) {
     lowerExpr(fcx, innerInstrs, inner);
+    if (inner.ty!.kind === "never") {
+      // The rest of the block is unreachable, so we don't bother codegening it.
+      break;
+    }
     const types = wasmTypeForBody(inner.ty!);
     types.forEach(() => innerInstrs.push({ kind: "drop" }));
-  });
+  }
 
   lowerExpr(fcx, innerInstrs, tailExpr);
 
