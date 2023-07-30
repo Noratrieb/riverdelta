@@ -13,6 +13,7 @@ import {
   Identifier,
   ItemId,
   LOGICAL_KINDS,
+  LoopId,
   Resolution,
   Ty,
   TY_BOOL,
@@ -483,8 +484,7 @@ export function checkBody(
   typeOfItem: (index: number) => Ty
 ): Expr {
   const localTys = [...fnTy.params];
-  const loopState: { hasBreak: boolean; nestingDepth: number }[] = [];
-  let currentNestingDepth = 0;
+  const loopState: { hasBreak: boolean; loopId: LoopId }[] = [];
 
   const infcx = new InferContext();
 
@@ -586,7 +586,6 @@ export function checkBody(
           };
         }
         case "block": {
-          currentNestingDepth++;
           const prevLocalTysLen = localTys.length;
 
           const exprs = expr.exprs.map((expr) => this.expr(expr));
@@ -594,8 +593,6 @@ export function checkBody(
           const ty = exprs.length > 0 ? exprs[exprs.length - 1].ty! : TY_UNIT;
 
           localTys.length = prevLocalTysLen;
-
-          currentNestingDepth--;
 
           return {
             ...expr,
@@ -680,10 +677,8 @@ export function checkBody(
         }
         case "if": {
           const cond = this.expr(expr.cond);
-          currentNestingDepth++;
           const then = this.expr(expr.then);
           const elsePart = expr.else && this.expr(expr.else);
-          currentNestingDepth--;
 
           infcx.assign(TY_BOOL, cond.ty!, cond.span);
 
@@ -699,10 +694,9 @@ export function checkBody(
           return { ...expr, cond, then, else: elsePart, ty };
         }
         case "loop": {
-          currentNestingDepth++;
           loopState.push({
             hasBreak: false,
-            nestingDepth: currentNestingDepth,
+            loopId: expr.loopId,
           });
 
           const body = this.expr(expr.body);
@@ -710,8 +704,6 @@ export function checkBody(
 
           const hadBreak = loopState.pop();
           const ty = hadBreak ? TY_UNIT : TY_NEVER;
-
-          currentNestingDepth--;
 
           return {
             ...expr,
@@ -723,10 +715,8 @@ export function checkBody(
           if (loopState.length === 0) {
             throw new CompilerError("break outside loop", expr.span);
           }
-          const loopDepth = loopState[loopState.length - 1].nestingDepth;
+          const target = loopState[loopState.length - 1].loopId;
           loopState[loopState.length - 1].hasBreak = true;
-
-          const target = currentNestingDepth - loopDepth;
 
           return {
             ...expr,

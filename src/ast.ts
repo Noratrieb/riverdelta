@@ -127,19 +127,17 @@ export type ExprIf = {
   else?: Expr;
 };
 
+export type LoopId = number;
+
 export type ExprLoop = {
   kind: "loop";
   body: Expr;
+  loopId: LoopId;
 };
 
 export type ExprBreak = {
   kind: "break";
-  /**
-   * The break target block.
-   * May be any control flow block, labelled from inside out.
-   * TODO: This is not a good solution at all and pretty broken.
-   */
-  target?: number;
+  target?: LoopId;
 };
 
 export type ExprStructLiteral = {

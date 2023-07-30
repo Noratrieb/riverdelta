@@ -12,6 +12,7 @@ import { exec } from "child_process";
 const input = `
 function main() = (
  let i = 0;
+ loop break;
  loop (
   if i > 10 then break;
 

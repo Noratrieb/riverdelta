@@ -6,6 +6,7 @@ import {
   COMPARISON_KINDS,
   DEFAULT_FOLDER,
   Expr,
+  ExprLoop,
   ExprStructLiteral,
   FieldDef,
   Folder,
@@ -24,13 +25,8 @@ import {
   superFoldExpr,
 } from "./ast";
 import { CompilerError, Span, spanMerge } from "./error";
-import {
-  BaseToken,
-  Token,
-  TokenIdent,
-  TokenLit,
-  TokenLitString,
-} from "./lexer";
+import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
+import { Ids } from "./utils";
 
 type Parser<T> = (t: Token[]) => [Token[], T];
 
@@ -43,9 +39,7 @@ export function parse(t: Token[]): Ast {
     items.push(item);
   }
 
-  const withIds = items.map((item, i) => ({ ...item, id: i }));
-
-  const ast = { items: withIds };
+  const ast = assignIds({ items: items });
 
   validateAst(ast);
 
@@ -406,7 +400,7 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
   if (tok.kind === "loop") {
     let body;
     [t, body] = parseExpr(t);
-    return [t, { kind: "loop", body, span: tok.span }];
+    return [t, { kind: "loop", body, span: tok.span, loopId: 0 }];
   }
 
   if (tok.kind === "break") {
@@ -613,4 +607,25 @@ function validateAst(ast: Ast) {
   };
 
   foldAst(ast, validator);
+}
+
+function assignIds(ast: Ast): Ast {
+  let loopId = new Ids();
+
+  const astItems = { items: ast.items.map((item, i) => ({ ...item, id: i })) };
+
+  const assigner: Folder = {
+    ...DEFAULT_FOLDER,
+    expr(expr: Expr): Expr {
+      if (expr.kind === "loop") {
+        return {
+          ...(superFoldExpr(expr, this) as ExprLoop & Expr),
+          loopId: loopId.next(),
+        };
+      }
+      return superFoldExpr(expr, this);
+    },
+  };
+
+  return foldAst(astItems, assigner);
 }

@@ -5,12 +5,13 @@ import {
   FunctionDef,
   ImportDef,
   Item,
+  LoopId,
   Resolution,
   Ty,
   TyFn,
   varUnreachable,
 } from "./ast";
-import { encodeUtf8 } from "./utils";
+import { encodeUtf8, unwrap } from "./utils";
 import * as wasm from "./wasm/defs";
 
 const USIZE: wasm.ValType = "i32";
@@ -204,6 +205,8 @@ type FuncContext = {
   func: FunctionDef;
   wasm: wasm.Func;
   varLocations: VarLocation[];
+  loopDepths: Map<LoopId, number>;
+  currentBlockDepth: number;
 };
 
 type FnAbi = { params: ArgRetAbi[]; ret: ArgRetAbi };
@@ -230,6 +233,8 @@ function lowerFunc(cx: Context, item: Item, func: FunctionDef) {
     func,
     wasm: wasmFunc,
     varLocations: paramLocations,
+    loopDepths: new Map(),
+    currentBlockDepth: 0,
   };
 
   lowerExpr(fcx, wasmFunc.body, fcx.func.body);
@@ -545,6 +550,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
     case "if": {
       lowerExpr(fcx, instrs, expr.cond!);
 
+      fcx.currentBlockDepth++;
       const thenInstrs: wasm.Instr[] = [];
       lowerExpr(fcx, thenInstrs, expr.then);
 
@@ -553,6 +559,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       if (expr.else) {
         lowerExpr(fcx, elseInstrs, expr.else);
       }
+      fcx.currentBlockDepth--;
 
       instrs.push({
         kind: "if",
@@ -566,12 +573,15 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
     case "loop": {
       const outerBlockInstrs: wasm.Instr[] = [];
 
+      fcx.loopDepths.set(expr.loopId, fcx.currentBlockDepth);
+      fcx.currentBlockDepth += 2;
       const bodyInstrs: wasm.Instr[] = [];
       lowerExpr(fcx, bodyInstrs, expr.body);
       bodyInstrs.push({
         kind: "br",
         label: /*innermost control structure, the loop*/ 0,
       });
+      fcx.currentBlockDepth -= 2;
 
       outerBlockInstrs.push({
         kind: "loop",
@@ -584,13 +594,18 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
         instrs: outerBlockInstrs,
         type: blockTypeForBody(fcx.cx, expr.ty!),
       });
+      fcx.loopDepths.delete(expr.loopId);
 
       break;
     }
     case "break": {
+      const loopDepth = unwrap(fcx.loopDepths.get(expr.target!));
+
+      console.log(loopDepth, fcx.currentBlockDepth);
+
       instrs.push({
         kind: "br",
-        label: expr.target! + /* the block outside the loop */ 1,
+        label: fcx.currentBlockDepth - loopDepth - 1,
       });
       break;
     }
@@ -612,6 +627,7 @@ function lowerExprBlockBody(
   fcx: FuncContext,
   expr: ExprBlock & Expr
 ): wasm.Instr[] {
+  fcx.currentBlockDepth++;
   const innerInstrs: wasm.Instr[] = [];
 
   const headExprs = expr.exprs.slice(0, -1);
@@ -624,6 +640,8 @@ function lowerExprBlockBody(
   });
 
   lowerExpr(fcx, innerInstrs, tailExpr);
+
+  fcx.currentBlockDepth--;
 
   return innerInstrs;
 }
