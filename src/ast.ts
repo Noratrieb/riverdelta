@@ -72,7 +72,16 @@ export type ExprLet = {
   type?: Type;
   rhs: Expr;
   // IMPORTANT: This is (sadly) shared with ExprBlock.
+  // TODO: Stop this sharing and just store the stack of blocks in typeck.
   local?: LocalInfo;
+};
+
+// A bit like ExprBinary except there are restrictions
+// on the LHS and precedence is unrestricted.
+export type ExprAssign = {
+  kind: "assign";
+  lhs: Expr;
+  rhs: Expr;
 };
 
 export type ExprBlock = {
@@ -128,6 +137,7 @@ export type ExprBreak = {
   /**
    * The break target block.
    * May be any control flow block, labelled from inside out.
+   * TODO: This is not a good solution at all and pretty broken.
    */
   target?: number;
 };
@@ -141,6 +151,7 @@ export type ExprStructLiteral = {
 export type ExprKind =
   | ExprEmpty
   | ExprLet
+  | ExprAssign
   | ExprBlock
   | ExprLiteral
   | ExprIdent
@@ -479,6 +490,14 @@ export function superFoldExpr(expr: Expr, folder: Folder): Expr {
         kind: "let",
         name: expr.name,
         type: expr.type && folder.type(expr.type),
+        rhs: folder.expr(expr.rhs),
+      };
+    }
+    case "assign": {
+      return {
+        ...expr,
+        kind: "assign",
+        lhs: folder.expr(expr.lhs),
         rhs: folder.expr(expr.rhs),
       };
     }

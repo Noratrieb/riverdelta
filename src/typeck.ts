@@ -557,6 +557,34 @@ export function checkBody(
             span: expr.span,
           };
         }
+        case "assign": {
+          const lhs = this.expr(expr.lhs);
+          const rhs = this.expr(expr.rhs);
+
+          infcx.assign(lhs.ty!, rhs.ty!, expr.span);
+
+          switch (lhs.kind) {
+            case "ident":
+              if (lhs.value.res!.kind !== "local") {
+                throw new CompilerError("cannot assign to items", expr.span);
+              }
+              break;
+            default: {
+              throw new CompilerError(
+                "invalid left-hand side of assignment",
+                lhs.span
+              );
+            }
+          }
+
+          return {
+            ...expr,
+            kind: "assign",
+            lhs,
+            rhs,
+            ty: TY_UNIT,
+          };
+        }
         case "block": {
           currentNestingDepth++;
           const prevLocalTysLen = localTys.length;

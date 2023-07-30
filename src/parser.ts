@@ -174,12 +174,14 @@ function parseFunctionSig(t: Token[]): [Token[], FunctionSig] {
 
 function parseExpr(t: Token[]): [Token[], Expr] {
   /*
-  EXPR = COMPARISON
+  EXPR = ASSIGNMENT
 
   LET = "let" NAME { ":" TYPE } "=" EXPR "in" EXPR
   IF = "if" EXPR "then" EXPR { "else" EXPR }
   LOOP = "loop" EXPR
   BREAK = "break"
+
+  ASSIGNMENT = COMPARISON { "=" ASSIGNMENT }
 
   // The precende here is pretty arbitrary since we forbid mixing of operators
   // with different precedence classes anyways.
@@ -199,12 +201,17 @@ function parseExpr(t: Token[]): [Token[], Expr] {
   STRUCT_INIT = "{" { NAME ":" EXPR } { "," NAME ":" EXPR } { "," } "}"
   EXPR_LIST = { EXPR { "," EXPR } { "," } }
   */
-  return parseExprComparison(t);
+  return parseExprAssignment(t);
+}
+
+function mkBinaryExpr(lhs: Expr, rhs: Expr, span: Span, kind: string): Expr {
+  return { kind: "binary", binaryKind: kind as BinaryKind, lhs, rhs, span };
 }
 
 function mkParserExprBinary(
   lower: Parser<Expr>,
-  kinds: string[]
+  kinds: string[],
+  mkExpr = mkBinaryExpr
 ): Parser<Expr> {
   function parser(t: Token[]): [Token[], Expr] {
     let lhs;
@@ -216,10 +223,7 @@ function mkParserExprBinary(
       let rhs;
       [t, rhs] = parser(t);
       const span = spanMerge(lhs.span, rhs.span);
-      return [
-        t,
-        { kind: "binary", binaryKind: peek.kind as BinaryKind, lhs, rhs, span },
-      ];
+      return [t, mkExpr(lhs, rhs, span, peek.kind)];
     }
 
     return [t, lhs];
@@ -243,6 +247,12 @@ const parseExprLogical = mkParserExprBinary(parseExprArithTerm, LOGICAL_KINDS);
 const parseExprComparison = mkParserExprBinary(
   parseExprLogical,
   COMPARISON_KINDS
+);
+
+const parseExprAssignment = mkParserExprBinary(
+  parseExprComparison,
+  ["="],
+  (lhs, rhs, span) => ({ kind: "assign", lhs, rhs, span })
 );
 
 function parseExprUnary(t: Token[]): [Token[], Expr] {

@@ -10,32 +10,14 @@ import fs from "fs";
 import { exec } from "child_process";
 
 const input = `
-import("wasi_snapshot_preview1" "fd_write")
-  fd_write(a: I32, b: I32, c: I32, d: I32): I32;
-
-function coolerPrint(a: String) = (
-  let ptr = __string_ptr(a);
-  let len = __string_len(a);
-
-  let mem = 1024_I32;
-
-  __i32_store(mem + 4_I32, ptr);
-  __i32_store(mem + 8_I32, 2_I32);
-
-  fd_write(
-    // stdout
-    1_I32,
-    // iovec
-    mem + 4_I32,
-    // len
-    len,
-    // return value
-    mem,
-  );
-);
-
 function main() = (
-  coolerPrint("uwu\\n");
+ let i = 0;
+ loop (
+  if i > 10 then break;
+
+  print("uwu\\n");
+  i = i + 1;
+ );
 );
 `;
 

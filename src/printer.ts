@@ -78,6 +78,9 @@ function printExpr(expr: Expr, indent: number): string {
         indent + 1
       )}`;
     }
+    case "assign": {
+      return `${printExpr(expr.lhs, indent)} = ${printExpr(expr.rhs, indent)}`;
+    }
     case "block": {
       const exprs = expr.exprs.map((expr) => printExpr(expr, indent + 1));
 

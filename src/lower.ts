@@ -272,6 +272,36 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
 
       break;
     }
+    case "assign": {
+      lowerExpr(fcx, instrs, expr.rhs);
+      const { lhs } = expr;
+      switch (lhs.kind) {
+        case "ident": {
+          const res = lhs.value.res!;
+
+          switch (res.kind) {
+            case "local": {
+              const location =
+                fcx.varLocations[fcx.varLocations.length - 1 - res.index];
+              storeVariable(instrs, location);
+              break;
+            }
+            case "item": {
+              throw new Error("cannot store to item");
+            }
+            case "builtin": {
+              throw new Error("cannot store to builtin");
+            }
+          }
+          break;
+        }
+        default: {
+          throw new Error("invalid lhs side of assignment");
+        }
+      }
+
+      break;
+    }
     case "block": {
       const prevVarLocationLengths = fcx.varLocations.length;
 
@@ -607,6 +637,15 @@ function loadVariable(instrs: wasm.Instr[], loc: VarLocation) {
   // Otherwise, load each part.
   loc.types.forEach((_, i) => {
     instrs.push({ kind: "local.get", imm: loc.localIdx + i });
+  });
+}
+
+function storeVariable(instrs: wasm.Instr[], loc: VarLocation) {
+  // Stores are just like loads, just the other way around.
+  const types = loc.types.map((_, i) => i);
+  types.reverse();
+  types.forEach((i) => {
+    instrs.push({ kind: "local.set", imm: loc.localIdx + i });
   });
 }
 
