@@ -3,6 +3,7 @@ import {
   Expr,
   ExprBlock,
   FunctionDef,
+  ImportDef,
   Item,
   Resolution,
   Ty,
@@ -11,8 +12,6 @@ import {
 } from "./ast";
 import { encodeUtf8 } from "./utils";
 import * as wasm from "./wasm/defs";
-
-type StringifiedForMap<T> = string;
 
 const USIZE: wasm.ValType = "i32";
 // POINTERS ARE JUST INTEGERS
@@ -28,22 +27,25 @@ type Relocation = {
   instr: wasm.Instr & { func: wasm.FuncIdx };
 } & { res: Resolution };
 
-function setMap<K, V>(map: Map<StringifiedForMap<K>, V>, key: K, value: V) {
-  map.set(JSON.stringify(key), value);
+type StringifiedMap<K, V> = { _map: Map<string, V> };
+
+function setMap<K, V>(map: StringifiedMap<K, V>, key: K, value: V) {
+  map._map.set(JSON.stringify(key), value);
 }
 
-function getMap<K, V>(
-  map: Map<StringifiedForMap<K>, V>,
-  key: K
-): V | undefined {
-  return map.get(JSON.stringify(key));
+function getMap<K, V>(map: StringifiedMap<K, V>, key: K): V | undefined {
+  return map._map.get(JSON.stringify(key));
 }
+
+type FuncOrImport =
+  | { kind: "func"; idx: wasm.FuncIdx }
+  | { kind: "import"; idx: number };
 
 export type Context = {
   mod: wasm.Module;
-  funcTypes: Map<StringifiedForMap<wasm.FuncType>, wasm.TypeIdx>;
+  funcTypes: StringifiedMap<wasm.FuncType, wasm.TypeIdx>;
   reservedHeapMemoryStart: number;
-  funcIndices: Map<StringifiedForMap<Resolution>, wasm.FuncIdx>;
+  funcIndices: StringifiedMap<Resolution, FuncOrImport>;
   ast: Ast;
   relocations: Relocation[];
 };
@@ -117,8 +119,8 @@ export function lower(ast: Ast): wasm.Module {
 
   const cx: Context = {
     mod,
-    funcTypes: new Map(),
-    funcIndices: new Map(),
+    funcTypes: { _map: new Map() },
+    funcIndices: { _map: new Map() },
     reservedHeapMemoryStart: 0,
     ast,
     relocations: [],
@@ -128,6 +130,11 @@ export function lower(ast: Ast): wasm.Module {
     switch (item.kind) {
       case "function": {
         lowerFunc(cx, item, item.node);
+        break;
+      }
+      case "import": {
+        lowerImport(cx, item, item.node);
+        break;
       }
     }
   });
@@ -145,19 +152,50 @@ export function lower(ast: Ast): wasm.Module {
   cx.relocations.forEach((rel) => {
     switch (rel.kind) {
       case "funccall": {
-        const idx = getMap<Resolution, number>(cx.funcIndices, rel.res);
+        const idx = getMap<Resolution, FuncOrImport>(cx.funcIndices, rel.res);
         if (idx === undefined) {
           throw new Error(
             `no function found for relocation '${JSON.stringify(rel.res)}'`
           );
         }
-        rel.instr.func = offset + idx;
+        rel.instr.func = idx.kind === "func" ? offset + idx.idx : idx.idx;
       }
     }
   });
   // END OF THE LINKER
 
   return mod;
+}
+
+function lowerImport(cx: Context, item: Item, def: ImportDef) {
+  const existing = cx.mod.imports.findIndex(
+    (imp) => imp.module === def.module.value && imp.name === def.func.value
+  );
+
+  let idx;
+  if (existing !== -1) {
+    idx = existing;
+  } else {
+    const abi = computeAbi(def.ty!);
+    const { type: wasmType } = wasmTypeForAbi(abi);
+    const type = internFuncType(cx, wasmType);
+
+    idx = cx.mod.imports.length;
+    cx.mod.imports.push({
+      module: def.module.value,
+      name: def.func.value,
+      desc: {
+        kind: "func",
+        type,
+      },
+    });
+  }
+
+  setMap<Resolution, FuncOrImport>(
+    cx.funcIndices,
+    { kind: "item", index: item.id },
+    { kind: "import", idx }
+  );
 }
 
 type FuncContext = {
@@ -198,10 +236,10 @@ function lowerFunc(cx: Context, item: Item, func: FunctionDef) {
 
   const idx = fcx.cx.mod.funcs.length;
   fcx.cx.mod.funcs.push(wasmFunc);
-  setMap<Resolution, number>(
+  setMap<Resolution, FuncOrImport>(
     fcx.cx.funcIndices,
     { kind: "item", index: fcx.item.id },
-    idx
+    { kind: "func", idx }
   );
 }
 
@@ -213,7 +251,7 @@ Expression lowering.
 function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
   const ty = expr.ty!;
 
-  switch (expr.kind) {
+  exprKind: switch (expr.kind) {
     case "empty": {
       // A ZST, do nothing.
       return;
@@ -265,7 +303,14 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
 
           break;
         case "int":
-          instrs.push({ kind: "i64.const", imm: expr.value.value });
+          switch (expr.value.type) {
+            case "Int":
+              instrs.push({ kind: "i64.const", imm: expr.value.value });
+              break;
+            case "I32":
+              instrs.push({ kind: "i32.const", imm: expr.value.value });
+              break;
+          }
           break;
       }
       break;
@@ -306,49 +351,55 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       lowerExpr(fcx, instrs, expr.lhs);
       lowerExpr(fcx, instrs, expr.rhs);
 
-      if (expr.lhs.ty!.kind === "int" && expr.rhs.ty!.kind === "int") {
+      const lhsTy = expr.lhs.ty!;
+      const rhsTy = expr.rhs.ty!;
+      if (
+        (lhsTy.kind === "int" && rhsTy.kind === "int") ||
+        (lhsTy.kind === "i32" && rhsTy.kind === "i32")
+      ) {
         let kind: wasm.Instr["kind"];
+        const valty = lhsTy.kind === "int" ? "i64" : "i32";
         switch (expr.binaryKind) {
           case "+":
-            kind = "i64.add";
+            kind = `${valty}.add`;
             break;
           case "-":
-            kind = "i64.sub";
+            kind = `${valty}.sub`;
             break;
           case "*":
-            kind = "i64.mul";
+            kind = `${valty}.mul`;
             break;
           case "/":
-            kind = "i64.div_u";
+            kind = `${valty}.div_u`;
             break;
           case "&":
-            kind = "i64.and";
+            kind = `${valty}.and`;
             break;
           case "|":
-            kind = "i64.or";
+            kind = `${valty}.or`;
             break;
           case "<":
-            kind = "i64.lt_u";
+            kind = `${valty}.lt_u`;
             break;
           case ">":
-            kind = "i64.gt_u";
+            kind = `${valty}.gt_u`;
             // errs
             break;
           case "==":
-            kind = "i64.eq";
+            kind = `${valty}.eq`;
             break;
           case "<=":
-            kind = "i64.le_u";
+            kind = `${valty}.le_u`;
             break;
           case ">=":
-            kind = "i64.ge_u";
+            kind = `${valty}.ge_u`;
             break;
           case "!=":
-            kind = "i64.ne";
+            kind = `${valty}.ne`;
             break;
         }
         instrs.push({ kind });
-      } else if (expr.lhs.ty!.kind === "bool" && expr.rhs.ty!.kind === "bool") {
+      } else if (lhsTy.kind === "bool" && rhsTy.kind === "bool") {
         let kind: wasm.Instr["kind"];
 
         switch (expr.binaryKind) {
@@ -404,6 +455,50 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       if (expr.lhs.kind !== "ident") {
         todo("non constant calls");
       }
+
+      if (expr.lhs.value.res!.kind === "builtin") {
+        switch (expr.lhs.value.res!.name) {
+          case "__i32_load": {
+            lowerExpr(fcx, instrs, expr.args[0]);
+            instrs.push({ kind: "i64.load", imm: {} });
+            break exprKind;
+          }
+          case "__i64_load": {
+            lowerExpr(fcx, instrs, expr.args[0]);
+            instrs.push({ kind: "i64.load", imm: {} });
+            break exprKind;
+          }
+          case "__i32_store": {
+            lowerExpr(fcx, instrs, expr.args[0]);
+            lowerExpr(fcx, instrs, expr.args[1]);
+            instrs.push({ kind: "i32.store", imm: {} });
+            break exprKind;
+          }
+          case "__i64_store": {
+            lowerExpr(fcx, instrs, expr.args[0]);
+            lowerExpr(fcx, instrs, expr.args[1]);
+            instrs.push({ kind: "i64.store", imm: {} });
+            break exprKind;
+          }
+          case "__string_ptr": {
+            lowerExpr(fcx, instrs, expr.args[0]);
+            // ptr, len
+            instrs.push({ kind: "drop" });
+            // ptr
+            break exprKind;
+          }
+          case "__string_len": {
+            lowerExpr(fcx, instrs, expr.args[0]);
+            // ptr, len
+            instrs.push({ kind: "i32.const", imm: 0 });
+            // ptr, len, 0
+            instrs.push({ kind: "select" });
+            // len
+            break exprKind;
+          }
+        }
+      }
+
       const callInstr: wasm.Instr = { kind: "call", func: 9999999999 };
       fcx.cx.relocations.push({
         kind: "funccall",
@@ -676,9 +771,10 @@ function addRt(cx: Context, ast: Ast) {
   const printIdx = cx.mod.funcs.length;
   cx.mod.funcs.push(print);
 
-  cx.funcIndices.set(
-    JSON.stringify({ kind: "builtin", name: "print" }),
-    printIdx
+  setMap(
+    cx.funcIndices,
+    { kind: "builtin", name: "print" },
+    { kind: "func", idx: printIdx }
   );
 
   mod.exports.push({

@@ -12,6 +12,7 @@ import {
   FunctionArg,
   FunctionDef,
   Identifier,
+  ImportDef,
   Item,
   LOGICAL_KINDS,
   Type,
@@ -23,7 +24,13 @@ import {
   superFoldExpr,
 } from "./ast";
 import { CompilerError, Span, spanMerge } from "./error";
-import { BaseToken, Token, TokenIdent } from "./lexer";
+import {
+  BaseToken,
+  Token,
+  TokenIdent,
+  TokenLit,
+  TokenLitString,
+} from "./lexer";
 
 type Parser<T> = (t: Token[]) => [Token[], T];
 
@@ -49,28 +56,8 @@ function parseItem(t: Token[]): [Token[], Item] {
   let tok;
   [t, tok] = next(t);
   if (tok.kind === "function") {
-    let name;
-    [t, name] = expectNext<TokenIdent>(t, "identifier");
-
-    [t] = expectNext(t, "(");
-
-    let args: FunctionArg[];
-    [t, args] = parseCommaSeparatedList(t, ")", (t) => {
-      let name;
-      [t, name] = expectNext<TokenIdent & { span: Span }>(t, "identifier");
-      [t] = expectNext(t, ":");
-      let type;
-      [t, type] = parseType(t);
-
-      return [t, { name: name.ident, type, span: name.span }];
-    });
-
-    let colon;
-    let returnType = undefined;
-    [t, colon] = eat(t, ":");
-    if (colon) {
-      [t, returnType] = parseType(t);
-    }
+    let sig;
+    [t, sig] = parseFunctionSig(t);
 
     [t] = expectNext(t, "=");
 
@@ -80,9 +67,7 @@ function parseItem(t: Token[]): [Token[], Item] {
     [t] = expectNext(t, ";");
 
     const def: FunctionDef = {
-      name: name.ident,
-      params: args,
-      returnType,
+      ...sig,
       body,
     };
 
@@ -129,9 +114,62 @@ function parseItem(t: Token[]): [Token[], Item] {
     };
 
     return [t, { kind: "type", node: def, span: name.span, id: 0 }];
+  } else if (tok.kind === "import") {
+    [t] = expectNext(t, "(");
+    let module;
+    [t, module] = expectNext<TokenLitString>(t, "lit_string");
+    let func;
+    [t, func] = expectNext<TokenLitString>(t, "lit_string");
+    [t] = expectNext(t, ")");
+
+    let sig;
+    [t, sig] = parseFunctionSig(t);
+
+    [t] = expectNext(t, ";");
+
+    const def: ImportDef = {
+      module: { kind: "str", value: module.value, span: module.span },
+      func: { kind: "str", value: func.value, span: func.span },
+      ...sig,
+    };
+
+    return [t, { kind: "import", node: def, span: tok.span, id: 0 }];
   } else {
     unexpectedToken(tok, "item");
   }
+}
+
+type FunctionSig = {
+  name: string;
+  params: FunctionArg[];
+  returnType?: Type;
+};
+
+function parseFunctionSig(t: Token[]): [Token[], FunctionSig] {
+  let name;
+  [t, name] = expectNext<TokenIdent>(t, "identifier");
+
+  [t] = expectNext(t, "(");
+
+  let params: FunctionArg[];
+  [t, params] = parseCommaSeparatedList(t, ")", (t) => {
+    let name;
+    [t, name] = expectNext<TokenIdent & { span: Span }>(t, "identifier");
+    [t] = expectNext(t, ":");
+    let type;
+    [t, type] = parseType(t);
+
+    return [t, { name: name.ident, type, span: name.span }];
+  });
+
+  let colon;
+  let returnType = undefined;
+  [t, colon] = eat(t, ":");
+  if (colon) {
+    [t, returnType] = parseType(t);
+  }
+
+  return [t, { name: name.ident, params, returnType }];
 }
 
 function parseExpr(t: Token[]): [Token[], Expr] {
@@ -267,7 +305,7 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
       {
         kind: "literal",
         span,
-        value: { kind: "str", value: tok.value },
+        value: { kind: "str", value: tok.value, span: tok.span },
       },
     ];
   }
@@ -278,7 +316,7 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
       {
         kind: "literal",
         span,
-        value: { kind: "int", value: tok.value },
+        value: { kind: "int", value: tok.value, type: tok.type },
       },
     ];
   }
@@ -340,7 +378,7 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
   if (tok.kind === "if") {
     let cond;
     [t, cond] = parseExpr(t);
-    
+
     [t] = expectNext(t, "then");
     let then;
     [t, then] = parseExpr(t);

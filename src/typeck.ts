@@ -1,6 +1,7 @@
 import {
   Ast,
   binaryExprPrecedenceClass,
+  BuiltinName,
   COMPARISON_KINDS,
   DEFAULT_FOLDER,
   EQUALITY_KINDS,
@@ -21,11 +22,16 @@ import {
   TY_STRING,
   TY_UNIT,
   TyFn,
+  tyIsUnit,
   Type,
   TyStruct,
 } from "./ast";
 import { CompilerError, Span } from "./error";
 import { printTy } from "./printer";
+
+function mkTyFn(params: Ty[], returnTy: Ty): Ty {
+  return { kind: "fn", params, returnTy };
+}
 
 function builtinAsTy(name: string, span: Span): Ty {
   switch (name) {
@@ -47,13 +53,25 @@ function builtinAsTy(name: string, span: Span): Ty {
   }
 }
 
-function typeOfBuiltinValue(name: string, span: Span): Ty {
+function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
   switch (name) {
     case "false":
     case "true":
       return TY_BOOL;
     case "print":
-      return { kind: "fn", params: [TY_STRING], returnTy: TY_UNIT };
+      return mkTyFn([TY_STRING], TY_UNIT);
+    case "__i32_store":
+      return mkTyFn([TY_I32, TY_I32], TY_UNIT);
+    case "__i64_store":
+      return mkTyFn([TY_I32, TY_INT], TY_UNIT);
+    case "__i32_load":
+      return mkTyFn([TY_I32], TY_I32);
+    case "__i64_load":
+      return mkTyFn([TY_I32], TY_INT);
+    case "__string_ptr":
+      return mkTyFn([TY_STRING], TY_I32);
+    case "__string_len":
+      return mkTyFn([TY_STRING], TY_I32);
     default: {
       throw new CompilerError(`\`${name}\` cannot be used as a value`, span);
     }
@@ -103,7 +121,8 @@ export function typeck(ast: Ast): Ast {
     }
     itemTys.set(index, null);
     switch (item.kind) {
-      case "function": {
+      case "function":
+      case "import": {
         const args = item.node.params.map((arg) => lowerAstTy(arg.type));
         const returnTy: Ty = item.node.returnType
           ? lowerAstTy(item.node.returnType)
@@ -177,6 +196,58 @@ export function typeck(ast: Ast): Ast {
                 type: { ...arg.type, ty: fnTy.params[i] },
               })),
               body,
+              returnType,
+              ty: fnTy,
+            },
+          };
+        }
+        case "import": {
+          const fnTy = typeOfItem(item.id) as TyFn;
+
+          fnTy.params.forEach((param, i) => {
+            switch (param.kind) {
+              case "int":
+              case "i32":
+                break;
+              default: {
+                throw new CompilerError(
+                  `import parameters must be I32 or Int`,
+                  item.node.params[i].span
+                );
+              }
+            }
+          });
+
+          if (!tyIsUnit(fnTy.returnTy)) {
+            switch (fnTy.returnTy.kind) {
+              case "int":
+              case "i32":
+                break;
+              default: {
+                throw new CompilerError(
+                  `import return must be I32 or Int`,
+                  item.node.returnType!.span
+                );
+              }
+            }
+          }
+
+          const returnType = item.node.returnType && {
+            ...item.node.returnType,
+            ty: fnTy.returnTy,
+          };
+
+          return {
+            ...item,
+            kind: "import",
+            node: {
+              module: item.node.module,
+              func: item.node.func,
+              name: item.node.name,
+              params: item.node.params.map((arg, i) => ({
+                ...arg,
+                type: { ...arg.type, ty: fnTy.params[i] },
+              })),
               returnType,
               ty: fnTy,
             },
@@ -436,7 +507,17 @@ export function checkBody(
       type,
       (ident) => {
         const res = ident.res!;
-        return typeOf(res, ident.span);
+        switch (res.kind) {
+          case "local": {
+            const idx = localTys.length - 1 - res.index;
+            return localTys[idx];
+          }
+          case "item": {
+            return typeOfItem(res.index);
+          }
+          case "builtin":
+            return builtinAsTy(res.name, ident.span);
+        }
       },
       typeOfItem
     );
@@ -502,7 +583,14 @@ export function checkBody(
               break;
             }
             case "int": {
-              ty = TY_INT;
+              switch (expr.value.type) {
+                case "Int":
+                  ty = TY_INT;
+                  break;
+                case "I32":
+                  ty = TY_I32;
+                  break;
+              }
               break;
             }
           }
@@ -720,6 +808,9 @@ function checkBinary(expr: Expr & ExprBinary): Expr {
 
   if (lhsTy.kind === "int" && rhsTy.kind === "int") {
     return { ...expr, ty: TY_INT };
+  }
+  if (lhsTy.kind === "i32" && rhsTy.kind === "i32") {
+    return { ...expr, ty: TY_I32 };
   }
 
   if (LOGICAL_KINDS.includes(expr.binaryKind)) {

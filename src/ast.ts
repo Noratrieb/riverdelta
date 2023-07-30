@@ -1,4 +1,5 @@
 import { Span } from "./error";
+import { LitIntType } from "./lexer";
 
 export type Ast = { items: Item[]; typeckResults?: TypeckResults };
 
@@ -18,6 +19,10 @@ export type ItemKind =
   | {
       kind: "type";
       node: TypeDef;
+    }
+  | {
+      kind: "import";
+      node: ImportDef;
     };
 
 export type Item = ItemKind & {
@@ -48,6 +53,15 @@ export type TypeDef = {
 export type FieldDef = {
   name: Identifier;
   type: Type;
+};
+
+export type ImportDef = {
+  module: StringLiteral;
+  func: StringLiteral;
+  name: string;
+  params: FunctionArg[];
+  returnType?: Type;
+  ty?: TyFn;
 };
 
 export type ExprEmpty = { kind: "empty" };
@@ -143,14 +157,18 @@ export type Expr = ExprKind & {
   ty?: Ty;
 };
 
+export type StringLiteral = {
+  kind: "str";
+  value: string;
+  span: Span;
+};
+
 export type Literal =
-  | {
-      kind: "str";
-      value: string;
-    }
+  | StringLiteral
   | {
       kind: "int";
       value: number;
+      type: LitIntType;
     };
 
 export type BinaryKind =
@@ -265,6 +283,13 @@ export const BUILTINS = [
   "Bool",
   "true",
   "false",
+  // Intrinsics:
+  "__i32_store",
+  "__i64_store",
+  "__i32_load",
+  "__i64_load",
+  "__string_ptr",
+  "__string_len",
 ] as const;
 
 export type BuiltinName = (typeof BUILTINS)[number];
@@ -399,15 +424,14 @@ export function superFoldItem(item: Item, folder: Folder): Item {
       }));
 
       return {
+        ...item,
         kind: "function",
-        span: item.span,
         node: {
           name: item.node.name,
           params: args,
           body: folder.expr(item.node.body),
           returnType: item.node.returnType && folder.type(item.node.returnType),
         },
-        id: item.id,
       };
     }
     case "type": {
@@ -417,10 +441,27 @@ export function superFoldItem(item: Item, folder: Folder): Item {
       }));
 
       return {
+        ...item,
         kind: "type",
-        span: item.span,
         node: { name: item.node.name, fields },
-        id: item.id,
+      };
+    }
+    case "import": {
+      const args = item.node.params.map(({ name, type, span }) => ({
+        name,
+        type: folder.type(type),
+        span,
+      }));
+      return {
+        ...item,
+        kind: "import",
+        node: {
+          module: item.node.module,
+          func: item.node.func,
+          name: item.node.name,
+          params: args,
+          returnType: item.node.returnType && folder.type(item.node.returnType),
+        },
       };
     }
   }

@@ -3,8 +3,10 @@ import {
   Expr,
   FunctionDef,
   Identifier,
+  ImportDef,
   Item,
   Resolution,
+  StringLiteral,
   Ty,
   Type,
   TypeDef,
@@ -15,6 +17,10 @@ export function printAst(ast: Ast): string {
   return ast.items.map(printItem).join("\n");
 }
 
+function printStringLiteral(lit: StringLiteral): string {
+  return `"${lit.value}"`;
+}
+
 function printItem(item: Item): string {
   switch (item.kind) {
     case "function": {
@@ -22,6 +28,9 @@ function printItem(item: Item): string {
     }
     case "type": {
       return printTypeDef(item.node);
+    }
+    case "import": {
+      return printImportDef(item.node);
     }
   }
 }
@@ -43,6 +52,17 @@ function printTypeDef(type: TypeDef): string {
     type.fields.length === 0 ? "()" : `(\n${fields.join("\n")}\n)`;
 
   return `type ${type.name} = ${fieldPart};`;
+}
+
+function printImportDef(def: ImportDef): string {
+  const args = def.params
+    .map(({ name, type }) => `${name}: ${printType(type)}`)
+    .join(", ");
+  const ret = def.returnType ? `: ${printType(def.returnType)}` : "";
+
+  return `import ${printStringLiteral(def.module)} ${printStringLiteral(
+    def.func
+  )}(${args})${ret};`;
 }
 
 function printExpr(expr: Expr, indent: number): string {
@@ -84,10 +104,10 @@ function printExpr(expr: Expr, indent: number): string {
     case "literal": {
       switch (expr.value.kind) {
         case "str": {
-          return `"${expr.value.value}"`;
+          return printStringLiteral(expr.value);
         }
         case "int": {
-          return `${expr.value.value}`;
+          return `${expr.value.value}_${expr.value.type}`;
         }
       }
     }

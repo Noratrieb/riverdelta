@@ -9,6 +9,7 @@ export type DatalessToken =
   | "type"
   | "loop"
   | "break"
+  | "import"
   | "("
   | ")"
   | "{"
@@ -36,14 +37,19 @@ export type DatalessToken =
 
 export type TokenIdent = { kind: "identifier"; ident: string };
 
+export type TokenLitString = {
+  kind: "lit_string";
+  value: string;
+};
+
+export type LitIntType = "Int" | "I32";
+
 export type TokenLit =
-  | {
-      kind: "lit_string";
-      value: string;
-    }
+  | TokenLitString
   | {
       kind: "lit_int";
       value: number;
+      type: LitIntType;
     };
 
 export type TokenKind = { kind: DatalessToken } | TokenIdent | TokenLit;
@@ -80,13 +86,13 @@ export function tokenize(input: string): Token[] {
     const next = input[i];
     const span: Span = { start: i, end: i + 1 };
 
-    if (next === "/" && input[i + 1] === "/") {
+    if (next === "/" && input[i + 1] === "/") {     
       while (input[i] !== "\n") {
         i++;
       }
 
       continue;
-    }
+    }  
 
     if (SINGLE_PUNCT.includes(next)) {
       tokens.push({ kind: next as DatalessToken, span });
@@ -207,7 +213,21 @@ export function tokenize(input: string): Token[] {
               );
             }
 
-            tokens.push({ kind: "lit_int", value: int, span });
+            let type: LitIntType = "Int";
+            console.log(input[i + 2]); 
+            if (input[i + 1] === "_" && isIdentStart(input[i + 2])) {
+              console.log("yes", input.slice(i+2, i+5));
+              
+              if (input.slice(i+2, i+5) === "Int") {
+                i += 4;
+                type = "Int";
+              } else if (input.slice(i+2, i+5) === "I32") {
+                i += 4;
+                type = "I32";
+              }
+            }
+
+            tokens.push({ kind: "lit_int", value: int, span, type });
           } else if (isIdentStart(next)) {
             while (isIdentContinue(input[i + 1])) {
               span.end++;
@@ -267,6 +287,7 @@ const KEYOWRDS: DatalessToken[] = [
   "type",
   "loop",
   "break",
+  "import",
 ];
 
 const KEYWORD_SET = new Set<string>(KEYOWRDS);

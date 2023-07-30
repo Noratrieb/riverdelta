@@ -24,6 +24,7 @@
             nodejs-18_x # Node.js 18, plus npm, npx, and corepack
             wasmtime
             wasm-tools
+            binaryen
           ];
         };
       });
