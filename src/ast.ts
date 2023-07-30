@@ -146,6 +146,11 @@ export type ExprStructLiteral = {
   fields: [Identifier, Expr][];
 };
 
+export type TupleLiteral = {
+  kind: "tupleLiteral";
+  fields: Expr[];
+};
+
 export type ExprKind =
   | ExprEmpty
   | ExprLet
@@ -159,7 +164,8 @@ export type ExprKind =
   | ExprIf
   | ExprLoop
   | ExprBreak
-  | ExprStructLiteral;
+  | ExprStructLiteral
+  | TupleLiteral;
 
 export type Expr = ExprKind & {
   span: Span;
@@ -565,6 +571,13 @@ export function superFoldExpr(expr: Expr, folder: Folder): Expr {
         kind: "structLiteral",
         name: folder.ident(expr.name),
         fields: expr.fields.map(([name, expr]) => [name, folder.expr(expr)]),
+      };
+    }
+    case "tupleLiteral": {
+      return {
+        ...expr,
+        kind: "tupleLiteral",
+        fields: expr.fields.map(folder.expr.bind(folder)),
       };
     }
   }

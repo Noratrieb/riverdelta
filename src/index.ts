@@ -11,15 +11,10 @@ import { exec } from "child_process";
 
 const input = `
 function main() = (
- let i = 0;
-
- loop (
-  if i > 10 then break;
-
-  print("uwu\\n");
-  i = i + 1;
- );
+  let a = (0,);
 );
+
+function uwu(): (Int, Int) = (0, 0);
 `;
 
 function main() {

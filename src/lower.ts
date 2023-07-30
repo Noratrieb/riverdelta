@@ -616,6 +616,10 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
     case "structLiteral": {
       todo("struct literal");
     }
+    case "tupleLiteral": {
+      expr.fields.forEach((field) => lowerExpr(fcx, instrs, field));
+      break;
+    }
     default: {
       const _: never = expr;
     }
@@ -691,10 +695,7 @@ function computeAbi(ty: TyFn): FnAbi {
       case "list":
         todo("list abi");
       case "tuple":
-        if (param.elems.length === 0) {
-          return [];
-        }
-        todo("complex tuple abi");
+        return param.elems.flatMap(argRetAbi);
       case "struct":
         todo("struct ABI");
       case "never":
@@ -741,12 +742,7 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
     case "list":
       todo("list types");
     case "tuple":
-      if (ty.elems.length === 0) {
-        return [];
-      } else if (ty.elems.length === 1) {
-        return wasmTypeForBody(ty.elems[0]);
-      }
-      todo("complex tuples");
+      return ty.elems.flatMap(wasmTypeForBody);
     case "fn":
       todo("fn types");
     case "struct":

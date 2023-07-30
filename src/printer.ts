@@ -18,7 +18,7 @@ export function printAst(ast: Ast): string {
 }
 
 function printStringLiteral(lit: StringLiteral): string {
-  return `"${lit.value}"`;
+  return `"${lit.value.replace("\n", "\\n")}"`;
 }
 
 function printItem(item: Item): string {
@@ -49,7 +49,7 @@ function printTypeDef(type: TypeDef): string {
   );
 
   const fieldPart =
-    type.fields.length === 0 ? "()" : `(\n${fields.join("\n")}\n)`;
+    type.fields.length === 0 ? "{}" : `{\n${fields.join("\n")}\n}`;
 
   return `type ${type.name} = ${fieldPart};`;
 }
@@ -150,7 +150,7 @@ function printExpr(expr: Expr, indent: number): string {
       )}${elsePart}`;
     }
     case "loop": {
-      return `loop ${printExpr(expr.body, indent + 1)}`;
+      return `loop ${printExpr(expr.body, indent)}`;
     }
     case "break": {
       const target = expr.target !== undefined ? `#${expr.target}` : "";
@@ -160,6 +160,11 @@ function printExpr(expr: Expr, indent: number): string {
       return `${printIdent(expr.name)} { ${expr.fields
         .map(([name, expr]) => `${name.name}: ${printExpr(expr, indent + 1)}`)
         .join(", ")} }`;
+    }
+    case "tupleLiteral": {
+      return `(${expr.fields
+        .map((expr) => printExpr(expr, indent))
+        .join(", ")})`;
     }
   }
 }
@@ -234,5 +239,5 @@ function linebreak(indent: number): string {
 }
 
 function ind(indent: number): string {
-  return "  ".repeat(indent * 2);
+  return "  ".repeat(indent);
 }

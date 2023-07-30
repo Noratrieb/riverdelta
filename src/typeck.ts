@@ -768,6 +768,16 @@ export function checkBody(
 
           return { ...expr, fields, ty: structTy };
         }
+        case "tupleLiteral": {
+          const fields = expr.fields.map((expr) => this.expr(expr));
+
+          const ty: Ty = {
+            kind: "tuple",
+            elems: fields.map((field) => field.ty!),
+          };
+
+          return { ...expr, fields, ty };
+        }
       }
     },
   };

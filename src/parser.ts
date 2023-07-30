@@ -79,10 +79,10 @@ function parseItem(t: Token[]): [Token[], Item] {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
     [t] = expectNext(t, "=");
-    [t] = expectNext(t, "(");
+    [t] = expectNext(t, "{");
 
     let fields;
-    [t, fields] = parseCommaSeparatedList<FieldDef>(t, ")", (t) => {
+    [t, fields] = parseCommaSeparatedList<FieldDef>(t, "}", (t) => {
       let name;
       [t, name] = expectNext<TokenIdent>(t, "identifier");
       [t] = expectNext(t, ":");
@@ -190,7 +190,7 @@ function parseExpr(t: Token[]): [Token[], Expr] {
 
   CALL = ATOM { "(" EXPR_LIST ")" }
 
-  ATOM = "(" { EXPR ";" } EXPR ")" | IDENT { STRUCT_INIT } | LITERAL | EMPTY | LET | IF | LOOP | BREAK
+  ATOM = "(" { EXPR ";" | "," } EXPR ")" | IDENT { STRUCT_INIT } | LITERAL | EMPTY | LET | IF | LOOP | BREAK
   EMPTY =
   STRUCT_INIT = "{" { NAME ":" EXPR } { "," NAME ":" EXPR } { "," } "}"
   EXPR_LIST = { EXPR { "," EXPR } { "," } }
@@ -292,15 +292,38 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
     let expr: Expr;
     [t, expr] = parseExpr(t);
 
-    const exprs = [expr];
-    while (next(t)[1].kind !== ")") {
-      [t] = expectNext(t, ";");
-      [t, expr] = parseExpr(t);
-      exprs.push(expr);
-    }
-    [t] = expectNext(t, ")");
+    // This could be a block or a tuple literal. We can only know after
+    // parsing the first expression and looking at the delimiter.
 
-    return [t, { kind: "block", span, exprs }];
+    let peek;
+    [, peek] = next(t);
+    // It's a single element, which we interpret as a block.
+    // `(0,)` is the one elem tuple.
+    if (peek.kind === ")") {
+      [t] = expectNext(t, ")");
+      return [t, { kind: "block", span, exprs: [expr] }];
+    }
+    // It's a block.
+    if (peek.kind === ";") {
+      const exprs = [expr];
+      while (next(t)[1].kind !== ")") {
+        [t] = expectNext(t, ";");
+        [t, expr] = parseExpr(t);
+        exprs.push(expr);
+      }
+      [t] = expectNext(t, ")");
+
+      return [t, { kind: "block", span, exprs }];
+    }
+    // It's a tuple.
+    if (peek.kind === ",") {
+      [t] = expectNext(t, ",");
+      let rest;
+      [t, rest] = parseCommaSeparatedList(t, ")", parseExpr);
+
+      return [t, { kind: "tupleLiteral", span, fields: [expr, ...rest] }];
+    }
+    unexpectedToken(peek, "`,`, `;` or `)`");
   }
 
   if (tok.kind === "lit_string") {
@@ -454,6 +477,9 @@ function parseType(t: Token[]): [Token[], Type] {
       return [t, { kind: "list", elem, span }];
     }
     case "(": {
+      // `()` is a the unit type, an empty tuple.
+      // `(T)` is just `T`
+      // `(T,)` is a tuple
       if (next(t)[1]?.kind === ")") {
         [t] = next(t);
         return [t, { kind: "tuple", elems: [], span }];
@@ -466,6 +492,8 @@ function parseType(t: Token[]): [Token[], Type] {
         // Just a type inside parens, not a tuple. `(T,)` is a tuple.
         return [t, head];
       }
+
+      [t] = expectNext(t, ",");
 
       let tail;
       [t, tail] = parseCommaSeparatedList(t, ")", parseType);
@@ -537,7 +565,7 @@ function expectNext<T extends BaseToken>(
   let tok;
   [t, tok] = next(t);
   if (tok.kind !== kind) {
-    throw new CompilerError(`expected ${kind}, found ${tok.kind}`, tok.span);
+    throw new CompilerError(`expected \`${kind}\`, found \`${tok.kind}\``, tok.span);
   }
   return [t, tok as unknown as T & Token];
 }
