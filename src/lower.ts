@@ -128,7 +128,7 @@ export function lower(ast: Ast): wasm.Module {
     relocations: [],
   };
 
-  ast.items.forEach((item) => {
+  ast.rootItems.forEach((item) => {
     switch (item.kind) {
       case "function": {
         lowerFunc(cx, item, item.node);
@@ -195,7 +195,7 @@ function lowerImport(cx: Context, item: Item, def: ImportDef) {
 
   setMap<Resolution, FuncOrImport>(
     cx.funcIndices,
-    { kind: "item", index: item.id },
+    { kind: "item", id: item.id },
     { kind: "import", idx }
   );
 }
@@ -246,7 +246,7 @@ function lowerFunc(cx: Context, item: Item, func: FunctionDef) {
   fcx.cx.mod.funcs.push(wasmFunc);
   setMap<Resolution, FuncOrImport>(
     fcx.cx.funcIndices,
-    { kind: "item", index: fcx.item.id },
+    { kind: "item", id: fcx.item.id },
     { kind: "func", idx }
   );
 }
@@ -381,6 +381,9 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       }
 
       break;
+    }
+    case "path": {
+      todo("path");
     }
     case "binary": {
       // By evaluating the LHS first, the RHS is on top, which

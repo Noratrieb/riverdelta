@@ -5,6 +5,7 @@ import {
   Identifier,
   ImportDef,
   Item,
+  ModItem,
   Resolution,
   StringLiteral,
   Ty,
@@ -14,7 +15,7 @@ import {
 } from "./ast";
 
 export function printAst(ast: Ast): string {
-  return ast.items.map(printItem).join("\n");
+  return ast.rootItems.map(printItem).join("\n");
 }
 
 function printStringLiteral(lit: StringLiteral): string {
@@ -22,15 +23,20 @@ function printStringLiteral(lit: StringLiteral): string {
 }
 
 function printItem(item: Item): string {
+  const id = `/*${item.id}*/ `;
+
   switch (item.kind) {
     case "function": {
-      return printFunction(item.node);
+      return id + printFunction(item.node);
     }
     case "type": {
-      return printTypeDef(item.node);
+      return id + printTypeDef(item.node);
     }
     case "import": {
-      return printImportDef(item.node);
+      return id + printImportDef(item.node);
+    }
+    case "mod": {
+      return id +printMod(item.node);
     }
   }
 }
@@ -63,6 +69,17 @@ function printImportDef(def: ImportDef): string {
   return `import ${printStringLiteral(def.module)} ${printStringLiteral(
     def.func
   )}(${args})${ret};`;
+}
+
+function printMod(mod: ModItem): string {
+  switch (mod.modKind.kind) {
+    case "inline":
+      return `mod ${mod.name} (\n${mod.modKind.contents
+        .map(printItem)
+        .join("\n  ")});`;
+    case "extern":
+      return `extern mod ${mod.name};`;
+  }
 }
 
 function printExpr(expr: Expr, indent: number): string {
@@ -116,6 +133,9 @@ function printExpr(expr: Expr, indent: number): string {
     }
     case "ident": {
       return printIdent(expr.value);
+    }
+    case "path": {
+      return `<${expr.segments.join(".")}>${printRes(expr.res)}`;
     }
     case "binary": {
       return `${printExpr(expr.lhs, indent)} ${expr.binaryKind} ${printExpr(
@@ -185,18 +205,19 @@ function printType(type: Type): string {
   }
 }
 
-function printIdent(ident: Identifier): string {
-  const printRes = (res: Resolution): string => {
-    switch (res.kind) {
-      case "local":
-        return `#${res.index}`;
-      case "item":
-        return `#G${res.index}`;
-      case "builtin": {
-        return `#B`;
-      }
+function printRes(res: Resolution): string {
+  switch (res.kind) {
+    case "local":
+      return `#${res.index}`;
+    case "item":
+      return `#G${res.id}`;
+    case "builtin": {
+      return `#B`;
     }
-  };
+  }
+}
+
+function printIdent(ident: Identifier): string {
   const res = ident.res ? printRes(ident.res) : "";
   return `${ident.name}${res}`;
 }

@@ -1,3 +1,9 @@
+extern mod std;
+
+mod uwu;
+
+mod owo {}
+
 function main() = (
   prIntln(0);
   prIntln(1);

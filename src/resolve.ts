@@ -6,21 +6,60 @@ import {
   Expr,
   Folder,
   Identifier,
+  Item,
+  ItemId,
   LocalInfo,
+  ModItem,
   Resolution,
-  foldAst,
   superFoldExpr,
   superFoldItem,
 } from "./ast";
-import { CompilerError } from "./error";
+import { CompilerError, spanMerge, todo } from "./error";
+import { unwrap } from "./utils";
 
 const BUILTIN_SET = new Set<string>(BUILTINS);
 
+type Context = {
+  ast: Ast;
+  modContentsCache: Map<ItemId, Map<string, ItemId>>;
+};
+
+function resolveModItem(
+  cx: Context,
+  mod: ModItem,
+  modId: ItemId,
+  name: string
+): ItemId | undefined {
+  const cachedContents = cx.modContentsCache.get(modId);
+  if (cachedContents) {
+    return cachedContents.get(name);
+  }
+
+  switch (mod.modKind.kind) {
+    case "inline": {
+      const contents = new Map(
+        mod.modKind.contents.map((item) => [item.node.name, item.id])
+      );      
+      cx.modContentsCache.set(modId, contents);
+      return contents.get(name);
+    }
+    case "extern": {
+      todo("extern mod items");
+    }
+  }
+}
+
 export function resolve(ast: Ast): Ast {
+  const cx: Context = { ast, modContentsCache: new Map() };
+
+  const rootItems = resolveModule(cx, ast.rootItems);
+  return { ...ast, rootItems };
+}
+
+function resolveModule(cx: Context, contents: Item[]): Item[] {
   const items = new Map<string, number>();
 
-  for (let i = 0; i < ast.items.length; i++) {
-    const item = ast.items[i];
+  contents.forEach((item) => {
     const existing = items.get(item.node.name);
     if (existing !== undefined) {
       throw new CompilerError(
@@ -28,8 +67,8 @@ export function resolve(ast: Ast): Ast {
         item.span
       );
     }
-    items.set(item.node.name, i);
-  }
+    items.set(item.node.name, item.id);
+  });
 
   const scopes: string[] = [];
 
@@ -59,7 +98,7 @@ export function resolve(ast: Ast): Ast {
     if (item !== undefined) {
       return {
         kind: "item",
-        index: item,
+        id: item,
       };
     }
 
@@ -103,43 +142,99 @@ export function resolve(ast: Ast): Ast {
             id: item.id,
           };
         }
+        case "mod": {
+          if (item.node.modKind.kind === "inline") {
+            const contents = resolveModule(cx, item.node.modKind.contents);
+            return {
+              ...item,
+              kind: "mod",
+              node: { ...item.node, modKind: { kind: "inline", contents } },
+            };
+          }
+          break;
+        }
       }
 
       return superFoldItem(item, this);
     },
     expr(expr) {
-      if (expr.kind === "block") {
-        const prevScopeLength = scopes.length;
-        blockLocals.push([]);
+      switch (expr.kind) {
+        case "block": {
+          const prevScopeLength = scopes.length;
+          blockLocals.push([]);
 
-        const exprs = expr.exprs.map<Expr>((inner) => this.expr(inner));
+          const exprs = expr.exprs.map<Expr>((inner) => this.expr(inner));
 
-        scopes.length = prevScopeLength;
-        const locals = blockLocals.pop();
+          scopes.length = prevScopeLength;
+          const locals = blockLocals.pop();
 
-        return {
-          kind: "block",
-          exprs,
-          locals,
-          span: expr.span,
-        };
-      } else if (expr.kind === "let") {
-        let rhs = this.expr(expr.rhs);
-        let type = expr.type && this.type(expr.type);
+          return {
+            kind: "block",
+            exprs,
+            locals,
+            span: expr.span,
+          };
+        }
+        case "let": {
+          let rhs = this.expr(expr.rhs);
+          let type = expr.type && this.type(expr.type);
 
-        scopes.push(expr.name.name);
-        const local = { name: expr.name.name, span: expr.name.span };
-        blockLocals[blockLocals.length - 1].push(local);
+          scopes.push(expr.name.name);
+          const local = { name: expr.name.name, span: expr.name.span };
+          blockLocals[blockLocals.length - 1].push(local);
 
-        return {
-          ...expr,
-          name: expr.name,
-          local,
-          type,
-          rhs,
-        };
-      } else {
-        return superFoldExpr(expr, this);
+          return {
+            ...expr,
+            name: expr.name,
+            local,
+            type,
+            rhs,
+          };
+        }
+        case "fieldAccess": {
+          if (expr.lhs.kind === "ident") {
+            // If the lhs is a module we need to convert this into a path.
+            const res = resolveIdent(expr.lhs.value);
+            if (res.kind === "item") {
+              const module = unwrap(cx.ast.itemsById.get(res.id));
+              if (module.kind === "mod") {
+                if (typeof expr.field.value === "number") {
+                  throw new CompilerError(
+                    "module contents cannot be indexed with a number",
+                    expr.field.span
+                  );
+                }
+
+                const pathResItem = resolveModItem(
+                  cx,
+                  module.node,
+                  module.id,
+                  expr.field.value
+                );
+                if (pathResItem === undefined) {
+                  throw new CompilerError(
+                    `module ${module.node.name} has no item ${expr.field.value}`,
+                    expr.field.span
+                  );
+                }
+
+                const pathRes: Resolution = { kind: "item", id: pathResItem };
+
+                return {
+                  kind: "path",
+                  segments: [expr.lhs.value.name, expr.field.value],
+                  res: pathRes,
+                  span: spanMerge(expr.lhs.span, expr.field.span),
+                };
+              }
+            }
+          }
+
+          return superFoldExpr(expr, this);
+        }
+        default: {
+          return superFoldExpr(expr, this);
+        }
       }
     },
     ident(ident) {
@@ -148,7 +243,5 @@ export function resolve(ast: Ast): Ast {
     },
   };
 
-  const resolved = foldAst(ast, resolver);
-
-  return resolved;
+  return contents.map((item) => resolver.item(item));
 }

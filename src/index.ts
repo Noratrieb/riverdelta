@@ -11,12 +11,13 @@ import { exec } from "child_process";
 
 const INPUT = `
 function main() = (
-  printTuples(("hello, ", "world\\n"));
+  owo.uwu.meow();
 );
 
-function printTuples(a: (String, String)) = (
-  print(a.0);
-  print(a.1);
+mod owo (
+  mod uwu (
+    function meow() =;
+  );
 );
 `;
 
@@ -38,14 +39,14 @@ function main() {
     const ast = parse(tokens);
     console.log("-----AST---------------");
 
-    console.dir(ast, { depth: 50 });
+    console.dir(ast.rootItems, { depth: 50 });
 
-    const printed = printAst(ast);
     console.log("-----AST pretty--------");
+    const printed = printAst(ast);
     console.log(printed);
 
-    const resolved = resolve(ast);
     console.log("-----AST resolved------");
+    const resolved = resolve(ast);
     const resolvedPrinted = printAst(resolved);
     console.log(resolvedPrinted);
 

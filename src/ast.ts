@@ -1,7 +1,11 @@
 import { Span } from "./error";
 import { LitIntType } from "./lexer";
 
-export type Ast = { items: Item[]; typeckResults?: TypeckResults };
+export type Ast = {
+  rootItems: Item[];
+  typeckResults?: TypeckResults;
+  itemsById: Map<ItemId, Item>;
+};
 
 export type Identifier = {
   name: string;
@@ -23,6 +27,10 @@ export type ItemKind =
   | {
       kind: "import";
       node: ImportDef;
+    }
+  | {
+      kind: "mod";
+      node: ModItem;
     };
 
 export type Item = ItemKind & {
@@ -64,6 +72,20 @@ export type ImportDef = {
   ty?: TyFn;
 };
 
+export type ModItem = {
+  name: string;
+  modKind: ModItemKind;
+};
+
+export type ModItemKind =
+  | {
+      kind: "inline";
+      contents: Item[];
+    }
+  | {
+      kind: "extern";
+    };
+
 export type ExprEmpty = { kind: "empty" };
 
 export type ExprLet = {
@@ -99,6 +121,20 @@ export type ExprLiteral = {
 export type ExprIdent = {
   kind: "ident";
   value: Identifier;
+};
+
+/**
+ * `a.b.c` in source code where `a` and `b` are modules.
+ * This expression is not parsed, but fieldAccess gets converted
+ * to path expressions in resolve.
+ */
+export type ExprPath = {
+  kind: "path";
+  segments: string[];
+  /**
+   * Since this only exists after resolve, we always have a res.
+   */
+  res: Resolution;
 };
 
 export type ExprBinary = {
@@ -168,6 +204,7 @@ export type ExprKind =
   | ExprBlock
   | ExprLiteral
   | ExprIdent
+  | ExprPath
   | ExprBinary
   | ExprUnary
   | ExprCall
@@ -291,12 +328,7 @@ export type Resolution =
     }
   | {
       kind: "item";
-      /**
-       * Items are numbered in the order they appear in.
-       * Right now we only have one scope of items (global)
-       * so this is enough.
-       */
-      index: number;
+      id: ItemId;
     }
   | {
       kind: "builtin";
@@ -438,7 +470,8 @@ export const DEFAULT_FOLDER: Folder = {
 
 export function foldAst(ast: Ast, folder: Folder): Ast {
   return {
-    items: ast.items.map((item) => folder.item(item)),
+    rootItems: ast.rootItems.map((item) => folder.item(item)),
+    itemsById: ast.itemsById,
     typeckResults: ast.typeckResults,
   };
 }
@@ -493,6 +526,30 @@ export function superFoldItem(item: Item, folder: Folder): Item {
         },
       };
     }
+    case "mod": {
+      let kind: ModItemKind;
+      const { modKind: itemKind } = item.node;    
+      switch (itemKind.kind) {
+        case "inline":
+          kind = {
+            kind: "inline",
+            contents: itemKind.contents.map((item) => folder.item(item)),
+          };
+          break;
+        case "extern":
+          kind = { kind: "extern" };
+          break;
+      }
+
+      return {
+        ...item,
+        kind: "mod",
+        node: {
+          name: item.node.name,
+          modKind: kind,
+        },
+      };
+    }
   }
 }
 
@@ -531,6 +588,9 @@ export function superFoldExpr(expr: Expr, folder: Folder): Expr {
     }
     case "ident": {
       return { kind: "ident", value: folder.ident(expr.value), span };
+    }
+    case "path": {
+      return { ...expr, kind: "path" };
     }
     case "binary": {
       return {

@@ -10,6 +10,8 @@ export type DatalessToken =
   | "loop"
   | "break"
   | "import"
+  | "extern"
+  | "mod"
   | "("
   | ")"
   | "{"
@@ -90,13 +92,24 @@ export function tokenize(input: string): Token[] {
     const next = input[i];
     const span: Span = { start: i, end: i + 1 };
 
-    if (next === "/" && input[i + 1] === "/") {     
+    if (next === "/" && input[i + 1] === "/") {
       while (input[i] !== "\n") {
         i++;
       }
 
       continue;
-    }  
+    }
+
+    if (next === "/" && input[i + 1] === "*") {
+      i++;
+      i++;
+      while (input[i] !== "*" && input[i + 1] !== "/") {
+        i++;
+        if (input[i] === undefined) {
+          throw new CompilerError("unterminated block comment", span);
+        }
+      }
+    }
 
     if (SINGLE_PUNCT.includes(next)) {
       tokens.push({ kind: next as DatalessToken, span });
@@ -218,14 +231,14 @@ export function tokenize(input: string): Token[] {
             }
 
             let type: LitIntType = "Int";
-            console.log(input[i + 2]); 
+            console.log(input[i + 2]);
             if (input[i + 1] === "_" && isIdentStart(input[i + 2])) {
-              console.log("yes", input.slice(i+2, i+5));
-              
-              if (input.slice(i+2, i+5) === "Int") {
+              console.log("yes", input.slice(i + 2, i + 5));
+
+              if (input.slice(i + 2, i + 5) === "Int") {
                 i += 4;
                 type = "Int";
-              } else if (input.slice(i+2, i+5) === "I32") {
+              } else if (input.slice(i + 2, i + 5) === "I32") {
                 i += 4;
                 type = "I32";
               }
@@ -292,6 +305,8 @@ const KEYOWRDS: DatalessToken[] = [
   "loop",
   "break",
   "import",
+  "extern",
+  "mod",
 ];
 
 const KEYWORD_SET = new Set<string>(KEYOWRDS);

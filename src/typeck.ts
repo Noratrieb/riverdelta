@@ -14,6 +14,7 @@ import {
   ItemId,
   LOGICAL_KINDS,
   LoopId,
+  ModItemKind,
   Resolution,
   Ty,
   TY_BOOL,
@@ -29,6 +30,7 @@ import {
 } from "./ast";
 import { CompilerError, Span } from "./error";
 import { printTy } from "./printer";
+import { unwrap } from "./utils";
 
 function mkTyFn(params: Ty[], returnTy: Ty): Ty {
   return { kind: "fn", params, returnTy };
@@ -81,10 +83,11 @@ function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
   }
 }
 
+// TODO: Cleanup, maybe get the ident switch into this function because typeOfItem is unused.
 function lowerAstTyBase(
   type: Type,
   lowerIdentTy: (ident: Identifier) => Ty,
-  typeOfItem: (index: number) => Ty
+  typeOfItem: (index: number, cause: Span) => Ty
 ): Ty {
   switch (type.kind) {
     case "ident": {
@@ -112,8 +115,8 @@ function lowerAstTyBase(
 
 export function typeck(ast: Ast): Ast {
   const itemTys = new Map<number, Ty | null>();
-  function typeOfItem(index: ItemId): Ty {
-    const item = ast.items[index];
+  function typeOfItem(index: ItemId, cause: Span): Ty {
+    const item = unwrap(ast.itemsById.get(index));
 
     const ty = itemTys.get(index);
     if (ty) {
@@ -154,6 +157,12 @@ export function typeck(ast: Ast): Ast {
         ty.fields = fields;
         return ty;
       }
+      case "mod": {
+        throw new CompilerError(
+          `module ${item.node.name} is not a type`,
+          cause
+        );
+      }
     }
   }
 
@@ -167,7 +176,7 @@ export function typeck(ast: Ast): Ast {
             throw new Error("Item type cannot refer to local variable");
           }
           case "item": {
-            return typeOfItem(res.index);
+            return typeOfItem(res.id, type.span);
           }
           case "builtin": {
             return builtinAsTy(res.name, ident.span);
@@ -183,7 +192,7 @@ export function typeck(ast: Ast): Ast {
     item(item) {
       switch (item.kind) {
         case "function": {
-          const fnTy = typeOfItem(item.id) as TyFn;
+          const fnTy = typeOfItem(item.id, item.span) as TyFn;
           const body = checkBody(item.node.body, fnTy, typeOfItem);
 
           const returnType = item.node.returnType && {
@@ -205,7 +214,7 @@ export function typeck(ast: Ast): Ast {
           };
         }
         case "import": {
-          const fnTy = typeOfItem(item.id) as TyFn;
+          const fnTy = typeOfItem(item.id, item.span) as TyFn;
 
           fnTy.params.forEach((param, i) => {
             switch (param.kind) {
@@ -268,7 +277,7 @@ export function typeck(ast: Ast): Ast {
             fieldNames.add(name);
           });
 
-          const ty = typeOfItem(item.id) as TyStruct;
+          const ty = typeOfItem(item.id, item.span) as TyStruct;
 
           return {
             ...item,
@@ -284,13 +293,38 @@ export function typeck(ast: Ast): Ast {
             },
           };
         }
+        case "mod": {
+          switch (item.node.modKind.kind) {
+            case "inline":
+              const modKind: ModItemKind = {
+                kind: "inline",
+                contents: item.node.modKind.contents.map((item) =>
+                  this.item(item)
+                ),
+              };
+
+              return {
+                ...item,
+                node: {
+                  ...item.node,
+                  modKind,
+                },
+              };
+            case "extern":
+              // Nothing to check.
+              return {
+                ...item,
+                node: { ...item.node, modKind: { ...item.node.modKind } },
+              };
+          }
+        }
       }
     },
   };
 
   const typecked = foldAst(ast, checker);
 
-  const main = typecked.items.find((item) => {
+  const main = typecked.rootItems.find((item) => {
     if (item.kind === "function" && item.node.name === "main") {
       const func = item.node;
       if (func.returnType !== undefined) {
@@ -316,7 +350,7 @@ export function typeck(ast: Ast): Ast {
   }
 
   typecked.typeckResults = {
-    main: { kind: "item", index: main.id },
+    main: { kind: "item", id: main.id },
   };
 
   return typecked;
@@ -483,7 +517,7 @@ export class InferContext {
 export function checkBody(
   body: Expr,
   fnTy: TyFn,
-  typeOfItem: (index: number) => Ty
+  typeOfItem: (index: number, cause: Span) => Ty
 ): Expr {
   const localTys = [...fnTy.params];
   const loopState: { hasBreak: boolean; loopId: LoopId }[] = [];
@@ -497,7 +531,7 @@ export function checkBody(
         return localTys[idx];
       }
       case "item": {
-        return typeOfItem(res.index);
+        return typeOfItem(res.id, span);
       }
       case "builtin":
         return typeOfBuiltinValue(res.name, span);
@@ -515,7 +549,7 @@ export function checkBody(
             return localTys[idx];
           }
           case "item": {
-            return typeOfItem(res.index);
+            return typeOfItem(res.id, type.span);
           }
           case "builtin":
             return builtinAsTy(res.name, ident.span);
@@ -629,6 +663,10 @@ export function checkBody(
 
           return { ...expr, ty };
         }
+        case "path": {
+          const ty = typeOf(expr.res, expr.span);
+          return { ...expr, ty };
+        }
         case "binary": {
           const lhs = this.expr(expr.lhs);
           const rhs = this.expr(expr.rhs);
@@ -731,7 +769,7 @@ export function checkBody(
             }
             default: {
               throw new CompilerError(
-                "only tuples and structs have fields",
+                `cannot access field \`${field.value}\` on type \`${printTy(lhs.ty)}\``,
                 expr.span
               );
             }

@@ -16,6 +16,7 @@ import {
   ImportDef,
   Item,
   LOGICAL_KINDS,
+  ModItem,
   Type,
   TypeDef,
   UNARY_KINDS,
@@ -23,6 +24,7 @@ import {
   binaryExprPrecedenceClass,
   foldAst,
   superFoldExpr,
+  superFoldItem,
 } from "./ast";
 import { CompilerError, Span, spanMerge } from "./error";
 import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
@@ -39,7 +41,7 @@ export function parse(t: Token[]): Ast {
     items.push(item);
   }
 
-  const ast = assignIds({ items: items });
+  const ast = assignIds(items);
 
   validateAst(ast);
 
@@ -128,6 +130,43 @@ function parseItem(t: Token[]): [Token[], Item] {
     };
 
     return [t, { kind: "import", node: def, span: tok.span, id: 0 }];
+  } else if (tok.kind === "extern") {
+    [t] = expectNext(t, "mod");
+    let name;
+    [t, name] = expectNext<TokenIdent>(t, "identifier");
+
+    const node: ModItem = {
+      name: name.ident,
+      modKind: { kind: "extern" },
+    };
+
+    [t] = expectNext(t, ";");
+
+    return [t, { kind: "mod", node, span: name.span, id: 0 }];
+  } else if (tok.kind === "mod") {
+    let name;
+    [t, name] = expectNext<TokenIdent>(t, "identifier");
+
+    [t] = expectNext(t, "(");
+
+    const contents: Item[] = [];
+
+    while (next(t)[1].kind !== ")") {
+      let item;
+      [t, item] = parseItem(t);
+
+      contents.push(item);
+    }
+
+    [t] = expectNext(t, ")");
+    [t] = expectNext(t, ";");
+
+    const node: ModItem = {
+      name: name.ident,
+      modKind: { kind: "inline", contents },
+    };
+
+    return [t, { kind: "mod", node, span: name.span, id: 0 }];
   } else {
     unexpectedToken(tok, "item");
   }
@@ -615,8 +654,17 @@ function unexpectedToken(token: Token, expected: string): never {
 }
 
 function validateAst(ast: Ast) {
+  const seenItemIds = new Set();
+
   const validator: Folder = {
     ...DEFAULT_FOLDER,
+    item(item: Item): Item {
+      if (seenItemIds.has(item.id)) {
+        throw new Error(`duplicate item id: ${item.id} for ${item.node.name}`);
+      }
+      seenItemIds.add(item.id);
+      return superFoldItem(item, this);
+    },
     expr(expr: Expr): Expr {
       if (expr.kind === "block") {
         expr.exprs.forEach((inner) => {
@@ -660,13 +708,22 @@ function validateAst(ast: Ast) {
   foldAst(ast, validator);
 }
 
-function assignIds(ast: Ast): Ast {
-  let loopId = new Ids();
+function assignIds(rootItems: Item[]): Ast {
+  const itemId = new Ids();
+  const loopId = new Ids();
 
-  const astItems = { items: ast.items.map((item, i) => ({ ...item, id: i })) };
+  const ast: Ast = {
+    rootItems,
+    itemsById: new Map(),
+  };
 
   const assigner: Folder = {
     ...DEFAULT_FOLDER,
+    item(item: Item): Item {
+      const id = itemId.next();
+      ast.itemsById.set(id, item);
+      return { ...superFoldItem(item, this), id };
+    },
     expr(expr: Expr): Expr {
       if (expr.kind === "loop") {
         return {
@@ -678,5 +735,5 @@ function assignIds(ast: Ast): Ast {
     },
   };
 
-  return foldAst(astItems, assigner);
+  return foldAst(ast, assigner);
 }
