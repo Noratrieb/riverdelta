@@ -629,12 +629,12 @@ function printStart(start: Start, f: FmtCtx) {
   });
 }
 
-function printElem(_elem: Elem, f: FmtCtx) {
+function printElem(_elem: Elem, _f: FmtCtx) {
   todo();
 }
 
 function printData(data: Data, f: FmtCtx) {
-  let mode = data.mode;
+  const mode = data.mode;
 
   f.sexpr(() => {
     f.keyword("data");

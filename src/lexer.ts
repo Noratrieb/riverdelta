@@ -251,7 +251,7 @@ export function tokenize(input: string): Token[] {
               i++;
             }
             const ident = input.slice(span.start, span.end);
-            let kw = isKeyword(ident);
+            const kw = isKeyword(ident);
             if (kw) {
               tokens.push({ kind: kw, span });
             } else {

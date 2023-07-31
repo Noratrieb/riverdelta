@@ -191,8 +191,8 @@ function resolveModule(
           };
         }
         case "let": {
-          let rhs = this.expr(expr.rhs);
-          let type = expr.type && this.type(expr.type);
+          const rhs = this.expr(expr.rhs);
+          const type = expr.type && this.type(expr.type);
 
           scopes.push(expr.name.name);
           const local = { name: expr.name.name, span: expr.name.span };

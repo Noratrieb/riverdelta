@@ -344,6 +344,7 @@ function parseExprCall(t: Token[]): [Token[], Expr] {
 }
 
 function parseExprAtom(startT: Token[]): [Token[], Expr] {
+  // eslint-disable-next-line prefer-const
   let [t, tok] = next(startT);
   const span = tok.span;
 
@@ -354,8 +355,7 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
     // This could be a block or a tuple literal. We can only know after
     // parsing the first expression and looking at the delimiter.
 
-    let peek;
-    [, peek] = next(t);
+    const [, peek] = next(t);
     // It's a single element, which we interpret as a block.
     // `(0,)` is the one elem tuple.
     if (peek.kind === ")") {
@@ -579,11 +579,7 @@ function parseCommaSeparatedList<R>(
 
   // () | (a) | (a,) | (a, b)
 
-  while (true) {
-    if (next(t)[1]?.kind === terminator) {
-      break;
-    }
-
+  while (next(t)[1]?.kind !== terminator) {
     let nextValue;
     [t, nextValue] = parser(t);
 

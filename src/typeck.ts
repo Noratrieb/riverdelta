@@ -1,6 +1,5 @@
 import {
   Ast,
-  binaryExprPrecedenceClass,
   BuiltinName,
   COMPARISON_KINDS,
   DEFAULT_FOLDER,
@@ -298,7 +297,7 @@ export function typeck(ast: Ast): Ast {
         }
         case "mod": {
           switch (item.node.modKind.kind) {
-            case "inline":
+            case "inline": {
               const modKind: ModItemKind = {
                 kind: "inline",
                 contents: item.node.modKind.contents.map((item) =>
@@ -313,6 +312,7 @@ export function typeck(ast: Ast): Ast {
                   modKind,
                 },
               };
+            }
             case "extern":
               // Nothing to check.
               return {
@@ -417,7 +417,7 @@ export class InferContext {
    * before calling this.
    */
   private constrainVar(variable: number, ty: Ty) {
-    let root = this.findRoot(variable);
+    const root = this.findRoot(variable);
 
     if (ty.kind === "var") {
       // Now we point our root to the other root to unify the two graphs.
@@ -571,7 +571,9 @@ export function checkBody(
         }
         case "let": {
           const loweredBindingTy = expr.type && lowerAstTy(expr.type);
-          let bindingTy = loweredBindingTy ? loweredBindingTy : infcx.newVar();
+          const bindingTy = loweredBindingTy
+            ? loweredBindingTy
+            : infcx.newVar();
 
           const rhs = this.expr(expr.rhs);
           infcx.assign(bindingTy, rhs.ty!, expr.span);
@@ -772,7 +774,9 @@ export function checkBody(
             }
             default: {
               throw new CompilerError(
-                `cannot access field \`${field.value}\` on type \`${printTy(lhs.ty)}\``,
+                `cannot access field \`${field.value}\` on type \`${printTy(
+                  lhs.ty
+                )}\``,
                 expr.span
               );
             }
@@ -854,7 +858,7 @@ export function checkBody(
 
           const assignedFields = new Set();
 
-          fields.forEach(([name, field], i) => {
+          fields.forEach(([name, field]) => {
             const fieldTy = structTy.fields.find((def) => def[0] === name.name);
             if (!fieldTy) {
               throw new CompilerError(
@@ -928,8 +932,8 @@ export function checkBody(
 }
 
 function checkBinary(expr: Expr & ExprBinary): Expr {
-  let lhsTy = expr.lhs.ty!;
-  let rhsTy = expr.rhs.ty!;
+  const lhsTy = expr.lhs.ty!;
+  const rhsTy = expr.rhs.ty!;
 
   if (COMPARISON_KINDS.includes(expr.binaryKind)) {
     if (lhsTy.kind === "int" && rhsTy.kind === "int") {
@@ -969,7 +973,7 @@ function checkBinary(expr: Expr & ExprBinary): Expr {
 }
 
 function checkUnary(expr: Expr & ExprUnary): Expr {
-  let rhsTy = expr.rhs.ty!;
+  const rhsTy = expr.rhs.ty!;
 
   if (
     expr.unaryKind === "!" &&

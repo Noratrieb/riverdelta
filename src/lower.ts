@@ -331,7 +331,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
     }
     case "literal": {
       switch (expr.value.kind) {
-        case "str":
+        case "str": {
           const utf8 = encodeUtf8(expr.value.value);
           const idx = appendData(fcx.cx, utf8);
 
@@ -339,6 +339,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
           instrs.push({ kind: "i32.const", imm: utf8.length });
 
           break;
+        }
         case "int":
           switch (expr.value.type) {
             case "Int":
@@ -573,10 +574,8 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
 
       // TODO: Actually do this instead of being naive.
 
-      const isPlace = (expr: Expr) =>
+      const _isPlace = (expr: Expr) =>
         expr.kind === "ident" || expr.kind === "fieldAccess";
-
-      function project() {}
 
       lowerExpr(fcx, instrs, expr.lhs);
 
