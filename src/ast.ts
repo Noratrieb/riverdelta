@@ -1,12 +1,6 @@
 import { Span } from "./error";
 import { LitIntType } from "./lexer";
 
-export type Ast<P extends Phase> = {
-  rootItems: Item<P>[];
-  itemsById: Map<ItemId, Item<P>>;
-  packageName: string;
-} & P["typeckResults"];
-
 export type Phase = {
   res: unknown;
   defPath: unknown;
@@ -45,12 +39,22 @@ export type Typecked = {
   ty: HasTy;
   typeckResults: HasTypeckResults;
 };
+
 export type AnyPhase = {
   res: No | HasRes;
   defPath: No | HasDefPath;
   ty: No | HasTy;
   typeckResults: No | HasTypeckResults;
 };
+
+export type CrateId = number;
+
+export type Crate<P extends Phase> = {
+  id: CrateId;
+  rootItems: Item<P>[];
+  itemsById: Map<ItemId, Item<P>>;
+  packageName: string;
+} & P["typeckResults"];
 
 export type Ident = {
   name: string;
@@ -80,6 +84,10 @@ export type ItemKind<P extends Phase> =
   | {
       kind: "mod";
       node: ModItem<P>;
+    }
+  | {
+      kind: "extern";
+      node: ExternItem;
     };
 
 export type Item<P extends Phase> = ItemKind<P> & {
@@ -123,17 +131,10 @@ export type ImportDef<P extends Phase> = {
 
 export type ModItem<P extends Phase> = {
   name: string;
-  modKind: ModItemKind<P>;
+  contents: Item<P>[];
 };
 
-export type ModItemKind<P extends Phase> =
-  | {
-      kind: "inline";
-      contents: Item<P>[];
-    }
-  | {
-      kind: "extern";
-    };
+export type ExternItem = { name: string };
 
 export type ExprEmpty = { kind: "empty" };
 
@@ -486,7 +487,7 @@ export const TY_I32: Ty = { kind: "i32" };
 export const TY_NEVER: Ty = { kind: "never" };
 
 export type TypeckResults = {
-  main: Resolution;
+  main: Resolution | undefined;
 };
 
 // folders
@@ -521,7 +522,7 @@ export function mkDefaultFolder<
     newItemsById: new Map(),
     item(item) {
       const newItem = this.itemInner(item);
-      this.newItemsById.set(item.id, newItem);
+      this.newItemsById.set(newItem.id, newItem);
       return newItem;
     },
     itemInner(_item) {
@@ -534,14 +535,15 @@ export function mkDefaultFolder<
 }
 
 export function foldAst<From extends Phase, To extends Phase>(
-  ast: Ast<From>,
+  ast: Crate<From>,
   folder: Folder<From, To>
-): Ast<To> {
+): Crate<To> {
   if ((folder.item as any)[ITEM_DEFAULT] !== ITEM_DEFAULT) {
     throw new Error("must not override `item` on folders");
   }
 
   return {
+    id: ast.id,
     rootItems: ast.rootItems.map((item) => folder.item(item)),
     itemsById: folder.newItemsById,
     typeckResults: "typeckResults" in ast ? ast.typeckResults : undefined,
@@ -603,28 +605,17 @@ export function superFoldItem<From extends Phase, To extends Phase>(
       };
     }
     case "mod": {
-      let kind: ModItemKind<To>;
-      const { modKind: itemKind } = item.node;
-      switch (itemKind.kind) {
-        case "inline":
-          kind = {
-            kind: "inline",
-            contents: itemKind.contents.map((item) => folder.item(item)),
-          };
-          break;
-        case "extern":
-          kind = { kind: "extern" };
-          break;
-      }
-
       return {
         ...item,
         kind: "mod",
         node: {
           name: item.node.name,
-          modKind: kind,
+          contents: item.node.contents.map((item) => folder.item(item)),
         },
       };
+    }
+    case "extern": {
+      return { ...item, kind: "extern" };
     }
   }
 }

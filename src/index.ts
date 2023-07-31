@@ -1,4 +1,4 @@
-import { withErrorHandler } from "./error";
+import { CompilerError, Span, withErrorPrinter } from "./error";
 import { isValidIdent, tokenize } from "./lexer";
 import { lower as lowerToWasm } from "./lower";
 import { parse } from "./parser";
@@ -9,23 +9,23 @@ import { writeModuleWatToString } from "./wasm/wat";
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
-import { Ast, Built, Typecked } from "./ast";
+import { Crate, Built, Typecked } from "./ast";
+import { Ids } from "./utils";
 
 const INPUT = `
-function main() = (
-  prIntln(0);
-);
+extern mod std;
 
-function prIntln(x: Int) = (
-  print("\n");
+function main() = (
+  std.pow(10, 2);
 );
 `;
 
 function main() {
+  let filename: string;
   let input: string;
   let packageName: string;
   if (process.argv.length > 2) {
-    const filename = process.argv[2];
+    filename = process.argv[2];
     if (path.extname(filename) !== ".nil") {
       console.error(
         `error: filename must have \`.nil\` extension: \`${filename}\``
@@ -36,6 +36,7 @@ function main() {
     input = fs.readFileSync(filename, { encoding: "utf-8" });
     packageName = path.basename(filename, ".nil");
   } else {
+    filename = "<hardcoded>";
     input = INPUT;
     packageName = "test";
   }
@@ -49,14 +50,14 @@ function main() {
 
   console.log(`package name: '${packageName}'`);
 
-  withErrorHandler(input, () => {
+  withErrorPrinter(input, filename, () => {
     const start = Date.now();
 
     const tokens = tokenize(input);
     console.log("-----TOKENS------------");
     console.log(tokens);
 
-    const ast: Ast<Built> = parse(packageName, tokens);
+    const ast: Crate<Built> = parse(packageName, tokens, 0);
     console.log("-----AST---------------");
 
     console.dir(ast.rootItems, { depth: 50 });
@@ -66,17 +67,17 @@ function main() {
     console.log(printed);
 
     console.log("-----AST resolved------");
-    const resolved = resolve(ast);
+    const [resolved, crates] = resolve(ast, loadCrate);
     const resolvedPrinted = printAst(resolved);
     console.log(resolvedPrinted);
 
     console.log("-----AST typecked------");
-    const typecked: Ast<Typecked> = typeck(resolved);
+    const typecked: Crate<Typecked> = typeck(resolved);
     const typeckPrinted = printAst(typecked);
     console.log(typeckPrinted);
 
     console.log("-----wasm--------------");
-    const wasmModule = lowerToWasm(typecked);
+    const wasmModule = lowerToWasm([typecked, ...crates]);
     const moduleStringColor = writeModuleWatToString(wasmModule, true);
     const moduleString = writeModuleWatToString(wasmModule);
 
@@ -103,6 +104,48 @@ function main() {
       console.log(`finished in ${Date.now() - start}ms`);
     });
   });
+}
+
+function loadCrate(
+  name: string,
+  span: Span,
+  crateId: Ids,
+  existingCrates: Crate<Typecked>[]
+): [Crate<Typecked>, Crate<Typecked>[]] {
+  // We really, really want a good algorithm for finding crates.
+  // But right now we just look for files in the CWD.
+
+  const existing = existingCrates.find((crate) => crate.packageName === name);
+  if (existing) {
+    return [existing, []];
+  }
+
+  const filename = `${name}.nil`;
+  let input;
+  try {
+    input = fs.readFileSync(filename, { encoding: "utf-8" });
+  } catch (e) {
+    throw new CompilerError(
+      `failed to load ${name}, could not fine \`${filename}\``,
+      span
+    );
+  }
+
+  try {
+    const tokens = tokenize(input);
+    const ast = parse(name, tokens, crateId.next());
+    const [resolved, crates] = resolve(ast, loadCrate);
+    const typecked = typeck(resolved);
+    return [typecked, crates];
+  } catch (e) {
+    withErrorPrinter(input, filename, () => {
+      throw e;
+    });
+    throw new CompilerError(
+      `failed to load crate ${name}: crate contains errors`,
+      span
+    );
+  }
 }
 
 main();

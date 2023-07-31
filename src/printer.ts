@@ -1,6 +1,6 @@
 import {
   AnyPhase,
-  Ast,
+  Crate,
   Expr,
   FunctionDef,
   IdentWithRes,
@@ -15,7 +15,7 @@ import {
   tyIsUnit,
 } from "./ast";
 
-export function printAst(ast: Ast<AnyPhase>): string {
+export function printAst(ast: Crate<AnyPhase>): string {
   return ast.rootItems.map(printItem).join("\n");
 }
 
@@ -38,6 +38,9 @@ function printItem(item: Item<AnyPhase>): string {
     }
     case "mod": {
       return id + printMod(item.node);
+    }
+    case "extern": {
+      return id + `extern mod ${item.node.name};`;
     }
   }
 }
@@ -73,14 +76,7 @@ function printImportDef(def: ImportDef<AnyPhase>): string {
 }
 
 function printMod(mod: ModItem<AnyPhase>): string {
-  switch (mod.modKind.kind) {
-    case "inline":
-      return `mod ${mod.name} (\n${mod.modKind.contents
-        .map(printItem)
-        .join("\n  ")});`;
-    case "extern":
-      return `extern mod ${mod.name};`;
-  }
+  return `mod ${mod.name} (\n${mod.contents.map(printItem).join("\n  ")});`;
 }
 
 function printExpr(expr: Expr<AnyPhase>, indent: number): string {

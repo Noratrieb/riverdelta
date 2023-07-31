@@ -17,6 +17,7 @@ module.exports = {
     // Some silly rules forbidding things that are not wrong:
     "no-constant-condition": "off",
     "no-empty": "off",
+    "@typescript-eslint/no-empty-function": "off",
     // Typescript already checks problematic fallthrough.
     // The eslint rule is a bit dumb and also complains about
     // obvious clear fallthrough like `case "a": case "b"`.

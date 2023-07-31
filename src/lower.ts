@@ -1,5 +1,5 @@
 import {
-  Ast,
+  Crate,
   Expr,
   ExprBlock,
   FunctionDef,
@@ -39,7 +39,7 @@ export type Context = {
   funcTypes: ComplexMap<wasm.FuncType, wasm.TypeIdx>;
   reservedHeapMemoryStart: number;
   funcIndices: ComplexMap<Resolution, FuncOrImport>;
-  ast: Ast<Typecked>;
+  crates: Crate<Typecked>[];
   relocations: Relocation[];
 };
 
@@ -89,7 +89,7 @@ function appendData(cx: Context, newData: Uint8Array): number {
   }
 }
 
-export function lower(ast: Ast<Typecked>): wasm.Module {
+export function lower(crates: Crate<Typecked>[]): wasm.Module {
   const mod: wasm.Module = {
     types: [],
     funcs: [],
@@ -119,7 +119,7 @@ export function lower(ast: Ast<Typecked>): wasm.Module {
     funcTypes: new ComplexMap(),
     funcIndices: new ComplexMap(),
     reservedHeapMemoryStart: 0,
-    ast,
+    crates,
     relocations: [],
   };
 
@@ -135,15 +135,12 @@ export function lower(ast: Ast<Typecked>): wasm.Module {
           break;
         }
         case "mod": {
-          if (item.node.modKind.kind === "inline") {
-            lowerMod(item.node.modKind.contents);
-          }
+          lowerMod(item.node.contents);
         }
       }
     });
   }
-
-  lowerMod(ast.rootItems);
+  crates.forEach((ast) => lowerMod(ast.rootItems));
 
   const HEAP_ALIGN = 0x08;
   cx.reservedHeapMemoryStart =
@@ -151,7 +148,7 @@ export function lower(ast: Ast<Typecked>): wasm.Module {
       ? (mod.datas[0].init.length + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1)
       : 0;
 
-  addRt(cx, ast);
+  addRt(cx, crates);
 
   // THE LINKER
   const offset = cx.mod.imports.length;
@@ -863,14 +860,16 @@ function todo(msg: string): never {
 }
 
 // Make the program runnable using wasi-preview-1
-function addRt(cx: Context, ast: Ast<Typecked>) {
+function addRt(cx: Context, crates: Crate<Typecked>[]) {
   const { mod } = cx;
+
+  const crate0 = unwrap(crates.find((crate) => crate.id === 0));
 
   const mainCall: wasm.Instr = { kind: "call", func: 9999999 };
   cx.relocations.push({
     kind: "funccall",
     instr: mainCall,
-    res: ast.typeckResults.main,
+    res: unwrap(crate0.typeckResults.main),
   });
 
   const start: wasm.Func = {

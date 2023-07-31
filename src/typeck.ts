@@ -1,5 +1,5 @@
 import {
-  Ast,
+  Crate,
   BuiltinName,
   COMPARISON_KINDS,
   mkDefaultFolder,
@@ -14,7 +14,6 @@ import {
   ItemId,
   LOGICAL_KINDS,
   LoopId,
-  ModItemKind,
   Resolution,
   Resolved,
   Ty,
@@ -116,7 +115,7 @@ function lowerAstTyBase(
   }
 }
 
-export function typeck(ast: Ast<Resolved>): Ast<Typecked> {
+export function typeck(ast: Crate<Resolved>): Crate<Typecked> {
   const itemTys = new Map<number, Ty | null>();
   function typeOfItem(index: ItemId, cause: Span): Ty {
     const item = unwrap(ast.itemsById.get(index));
@@ -162,7 +161,13 @@ export function typeck(ast: Ast<Resolved>): Ast<Typecked> {
       }
       case "mod": {
         throw new CompilerError(
-          `module ${item.node.name} is not a type`,
+          `module ${item.node.name} cannot be used as a type or value`,
+          cause
+        );
+      }
+      case "extern": {
+        throw new CompilerError(
+          `extern declaration ${item.node.name} cannot be used as a type or value`,
           cause
         );
       }
@@ -297,30 +302,20 @@ export function typeck(ast: Ast<Resolved>): Ast<Typecked> {
           };
         }
         case "mod": {
-          switch (item.node.modKind.kind) {
-            case "inline": {
-              const modKind: ModItemKind<Typecked> = {
-                kind: "inline",
-                contents: item.node.modKind.contents.map((item) =>
-                  this.item(item)
-                ),
-              };
-
-              return {
-                ...item,
-                node: {
-                  ...item.node,
-                  modKind,
-                },
-              };
-            }
-            case "extern":
-              // Nothing to check.
-              return {
-                ...item,
-                node: { ...item.node, modKind: { ...item.node.modKind } },
-              };
-          }
+          return {
+            ...item,
+            node: {
+              ...item.node,
+              contents: item.node.contents.map((item) => this.item(item)),
+            },
+          };
+        }
+        case "extern": {
+          // Nothing to check.
+          return {
+            ...item,
+            node: { ...item.node },
+          };
         }
       }
     },
@@ -355,16 +350,19 @@ export function typeck(ast: Ast<Resolved>): Ast<Typecked> {
     return false;
   });
 
-  if (!main) {
-    throw new CompilerError(`\`main\` function not found`, {
-      start: 0,
-      end: 1,
-    });
-  }
+  if (ast.id === 0) {
+    // Only the final id=0 crate needs and cares about main.
+    if (!main) {
+      throw new CompilerError(`\`main\` function not found`, {
+        start: 0,
+        end: 1,
+      });
+    }
 
-  typecked.typeckResults = {
-    main: { kind: "item", id: main.id },
-  };
+    typecked.typeckResults = {
+      main: { kind: "item", id: main.id },
+    };
+  }
 
   return typecked;
 }

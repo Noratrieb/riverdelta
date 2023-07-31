@@ -1,7 +1,7 @@
 import {
   ARITH_FACTOR_KINDS,
   ARITH_TERM_KINDS,
-  Ast,
+  Crate,
   BinaryKind,
   COMPARISON_KINDS,
   mkDefaultFolder,
@@ -27,6 +27,7 @@ import {
   superFoldItem,
   Built,
   Parsed,
+  ExternItem,
 } from "./ast";
 import { CompilerError, Span, spanMerge } from "./error";
 import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
@@ -34,7 +35,11 @@ import { Ids } from "./utils";
 
 type Parser<T> = (t: Token[]) => [Token[], T];
 
-export function parse(packageName: string, t: Token[]): Ast<Built> {
+export function parse(
+  packageName: string,
+  t: Token[],
+  crateId: number
+): Crate<Built> {
   const items: Item<Parsed>[] = [];
 
   while (t.length > 0) {
@@ -43,7 +48,7 @@ export function parse(packageName: string, t: Token[]): Ast<Built> {
     items.push(item);
   }
 
-  const ast = buildAst(packageName, items);
+  const ast: Crate<Built> = buildCrate(packageName, items, crateId);
 
   validateAst(ast);
 
@@ -137,14 +142,13 @@ function parseItem(t: Token[]): [Token[], Item<Parsed>] {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
 
-    const node: ModItem<Parsed> = {
+    const node: ExternItem = {
       name: name.ident,
-      modKind: { kind: "extern" },
     };
 
     [t] = expectNext(t, ";");
 
-    return [t, { kind: "mod", node, span: name.span, id: 0 }];
+    return [t, { kind: "extern", node, span: name.span, id: 0 }];
   } else if (tok.kind === "mod") {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
@@ -165,7 +169,7 @@ function parseItem(t: Token[]): [Token[], Item<Parsed>] {
 
     const node: ModItem<Parsed> = {
       name: name.ident,
-      modKind: { kind: "inline", contents },
+      contents,
     };
 
     return [t, { kind: "mod", node, span: name.span, id: 0 }];
@@ -658,7 +662,7 @@ function unexpectedToken(token: Token, expected: string): never {
   throw new CompilerError(`unexpected token, expected ${expected}`, token.span);
 }
 
-function validateAst(ast: Ast<Built>) {
+function validateAst(ast: Crate<Built>) {
   const seenItemIds = new Set();
 
   const validator: Folder<Built, Built> = {
@@ -719,11 +723,16 @@ function validateAst(ast: Ast<Built>) {
   foldAst(ast, validator);
 }
 
-function buildAst(packageName: string, rootItems: Item<Parsed>[]): Ast<Built> {
+function buildCrate(
+  packageName: string,
+  rootItems: Item<Parsed>[],
+  crateId: number
+): Crate<Built> {
   const itemId = new Ids();
   const loopId = new Ids();
 
-  const ast: Ast<Built> = {
+  const ast: Crate<Built> = {
+    id: crateId,
     rootItems,
     itemsById: new Map(),
     packageName,
@@ -733,7 +742,6 @@ function buildAst(packageName: string, rootItems: Item<Parsed>[]): Ast<Built> {
     ...mkDefaultFolder(),
     itemInner(item: Item<Parsed>): Item<Built> {
       const id = itemId.next();
-      ast.itemsById.set(id, item);
       return { ...superFoldItem(item, this), id };
     },
     expr(expr: Expr<Parsed>): Expr<Built> {

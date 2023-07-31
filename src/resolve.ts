@@ -1,5 +1,5 @@
 import {
-  Ast,
+  Crate,
   BUILTINS,
   Built,
   BuiltinName,
@@ -16,56 +16,89 @@ import {
   superFoldExpr,
   superFoldItem,
   superFoldType,
+  ExternItem,
+  Typecked,
 } from "./ast";
-import { CompilerError, spanMerge, todo } from "./error";
-import { unwrap } from "./utils";
+import { CompilerError, Span, spanMerge } from "./error";
+import { Ids, unwrap } from "./utils";
 
 const BUILTIN_SET = new Set<string>(BUILTINS);
 
+export type CrateLoader = (
+  name: string,
+  span: Span,
+  crateId: Ids,
+  existingCrates: Crate<Typecked>[]
+) => [Crate<Typecked>, Crate<Typecked>[]];
+
 type Context = {
-  ast: Ast<Built>;
+  ast: Crate<Built>;
+  crates: Crate<Typecked>[];
   modContentsCache: Map<ItemId, Map<string, ItemId>>;
   newItemsById: Map<ItemId, Item<Resolved>>;
+  crateLoader: CrateLoader;
+  crateId: Ids;
 };
 
 function resolveModItem(
   cx: Context,
-  mod: ModItem<Built>,
-  modId: ItemId,
+  mod: ModItem<Built> | ExternItem,
+  item: Item<Built>,
   name: string
 ): ItemId | undefined {
-  const cachedContents = cx.modContentsCache.get(modId);
+  const cachedContents = cx.modContentsCache.get(item.id);
   if (cachedContents) {
     return cachedContents.get(name);
   }
 
-  switch (mod.modKind.kind) {
-    case "inline": {
-      const contents = new Map(
-        mod.modKind.contents.map((item) => [item.node.name, item.id])
-      );
-      cx.modContentsCache.set(modId, contents);
-      return contents.get(name);
-    }
-    case "extern": {
-      todo("extern mod items");
-    }
+  let contents: Map<string, ItemId>;
+
+  if ("contents" in mod) {
+    contents = new Map(mod.contents.map((item) => [item.node.name, item.id]));
+  } else {
+    const [loadedCrate, itsDeps] = cx.crateLoader(
+      item.node.name,
+      item.span,
+      cx.crateId,
+      cx.crates
+    );
+    cx.crates.push(loadedCrate);
+    cx.crates.push(...itsDeps);
+
+    contents = new Map(
+      loadedCrate.rootItems.map((item) => [item.node.name, item.id])
+    );
   }
+
+  cx.modContentsCache.set(item.id, contents);
+  return contents.get(name);
 }
 
-export function resolve(ast: Ast<Built>): Ast<Resolved> {
+export function resolve(
+  ast: Crate<Built>,
+  crateLoader: CrateLoader
+): [Crate<Resolved>, Crate<Typecked>[]] {
+  const crateId = new Ids();
+  crateId.next(); // Local crate.
   const cx: Context = {
     ast,
+    crates: [],
     modContentsCache: new Map(),
     newItemsById: new Map(),
+    crateLoader,
+    crateId,
   };
 
   const rootItems = resolveModule(cx, [ast.packageName], ast.rootItems);
-  return {
-    itemsById: cx.newItemsById,
-    rootItems,
-    packageName: ast.packageName,
-  };
+  return [
+    {
+      id: ast.id,
+      itemsById: cx.newItemsById,
+      rootItems,
+      packageName: ast.packageName,
+    },
+    cx.crates,
+  ];
 }
 
 function resolveModule(
@@ -129,7 +162,7 @@ function resolveModule(
 
   const resolver: Folder<Built, Resolved> = {
     ...mkDefaultFolder(),
-    itemInner(item) {
+    itemInner(item): Item<Resolved> {
       const defPath = [...modName, item.node.name];
 
       switch (item.kind) {
@@ -162,20 +195,23 @@ function resolveModule(
           };
         }
         case "mod": {
-          if (item.node.modKind.kind === "inline") {
-            const contents = resolveModule(
-              cx,
-              defPath,
-              item.node.modKind.contents
-            );
-            return {
-              ...item,
-              kind: "mod",
-              node: { ...item.node, modKind: { kind: "inline", contents } },
-              defPath,
-            };
-          }
-          break;
+          const contents = resolveModule(cx, defPath, item.node.contents);
+          return {
+            ...item,
+            kind: "mod",
+            node: { ...item.node, contents },
+            defPath,
+          };
+        }
+        case "extern": {
+          const node: ExternItem = {
+            ...item.node,
+          };
+          return {
+            ...item,
+            node,
+            defPath,
+          };
         }
       }
 
@@ -230,7 +266,11 @@ function resolveModule(
 
             if (res.kind === "item") {
               const module = unwrap(cx.ast.itemsById.get(res.id));
-              if (module.kind === "mod") {
+              console.log("nested", module.kind, res.id, cx.ast.itemsById);
+              
+              if (module.kind === "mod" || module.kind === "extern") {
+                console.log("resolve");
+                
                 if (typeof expr.field.value === "number") {
                   throw new CompilerError(
                     "module contents cannot be indexed with a number",
@@ -241,7 +281,7 @@ function resolveModule(
                 const pathResItem = resolveModItem(
                   cx,
                   module.node,
-                  module.id,
+                  module,
                   expr.field.value
                 );
                 if (pathResItem === undefined) {

@@ -230,10 +230,7 @@ export function tokenize(input: string): Token[] {
             }
 
             let type: LitIntType = "Int";
-            console.log(input[i + 2]);
             if (input[i + 1] === "_" && isIdentStart(input[i + 2])) {
-              console.log("yes", input.slice(i + 2, i + 5));
-
               if (input.slice(i + 2, i + 5) === "Int") {
                 i += 4;
                 type = "Int";

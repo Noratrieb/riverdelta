@@ -1,0 +1,9 @@
+function pow(base: Int, exp: Int): Int = (
+  let acc = 1;
+  loop (
+    if exp == 0 then break;
+    acc = acc * base;
+    exp = exp - 1;
+  );
+  acc
+);

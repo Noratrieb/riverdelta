@@ -3,7 +3,7 @@ export function encodeUtf8(s: string): Uint8Array {
 }
 
 export class Ids {
-  nextId = 0;
+  private nextId = 0;
 
   public next(): number {
     return this.nextId++;
