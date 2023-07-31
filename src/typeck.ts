@@ -341,7 +341,7 @@ export function typeck(ast: Ast<Resolved>): Ast<Typecked> {
     if (item.kind === "function" && item.node.name === "main") {
       const func = item.node;
       if (func.returnType !== undefined) {
-        const ty = func.returnType.ty!;
+        const ty = func.body.ty;
         if (ty.kind !== "tuple" || ty.elems.length !== 0) {
           throw new CompilerError(
             `\`main\` has an invalid signature. main takes no arguments and returns nothing`,
@@ -586,7 +586,7 @@ export function checkBody(
             : infcx.newVar();
 
           const rhs = this.expr(expr.rhs);
-          infcx.assign(bindingTy, rhs.ty!, expr.span);
+          infcx.assign(bindingTy, rhs.ty, expr.span);
 
           // AST validation ensures that lets can only be in blocks, where
           // the types will be popped.
@@ -596,7 +596,6 @@ export function checkBody(
 
           const type: Type<Typecked> | undefined = loweredBindingTy && {
             ...expr.type!,
-            ty: loweredBindingTy,
           };
 
           return {
@@ -612,7 +611,7 @@ export function checkBody(
           const lhs = this.expr(expr.lhs);
           const rhs = this.expr(expr.rhs);
 
-          infcx.assign(lhs.ty!, rhs.ty!, expr.span);
+          infcx.assign(lhs.ty, rhs.ty, expr.span);
 
           switch (lhs.kind) {
             case "ident":
@@ -641,7 +640,7 @@ export function checkBody(
 
           const exprs = expr.exprs.map((expr) => this.expr(expr));
 
-          const ty = exprs.length > 0 ? exprs[exprs.length - 1].ty! : TY_UNIT;
+          const ty = exprs.length > 0 ? exprs[exprs.length - 1].ty : TY_UNIT;
 
           localTys.length = prevLocalTysLen;
 
@@ -686,19 +685,19 @@ export function checkBody(
           const lhs = this.expr(expr.lhs);
           const rhs = this.expr(expr.rhs);
 
-          lhs.ty = infcx.resolveIfPossible(lhs.ty!);
-          rhs.ty = infcx.resolveIfPossible(rhs.ty!);
+          lhs.ty = infcx.resolveIfPossible(lhs.ty);
+          rhs.ty = infcx.resolveIfPossible(rhs.ty);
 
-          return checkBinary({ ...expr, lhs, rhs });
+          return checkBinary(expr, lhs, rhs);
         }
         case "unary": {
           const rhs = this.expr(expr.rhs);
-          rhs.ty = infcx.resolveIfPossible(rhs.ty!);
-          return checkUnary({ ...expr, rhs });
+          rhs.ty = infcx.resolveIfPossible(rhs.ty);
+          return checkUnary(expr, rhs);
         }
         case "call": {
           const lhs = this.expr(expr.lhs);
-          lhs.ty = infcx.resolveIfPossible(lhs.ty!);
+          lhs.ty = infcx.resolveIfPossible(lhs.ty);
           const lhsTy = lhs.ty;
           if (lhsTy.kind !== "fn") {
             throw new CompilerError(
@@ -718,7 +717,7 @@ export function checkBody(
             }
             const arg = checker.expr(args[i]);
 
-            infcx.assign(param, arg.ty!, args[i].span);
+            infcx.assign(param, arg.ty, args[i].span);
           });
 
           if (args.length > lhsTy.params.length) {
@@ -732,7 +731,7 @@ export function checkBody(
         }
         case "fieldAccess": {
           const lhs = this.expr(expr.lhs);
-          lhs.ty = infcx.resolveIfPossible(lhs.ty!);
+          lhs.ty = infcx.resolveIfPossible(lhs.ty);
 
           const { field } = expr;
           let ty: Ty;
@@ -807,14 +806,14 @@ export function checkBody(
           const then = this.expr(expr.then);
           const elsePart = expr.else && this.expr(expr.else);
 
-          infcx.assign(TY_BOOL, cond.ty!, cond.span);
+          infcx.assign(TY_BOOL, cond.ty, cond.span);
 
           let ty: Ty;
           if (elsePart) {
-            infcx.assign(then.ty!, elsePart.ty!, elsePart.span);
+            infcx.assign(then.ty, elsePart.ty, elsePart.span);
             ty = then.ty!;
           } else {
-            infcx.assign(TY_UNIT, then.ty!, then.span);
+            infcx.assign(TY_UNIT, then.ty, then.span);
             ty = TY_UNIT;
           }
 
@@ -827,7 +826,7 @@ export function checkBody(
           });
 
           const body = this.expr(expr.body);
-          infcx.assign(TY_UNIT, body.ty!, body.span);
+          infcx.assign(TY_UNIT, body.ty, body.span);
 
           const hadBreak = loopState.pop();
           const ty = hadBreak ? TY_UNIT : TY_NEVER;
@@ -875,7 +874,7 @@ export function checkBody(
                 name.span
               );
             }
-            infcx.assign(fieldTy[1], field.ty!, field.span);
+            infcx.assign(fieldTy[1], field.ty, field.span);
             assignedFields.add(name.name);
           });
 
@@ -899,7 +898,7 @@ export function checkBody(
 
           const ty: Ty = {
             kind: "tuple",
-            elems: fields.map((field) => field.ty!),
+            elems: fields.map((field) => field.ty),
           };
 
           return { ...expr, fields, ty };
@@ -919,7 +918,7 @@ export function checkBody(
 
   const checked = checker.expr(body);
 
-  infcx.assign(fnTy.returnTy, checked.ty!, body.span);
+  infcx.assign(fnTy.returnTy, checked.ty, body.span);
 
   const resolveTy = (ty: Ty, span: Span) => {
     const resTy = infcx.resolveIfPossible(ty);
@@ -933,7 +932,7 @@ export function checkBody(
   const resolver: Folder<Typecked, Typecked> = {
     ...mkDefaultFolder(),
     expr(expr) {
-      const ty = resolveTy(expr.ty!, expr.span);
+      const ty = resolveTy(expr.ty, expr.span);
 
       if (expr.kind === "block") {
         expr.locals!.forEach((local) => {
@@ -944,8 +943,7 @@ export function checkBody(
       return { ...expr, ty };
     },
     type(type) {
-      const ty = resolveTy(type.ty!, type.span);
-      return { ...type, ty };
+      return type;
     },
     ident(ident) {
       return ident;
@@ -958,58 +956,61 @@ export function checkBody(
 }
 
 function checkBinary(
-  expr: Expr<Typecked> & ExprBinary<Typecked>
+  expr: Expr<Resolved> & ExprBinary<Resolved>,
+  lhs: Expr<Typecked>,
+  rhs: Expr<Typecked>
 ): Expr<Typecked> {
-  const lhsTy = expr.lhs.ty!;
-  const rhsTy = expr.rhs.ty!;
+  const lhsTy = lhs.ty;
+  const rhsTy = rhs.ty;
 
   if (COMPARISON_KINDS.includes(expr.binaryKind)) {
     if (lhsTy.kind === "int" && rhsTy.kind === "int") {
-      return { ...expr, ty: TY_BOOL };
+      return { ...expr, lhs, rhs, ty: TY_BOOL };
     }
 
     if (lhsTy.kind === "string" && rhsTy.kind === "string") {
-      return { ...expr, ty: TY_BOOL };
+      return { ...expr, lhs, rhs, ty: TY_BOOL };
     }
 
     if (EQUALITY_KINDS.includes(expr.binaryKind)) {
       if (lhsTy.kind === "bool" && rhsTy.kind === "bool") {
-        return { ...expr, ty: TY_BOOL };
+        return { ...expr, lhs, rhs, ty: TY_BOOL };
       }
     }
   }
 
   if (lhsTy.kind === "int" && rhsTy.kind === "int") {
-    return { ...expr, ty: TY_INT };
+    return { ...expr, lhs, rhs, ty: TY_INT };
   }
   if (lhsTy.kind === "i32" && rhsTy.kind === "i32") {
-    return { ...expr, ty: TY_I32 };
+    return { ...expr, lhs, rhs, ty: TY_I32 };
   }
 
   if (LOGICAL_KINDS.includes(expr.binaryKind)) {
     if (lhsTy.kind === "bool" && rhsTy.kind === "bool") {
-      return { ...expr, ty: TY_BOOL };
+      return { ...expr, lhs, rhs, ty: TY_BOOL };
     }
   }
 
   throw new CompilerError(
-    `invalid types for binary operation: ${printTy(expr.lhs.ty!)} ${
+    `invalid types for binary operation: ${printTy(lhs.ty)} ${
       expr.binaryKind
-    } ${printTy(expr.rhs.ty!)}`,
+    } ${printTy(rhs.ty)}`,
     expr.span
   );
 }
 
 function checkUnary(
-  expr: Expr<Typecked> & ExprUnary<Typecked>
+  expr: Expr<Resolved> & ExprUnary<Resolved>,
+  rhs: Expr<Typecked>
 ): Expr<Typecked> {
-  const rhsTy = expr.rhs.ty!;
+  const rhsTy = rhs.ty;
 
   if (
     expr.unaryKind === "!" &&
     (rhsTy.kind === "int" || rhsTy.kind === "bool")
   ) {
-    return { ...expr, ty: rhsTy };
+    return { ...expr, rhs, ty: rhsTy };
   }
 
   if (expr.unaryKind === "-" && rhsTy.kind == "int") {
@@ -1017,9 +1018,7 @@ function checkUnary(
   }
 
   throw new CompilerError(
-    `invalid types for unary operation: ${expr.unaryKind} ${printTy(
-      expr.rhs.ty!
-    )}`,
+    `invalid types for unary operation: ${expr.unaryKind} ${printTy(rhs.ty)}`,
     expr.span
   );
 }

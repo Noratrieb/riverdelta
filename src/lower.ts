@@ -231,7 +231,7 @@ function lowerFunc(
   const type = internFuncType(cx, wasmType);
 
   const wasmFunc: wasm.Func = {
-    _name: mangleDefPath(item.defPath!),
+    _name: mangleDefPath(item.defPath),
     type,
     locals: [],
     body: [],
@@ -269,7 +269,7 @@ function lowerExpr(
   instrs: wasm.Instr[],
   expr: Expr<Typecked>
 ) {
-  const ty = expr.ty!;
+  const ty = expr.ty;
 
   exprKind: switch (expr.kind) {
     case "empty": {
@@ -278,7 +278,7 @@ function lowerExpr(
     }
     case "let": {
       lowerExpr(fcx, instrs, expr.rhs);
-      const types = wasmTypeForBody(expr.rhs.ty!);
+      const types = wasmTypeForBody(expr.rhs.ty);
 
       const local = fcx.wasm.locals.length + fcx.wasmType.params.length;
 
@@ -333,7 +333,7 @@ function lowerExpr(
         const instr: wasm.Instr = {
           kind: "block",
           instrs: lowerExprBlockBody(fcx, expr),
-          type: blockTypeForBody(fcx.cx, expr.ty!),
+          type: blockTypeForBody(fcx.cx, expr.ty),
         };
 
         instrs.push(instr);
@@ -404,8 +404,8 @@ function lowerExpr(
       lowerExpr(fcx, instrs, expr.lhs);
       lowerExpr(fcx, instrs, expr.rhs);
 
-      const lhsTy = expr.lhs.ty!;
-      const rhsTy = expr.rhs.ty!;
+      const lhsTy = expr.lhs.ty;
+      const rhsTy = expr.rhs.ty;
       if (
         (lhsTy.kind === "int" && rhsTy.kind === "int") ||
         (lhsTy.kind === "i32" && rhsTy.kind === "i32")
@@ -592,11 +592,11 @@ function lowerExpr(
 
       lowerExpr(fcx, instrs, expr.lhs);
 
-      switch (expr.lhs.ty!.kind) {
+      switch (expr.lhs.ty.kind) {
         case "tuple": {
           // Tuples have a by-value ABI, so we can simply index.
           const lhsSize = argRetAbi(expr.lhs.ty).length;
-          const resultAbi = argRetAbi(expr.ty!);
+          const resultAbi = argRetAbi(expr.ty);
           const resultSize = resultAbi.length;
           const wasmIdx = wasmTypeIdxForTupleField(
             expr.lhs.ty,
@@ -655,7 +655,7 @@ function lowerExpr(
         kind: "if",
         then: thenInstrs,
         else: elseInstrs,
-        type: blockTypeForBody(fcx.cx, expr.ty!),
+        type: blockTypeForBody(fcx.cx, expr.ty),
       });
 
       break;
@@ -669,7 +669,7 @@ function lowerExpr(
       lowerExpr(fcx, bodyInstrs, expr.body);
 
       // For diverging bodies, we don't need to bother creating the back edge.
-      if (expr.body.ty!.kind !== "never") {
+      if (expr.body.ty.kind !== "never") {
         bodyInstrs.push({
           kind: "br",
           label: /*innermost control structure, the loop*/ 0,
@@ -680,13 +680,13 @@ function lowerExpr(
       outerBlockInstrs.push({
         kind: "loop",
         instrs: bodyInstrs,
-        type: blockTypeForBody(fcx.cx, expr.ty!),
+        type: blockTypeForBody(fcx.cx, expr.ty),
       });
 
       instrs.push({
         kind: "block",
         instrs: outerBlockInstrs,
-        type: blockTypeForBody(fcx.cx, expr.ty!),
+        type: blockTypeForBody(fcx.cx, expr.ty),
       });
       fcx.loopDepths.delete(expr.loopId);
 
@@ -694,8 +694,6 @@ function lowerExpr(
     }
     case "break": {
       const loopDepth = unwrap(fcx.loopDepths.get(expr.target!));
-
-      console.log(loopDepth, fcx.currentBlockDepth);
 
       instrs.push({
         kind: "br",
@@ -733,11 +731,11 @@ function lowerExprBlockBody(
 
   for (const inner of headExprs) {
     lowerExpr(fcx, innerInstrs, inner);
-    if (inner.ty!.kind === "never") {
+    if (inner.ty.kind === "never") {
       // The rest of the block is unreachable, so we don't bother codegening it.
       break;
     }
-    const types = wasmTypeForBody(inner.ty!);
+    const types = wasmTypeForBody(inner.ty);
     types.forEach(() => innerInstrs.push({ kind: "drop" }));
   }
 
@@ -872,7 +870,7 @@ function addRt(cx: Context, ast: Ast<Typecked>) {
   cx.relocations.push({
     kind: "funccall",
     instr: mainCall,
-    res: ast.typeckResults!.main,
+    res: ast.typeckResults.main,
   });
 
   const start: wasm.Func = {

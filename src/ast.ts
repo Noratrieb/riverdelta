@@ -3,32 +3,53 @@ import { LitIntType } from "./lexer";
 
 export type Ast<P extends Phase> = {
   rootItems: Item<P>[];
-  typeckResults?: TypeckResults;
   itemsById: Map<ItemId, Item<P>>;
   packageName: string;
-};
+} & P["typeckResults"];
 
 export type Phase = {
   res: unknown;
+  defPath: unknown;
+  ty: unknown;
+  typeckResults: unknown;
 };
 
-type NoRes = object;
+type No = object;
+
 type HasRes = { res: Resolution };
+type HasDefPath = { defPath: string[] };
+type HasTy = { ty: Ty };
+type HasTypeckResults = { typeckResults: TypeckResults };
 
 export type Parsed = {
-  res: NoRes;
+  res: No;
+  defPath: No;
+  ty: No;
+  typeckResults: No;
 };
 export type Built = {
-  res: NoRes;
+  res: No;
+  defPath: No;
+  ty: No;
+  typeckResults: No;
 };
 export type Resolved = {
   res: HasRes;
+  defPath: HasDefPath;
+  ty: No;
+  typeckResults: No;
 };
 export type Typecked = {
   res: HasRes;
+  defPath: HasDefPath;
+  ty: HasTy;
+  typeckResults: HasTypeckResults;
 };
 export type AnyPhase = {
-  res: NoRes | HasRes;
+  res: No | HasRes;
+  defPath: No | HasDefPath;
+  ty: No | HasTy;
+  typeckResults: No | HasTypeckResults;
 };
 
 export type Ident = {
@@ -64,8 +85,7 @@ export type ItemKind<P extends Phase> =
 export type Item<P extends Phase> = ItemKind<P> & {
   span: Span;
   id: ItemId;
-  defPath?: string[];
-};
+} & P["defPath"];
 
 export type FunctionDef<P extends Phase> = {
   name: string;
@@ -246,8 +266,7 @@ export type ExprKind<P extends Phase> =
 
 export type Expr<P extends Phase> = ExprKind<P> & {
   span: Span;
-  ty?: Ty;
-};
+} & P["ty"];
 
 export type StringLiteral = {
   kind: "str";
@@ -335,7 +354,6 @@ export type TypeKind<P extends Phase> =
 
 export type Type<P extends Phase> = TypeKind<P> & {
   span: Span;
-  ty?: Ty;
 };
 
 // name resolution stuff
@@ -526,7 +544,7 @@ export function foldAst<From extends Phase, To extends Phase>(
   return {
     rootItems: ast.rootItems.map((item) => folder.item(item)),
     itemsById: folder.newItemsById,
-    typeckResults: ast.typeckResults,
+    typeckResults: "typeckResults" in ast ? ast.typeckResults : undefined,
     packageName: ast.packageName,
   };
 }
