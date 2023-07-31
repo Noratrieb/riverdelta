@@ -30,8 +30,9 @@ import {
   ExternItem,
   ItemId,
   GlobalItem,
+  StructLiteralField,
 } from "./ast";
-import { CompilerError, DUMMY_SPAN, EOF_SPAN, Span, spanMerge } from "./error";
+import { CompilerError, EOF_SPAN, Span, spanMerge } from "./error";
 import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
 import { ComplexMap, ComplexSet, Ids } from "./utils";
 
@@ -540,15 +541,19 @@ function parseStructInit(
   [t] = expectNext(t, "{");
 
   let fields;
-  [t, fields] = parseCommaSeparatedList<[Ident, Expr<Parsed>]>(t, "}", (t) => {
-    let name;
-    [t, name] = expectNext<TokenIdent>(t, "identifier");
-    [t] = expectNext(t, ":");
-    let expr;
-    [t, expr] = parseExpr(t);
+  [t, fields] = parseCommaSeparatedList<StructLiteralField<Parsed>>(
+    t,
+    "}",
+    (t) => {
+      let name;
+      [t, name] = expectNext<TokenIdent>(t, "identifier");
+      [t] = expectNext(t, ":");
+      let expr;
+      [t, expr] = parseExpr(t);
 
-    return [t, [{ name: name.ident, span: name.span }, expr]];
-  });
+      return [t, { name: { name: name.ident, span: name.span }, expr }];
+    }
+  );
 
   return [t, fields];
 }

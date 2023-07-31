@@ -15,10 +15,21 @@ import { Ids } from "./utils";
 const INPUT = `
 extern mod std;
 
-type A = { a: String };
+type A = { a: Int };
 
 function main() = (
-  std.rt.allocateItem(0_I32, 0_I32);
+  let a = A { a: 100 };
+  printA(a);
+);
+
+function printA(a: A) = (
+  print("ABCDEFGH\\n");
+  std.printlnInt(a.a);
+  print("ABCDEFGH\\n");
+);
+
+function linkStd() = (
+  std.println("a");
 );
 `;
 

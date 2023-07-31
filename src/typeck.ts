@@ -9,7 +9,6 @@ import {
   ExprUnary,
   foldAst,
   Folder,
-  Ident,
   IdentWithRes,
   ItemId,
   LOGICAL_KINDS,
@@ -30,6 +29,7 @@ import {
   TyStruct,
   Item,
   findCrateItem,
+  StructLiteralField,
 } from "./ast";
 import { CompilerError, Span } from "./error";
 import { printTy } from "./printer";
@@ -943,8 +943,8 @@ export function checkBody(
           };
         }
         case "structLiteral": {
-          const fields = expr.fields.map<[Ident, Expr<Typecked>]>(
-            ([name, expr]) => [name, this.expr(expr)]
+          const fields = expr.fields.map<StructLiteralField<Typecked>>(
+            ({ name, expr }) => ({ name, expr: this.expr(expr) })
           );
 
           const structTy = typeOf(expr.name.res, expr.name.span);
@@ -958,16 +958,20 @@ export function checkBody(
 
           const assignedFields = new Set();
 
-          fields.forEach(([name, field]) => {
-            const fieldTy = structTy.fields.find((def) => def[0] === name.name);
-            if (!fieldTy) {
+          fields.forEach(({ name, expr: field }, i) => {
+            const fieldIdx = structTy.fields.findIndex(
+              (def) => def[0] === name.name
+            );
+            if (fieldIdx == -1) {
               throw new CompilerError(
                 `field ${name.name} doesn't exist on type ${expr.name.name}`,
                 name.span
               );
             }
+            const fieldTy = structTy.fields[fieldIdx];
             infcx.assign(fieldTy[1], field.ty, field.span);
             assignedFields.add(name.name);
+            fields[i].fieldIdx = fieldIdx;
           });
 
           const missing: string[] = [];

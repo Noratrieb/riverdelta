@@ -2,6 +2,7 @@ import {
   Crate,
   Expr,
   ExprBlock,
+  Folder,
   FunctionDef,
   GlobalItem,
   ImportDef,
@@ -11,9 +12,13 @@ import {
   Resolution,
   Ty,
   TyFn,
+  TyStruct,
   TyTuple,
   Typecked,
   findCrateItem,
+  mkDefaultFolder,
+  superFoldExpr,
+  superFoldItem,
   varUnreachable,
 } from "./ast";
 import { printTy } from "./printer";
@@ -31,7 +36,7 @@ const WASM_PAGE = 65536;
 
 const DUMMY_IDX = 9999999;
 
-const ALLOCATE_SYMBOL = "nil__std__rt__allocateItem";
+const ALLOCATE_ITEM: string[] = ["std", "rt", "allocateItem"];
 
 type RelocationKind =
   | {
@@ -57,6 +62,7 @@ export type Context = {
   globalIndices: ComplexMap<Resolution, wasm.GlobalIdx>;
   crates: Crate<Typecked>[];
   relocations: Relocation[];
+  knownDefPaths: ComplexMap<string[], ItemId>;
 };
 
 function mangleDefPath(defPath: string[]): string {
@@ -95,6 +101,8 @@ function appendData(cx: Context, newData: Uint8Array): number {
     });
     return 0;
   } else {
+    console.log("appending", newData);
+    
     const data = datas[0];
     const idx = data.init.length;
     const init = new Uint8Array(data.init.length + newData.length);
@@ -112,7 +120,45 @@ function findItem(cx: Context, id: ItemId): Item<Typecked> {
   );
 }
 
+const KNOWN_DEF_PATHS = [ALLOCATE_ITEM];
+
+function getKnownDefPaths(
+  crates: Crate<Typecked>[]
+): ComplexMap<string[], ItemId> {
+  const knows = new ComplexMap<string[], ItemId>();
+
+  const folder: Folder<Typecked, Typecked> = {
+    ...mkDefaultFolder(),
+    itemInner(item): Item<Typecked> {
+      KNOWN_DEF_PATHS.forEach((path) => {
+        if (JSON.stringify(path) === JSON.stringify(item.defPath)) {
+          knows.set(path, item.id);
+        }
+      });
+
+      return superFoldItem(item, this);
+    },
+    expr(expr) {
+      return superFoldExpr(expr, this);
+    },
+    ident(ident) {
+      return ident;
+    },
+    type(type) {
+      return type;
+    },
+  };
+
+  crates.forEach((crate) =>
+    crate.rootItems.forEach((item) => folder.item(item))
+  );
+
+  return knows;
+}
+
 export function lower(crates: Crate<Typecked>[]): wasm.Module {
+  const knownDefPaths = getKnownDefPaths(crates);
+
   const mod: wasm.Module = {
     types: [],
     funcs: [],
@@ -145,6 +191,7 @@ export function lower(crates: Crate<Typecked>[]): wasm.Module {
     reservedHeapMemoryStart: 0,
     crates,
     relocations: [],
+    knownDefPaths,
   };
 
   function lowerMod(items: Item<Typecked>[]) {
@@ -304,10 +351,16 @@ type ArgRetAbi = wasm.ValType[];
 
 type VarLocation = { localIdx: number; types: wasm.ValType[] };
 
+type StructFieldLayout = {
+  types: { offset: number; type: wasm.ValType }[];
+  ty: Ty;
+};
+
 type StructLayout = {
-  size: number,
-  align: number,
-}
+  size: number;
+  align: number;
+  fields: StructFieldLayout[];
+};
 
 function lowerFunc(
   cx: Context,
@@ -776,7 +829,53 @@ function lowerExpr(
           break;
         }
         case "struct": {
-          todo("struct field accesses");
+          const ty = expr.lhs.ty;
+          const layout = layoutOfStruct(ty);
+          const field = layout.fields[expr.field.fieldIdx!];
+
+          // TODO: SCRATCH LOCALS
+          const ptrLocal = fcx.wasmType.params.length + fcx.wasm.locals.length;
+          fcx.wasm.locals.push("i32");
+
+          // We save the local for getting it later for all the field parts.
+          instrs.push({
+            kind: "local.set",
+            imm: ptrLocal,
+          });
+
+          field.types.forEach((fieldPart) => {
+            instrs.push({
+              kind: "local.get",
+              imm: ptrLocal,
+            });
+            switch (fieldPart.type) {
+              case "i32":
+                instrs.push({
+                  kind: "i32.load",
+                  imm: {
+                    align: sizeOfValtype(fieldPart.type),
+                    offset: fieldPart.offset,
+                  },
+                });
+                break;
+              case "i64":
+                instrs.push({
+                  kind: "i64.load",
+                  imm: {
+                    align: sizeOfValtype(fieldPart.type),
+                    offset: fieldPart.offset,
+                  },
+                });
+                break;
+              default: {
+                throw new Error(
+                  `unsupported struct content type: ${fieldPart.type}`
+                );
+              }
+            }
+          });
+
+          break;
         }
         default:
           throw new Error("invalid field access lhs");
@@ -849,7 +948,70 @@ function lowerExpr(
       break;
     }
     case "structLiteral": {
-      todo("struct literal");
+      if (expr.ty.kind !== "struct") {
+        throw new Error("struct literal must have struct type");
+      }
+      const layout = layoutOfStruct(expr.ty);
+
+      // std.rt.allocateItem(size, align);
+      instrs.push({ kind: "i32.const", imm: BigInt(layout.size) });
+      instrs.push({ kind: "i32.const", imm: BigInt(layout.align) });
+      const allocate: wasm.Instr = { kind: "call", func: DUMMY_IDX };
+      const allocateItemId = fcx.cx.knownDefPaths.get(ALLOCATE_ITEM);
+      if (!allocateItemId) {
+        throw new Error("std.rt.allocateItem not found");
+      }
+      fcx.cx.relocations.push({
+        kind: "funccall",
+        instr: allocate,
+        res: { kind: "item", id: allocateItemId },
+      });
+      instrs.push(allocate);
+      // TODO: scratch locals...
+      const ptrLocal = fcx.wasmType.params.length + fcx.wasm.locals.length;
+      fcx.wasm.locals.push("i32");
+      instrs.push({ kind: "local.set", imm: ptrLocal });
+
+      // Now, set all fields.
+      expr.fields.forEach((field, i) => {
+        instrs.push({ kind: "local.get", imm: ptrLocal });
+        lowerExpr(fcx, instrs, field.expr);
+
+        const fieldLayout = [...layout.fields[i].types];
+        fieldLayout.reverse();
+        fieldLayout.forEach((fieldPart) => {
+          switch (fieldPart.type) {
+            case "i32":
+              instrs.push({
+                kind: "i32.store",
+                imm: {
+                  align: sizeOfValtype(fieldPart.type),
+                  offset: fieldPart.offset,
+                },
+              });
+              break;
+            case "i64":
+              instrs.push({
+                kind: "i64.store",
+                imm: {
+                  align: sizeOfValtype(fieldPart.type),
+                  offset: fieldPart.offset,
+                },
+              });
+              break;
+            default: {
+              throw new Error(
+                `unsupported struct content type: ${fieldPart.type}`
+              );
+            }
+          }
+        });
+      });
+
+      // Last, load the pointer and pass that on.
+      instrs.push({ kind: "local.get", imm: ptrLocal });
+
+      break;
     }
     case "tupleLiteral": {
       expr.fields.forEach((field) => lowerExpr(fcx, instrs, field));
@@ -931,7 +1093,7 @@ function argRetAbi(param: Ty): ArgRetAbi {
     case "tuple":
       return param.elems.flatMap(argRetAbi);
     case "struct":
-      todo("struct ABI");
+      return ["i32"];
     case "never":
       return [];
     case "var":
@@ -981,12 +1143,76 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
     case "fn":
       todo("fn types");
     case "struct":
-      todo("struct types");
+      return ["i32"];
     case "never":
       return [];
     case "var":
       varUnreachable();
   }
+}
+
+function sizeOfValtype(type: wasm.ValType): number {
+  switch (type) {
+    case "i32":
+    case "f32":
+      return 4;
+    case "i64":
+    case "f64":
+      return 8;
+    case "v128":
+    case "funcref":
+    case "externref":
+      throw new Error("types not emitted");
+  }
+}
+
+export function layoutOfStruct(ty: TyStruct): StructLayout {
+  const fieldWasmTys = ty.fields.map(([, field]) => wasmTypeForBody(field));
+
+  const align = fieldWasmTys.some((field) =>
+    field.some((type) => type === "i64")
+  )
+    ? 8
+    : 4;
+
+  let offset = 0;
+
+  const fields: StructFieldLayout[] = fieldWasmTys.map((field, i) => {
+    const value: StructFieldLayout = {
+      types: [],
+      ty: ty.fields[i][1],
+    };
+
+    const types = field.map((type) => {
+      const size = sizeOfValtype(type);
+
+      if (size === 8 && offset % 8 !== 0) {
+        // padding.
+        offset += 4;
+      }
+
+      const fieldPart = {
+        offset,
+        type,
+      };
+      offset += size;
+      return fieldPart;
+    });
+
+    value.types = types;
+
+    return value;
+  });
+
+  if (align === 8 && offset % 8 !== 0) {
+    offset += 4;
+  }
+
+  return {
+    size: offset,
+    align,
+    fields,
+  };
 }
 
 function blockTypeForBody(cx: Context, ty: Ty): wasm.Blocktype {

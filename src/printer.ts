@@ -187,7 +187,7 @@ function printExpr(expr: Expr<AnyPhase>, indent: number): string {
     }
     case "structLiteral": {
       return `${printIdent(expr.name)} { ${expr.fields
-        .map(([name, expr]) => `${name.name}: ${printExpr(expr, indent + 1)}`)
+        .map(({ name, expr }) => `${name.name}: ${printExpr(expr, indent + 1)}`)
         .join(", ")} }`;
     }
     case "tupleLiteral": {

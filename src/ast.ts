@@ -270,7 +270,13 @@ export type ExprBreak = {
 export type ExprStructLiteral<P extends Phase> = {
   kind: "structLiteral";
   name: IdentWithRes<P>;
-  fields: [Ident, Expr<P>][];
+  fields: StructLiteralField<P>[];
+};
+
+export type StructLiteralField<P extends Phase> = {
+  name: Ident;
+  expr: Expr<P>;
+  fieldIdx?: number;
 };
 
 export type TupleLiteral<P extends Phase> = {
@@ -432,7 +438,7 @@ export const BUILTINS = [
   "__string_len",
   "__memory_size",
   "__memory_grow",
-  "__i32_extend_to_i64_u"
+  "__i32_extend_to_i64_u",
 ] as const;
 
 export type BuiltinName = (typeof BUILTINS)[number];
@@ -789,7 +795,10 @@ export function superFoldExpr<From extends Phase, To extends Phase>(
         ...expr,
         kind: "structLiteral",
         name: folder.ident(expr.name),
-        fields: expr.fields.map(([name, expr]) => [name, folder.expr(expr)]),
+        fields: expr.fields.map(({ name, expr }) => ({
+          name,
+          expr: folder.expr(expr),
+        })),
       };
     }
     case "tupleLiteral": {

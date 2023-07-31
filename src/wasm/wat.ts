@@ -146,7 +146,7 @@ function printBinaryString(buf: Uint8Array, f: FmtCtx) {
 
   buf.forEach((byte) => {
     const noEscape =
-      (byte > 0x30 && byte <= 0x5a) || (byte > 0x61 && byte <= 0x71);
+      (byte > 0x30 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a);
     if (noEscape) {
       parts.push(`${String.fromCharCode(byte)}`);
     } else {
