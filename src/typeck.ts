@@ -189,7 +189,10 @@ export function typeck(ast: Ast): Ast {
 
   const checker: Folder = {
     ...DEFAULT_FOLDER,
-    item(item) {
+    ast() {
+      return ast;
+    },
+    itemInner(item) {
       switch (item.kind) {
         case "function": {
           const fnTy = typeOfItem(item.id, item.span) as TyFn;

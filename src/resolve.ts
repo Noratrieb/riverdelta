@@ -113,7 +113,10 @@ function resolveModule(cx: Context, contents: Item[]): Item[] {
 
   const resolver: Folder = {
     ...DEFAULT_FOLDER,
-    item(item) {
+    ast() {
+      return cx.ast;
+    },
+    itemInner(item) {
       switch (item.kind) {
         case "function": {
           const params = item.node.params.map(({ name, span, type }) => ({

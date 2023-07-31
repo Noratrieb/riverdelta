@@ -658,7 +658,10 @@ function validateAst(ast: Ast) {
 
   const validator: Folder = {
     ...DEFAULT_FOLDER,
-    item(item: Item): Item {
+    ast() {
+      return ast;
+    },
+    itemInner(item: Item): Item {
       if (seenItemIds.has(item.id)) {
         throw new Error(`duplicate item id: ${item.id} for ${item.node.name}`);
       }
@@ -719,7 +722,10 @@ function assignIds(rootItems: Item[]): Ast {
 
   const assigner: Folder = {
     ...DEFAULT_FOLDER,
-    item(item: Item): Item {
+    ast() {
+      return ast;
+    },
+    itemInner(item: Item): Item {
       const id = itemId.next();
       ast.itemsById.set(id, item);
       return { ...superFoldItem(item, this), id };

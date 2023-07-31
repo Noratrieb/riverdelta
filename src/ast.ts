@@ -447,14 +447,29 @@ export type TypeckResults = {
 export type FoldFn<T> = (value: T) => T;
 
 export type Folder = {
+  ast: () => Ast;
+  /**
+   * This should not be overridden.
+   */
   item: FoldFn<Item>;
+  itemInner: FoldFn<Item>;
   expr: FoldFn<Expr>;
   ident: FoldFn<Identifier>;
   type: FoldFn<Type>;
 };
 
+const ITEM_DEFAULT: symbol = Symbol("item must not be overriden");
+
 export const DEFAULT_FOLDER: Folder = {
+  ast() {
+    throw new Error("folders need to implement `ast`");
+  },
   item(item) {
+    const newItem = this.itemInner(item);
+    this.ast().itemsById.set(item.id, item);
+    return newItem;
+  },
+  itemInner(item) {
     return superFoldItem(item, this);
   },
   expr(expr) {
@@ -467,8 +482,13 @@ export const DEFAULT_FOLDER: Folder = {
     return superFoldType(type, this);
   },
 };
+(DEFAULT_FOLDER.item as any)[ITEM_DEFAULT] = ITEM_DEFAULT;
 
 export function foldAst(ast: Ast, folder: Folder): Ast {
+  if ((folder.item as any)[ITEM_DEFAULT] !== ITEM_DEFAULT) {
+    throw new Error("must not override `item` on folders");
+  }
+
   return {
     rootItems: ast.rootItems.map((item) => folder.item(item)),
     itemsById: ast.itemsById,
@@ -528,7 +548,7 @@ export function superFoldItem(item: Item, folder: Folder): Item {
     }
     case "mod": {
       let kind: ModItemKind;
-      const { modKind: itemKind } = item.node;    
+      const { modKind: itemKind } = item.node;
       switch (itemKind.kind) {
         case "inline":
           kind = {
