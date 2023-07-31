@@ -265,6 +265,7 @@ export type ControlInstr =
 
 export type Instr =
   | NumericInstr
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
   | VectorInstr
   | ReferenceInstr
   | ParametricInstr

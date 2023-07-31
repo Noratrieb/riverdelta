@@ -44,12 +44,13 @@ function main() {
   }
 
   if (!isValidIdent(packageName)) {
-    console.error(`error: package name \`${packageName}\` is not a valid identifer`);
+    console.error(
+      `error: package name \`${packageName}\` is not a valid identifer`
+    );
     process.exit(1);
   }
 
   console.log(`package name: '${packageName}'`);
-  
 
   withErrorHandler(input, () => {
     const start = Date.now();
@@ -92,7 +93,7 @@ function main() {
       if (error && error.code === 1) {
         console.log(stderr);
       } else if (error) {
-        console.error(`failed to spawn wasm-tools: ${error}`);
+        console.error(`failed to spawn wasm-tools: ${error.message}`);
       } else {
         if (stderr) {
           console.log(stderr);

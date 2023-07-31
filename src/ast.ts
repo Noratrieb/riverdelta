@@ -460,7 +460,7 @@ export type Folder = {
   type: FoldFn<Type>;
 };
 
-const ITEM_DEFAULT: symbol = Symbol("item must not be overriden");
+const ITEM_DEFAULT = Symbol("item must not be overriden");
 
 export const DEFAULT_FOLDER: Folder = {
   ast() {

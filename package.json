@@ -7,7 +7,8 @@
     "dev": "node-dev --respawn src/index.ts",
     "build": "tsc",
     "fmt": "prettier -w .",
-    "test": "jest"
+    "test": "jest",
+    "lint": "eslint ."
   },
   "author": "",
   "license": "ISC",

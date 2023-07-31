@@ -36,7 +36,7 @@ function printItem(item: Item): string {
       return id + printImportDef(item.node);
     }
     case "mod": {
-      return id +printMod(item.node);
+      return id + printMod(item.node);
     }
   }
 }

@@ -140,8 +140,8 @@ function printString(s: string, f: FmtCtx) {
 
 function printBinaryString(buf: Uint8Array, f: FmtCtx) {
   const parts: string[] = [];
-  for (let i = 0; i < buf.length; i++) {
-    const byte = buf[i];
+
+  buf.forEach((byte) => {
     const noEscape =
       (byte > 0x30 && byte <= 0x5a) || (byte > 0x61 && byte <= 0x71);
     if (noEscape) {
@@ -149,13 +149,13 @@ function printBinaryString(buf: Uint8Array, f: FmtCtx) {
     } else {
       parts.push(`\\${byte.toString(16).padStart(2, "0")}`);
     }
-  }
+  });
 
   f.word(`"${parts.join("")}"`);
 }
 
 function printId(id: string | undefined, f: FmtCtx) {
-  if (id) {
+  if (id !== undefined) {
     f.word(`$${id}`);
   }
 }
@@ -215,7 +215,7 @@ function printBlockType(type: Blocktype, f: FmtCtx) {
 }
 
 function printMemarg(arg: MemArg, f: FmtCtx) {
-  if (arg.offset /*0->false*/) {
+  if (arg.offset === undefined || arg.offset === 0) {
     f.word(`offset=${arg.offset}`);
   }
   if (arg.align !== undefined) {
@@ -437,7 +437,7 @@ function printInstr(instr: Instr, f: FmtCtx) {
       f.controlFlow(instr.kind);
       f.word(instr.func);
       const name = f.mod.funcs[instr.func]?._name;
-      if (name) {
+      if (name !== undefined) {
         f.comment(name);
       }
       break;

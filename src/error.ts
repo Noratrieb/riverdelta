@@ -23,7 +23,7 @@ export class CompilerError extends Error {
   }
 }
 
-export function withErrorHandler(input: string, f: () => void) {
+export function withErrorHandler(input: string, f: () => void): void {
   try {
     f();
   } catch (e) {

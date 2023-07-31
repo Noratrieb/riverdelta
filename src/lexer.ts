@@ -36,8 +36,7 @@ export type DatalessToken =
   | "=="
   | "<="
   | ">="
-  | "!="
-  | "!";
+  | "!=";
 
 export type TokenIdent = { kind: "identifier"; ident: string };
 

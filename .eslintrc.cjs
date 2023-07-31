@@ -1,13 +1,22 @@
 /* eslint-env node */
 module.exports = {
-  ignorePatterns: ["/target/**", "/jest.config.js"],
-  extends: ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  ignorePatterns: ["/target/**", "/*.js", "/*.cjs"],
+  extends: [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/strict-type-checked",
+    "plugin:@typescript-eslint/stylistic-type-checked",
+  ],
   parser: "@typescript-eslint/parser",
+  parserOptions: {
+    project: true,
+    tsconfigRootDir: __dirname,
+  },
   plugins: ["@typescript-eslint"],
   root: true,
   rules: {
-    // Sometimes you just need a `while(true)`.
+    // Some silly rules forbidding things that are not wrong:
     "no-constant-condition": "off",
+    "no-empty": "off",
     // Typescript already checks problematic fallthrough.
     // The eslint rule is a bit dumb and also complains about
     // obvious clear fallthrough like `case "a": case "b"`.
@@ -23,5 +32,29 @@ module.exports = {
     // `any` is genrally bad, but sometimes it's the nicest solution
     // Just let me use it without any ceremony.
     "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unsafe-member-access": "off",
+    // This needs to be turned off until the AST types are redesigned.
+    "@typescript-eslint/no-non-null-assertion": "off",
+    // "value is always truthy" YES IT IS. Typescript already emits errors
+    // for the important cases here.
+    "@typescript-eslint/no-unnecessary-condition": "off",
+    "@typescript-eslint/no-confusing-void-expression": [
+      "error",
+      {
+        ignoreArrowShorthand: true,
+      },
+    ],
+    // No, I will use `type` instead of `interface`.
+    "@typescript-eslint/consistent-type-definitions": ["error", "type"],
+    // Useful extra lints that are not on by default:
+    "@typescript-eslint/explicit-module-boundary-types": "warn",
+    // This has caused several bugs before. Thanks eslint!
+    "@typescript-eslint/strict-boolean-expressions": [
+      "error",
+      {
+        allowNullableObject: true,
+        allowNullableBoolean: false,
+      },
+    ],
   },
 };

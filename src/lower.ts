@@ -441,6 +441,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
             kind = `${valty}.ne`;
             break;
         }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const instr: wasm.NumericInstr = { kind } as any; // Typescript is buggy.
         instrs.push(instr);
       } else if (lhsTy.kind === "bool" && rhsTy.kind === "bool") {
@@ -582,11 +583,11 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       switch (expr.lhs.ty!.kind) {
         case "tuple": {
           // Tuples have a by-value ABI, so we can simply index.
-          const lhsSize = argRetAbi(expr.lhs.ty!).length;
+          const lhsSize = argRetAbi(expr.lhs.ty).length;
           const resultAbi = argRetAbi(expr.ty!);
           const resultSize = resultAbi.length;
           const wasmIdx = wasmTypeIdxForTupleField(
-            expr.lhs.ty!,
+            expr.lhs.ty,
             expr.field.fieldIdx!
           );
 
@@ -625,7 +626,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       break;
     }
     case "if": {
-      lowerExpr(fcx, instrs, expr.cond!);
+      lowerExpr(fcx, instrs, expr.cond);
 
       fcx.currentBlockDepth++;
       const thenInstrs: wasm.Instr[] = [];

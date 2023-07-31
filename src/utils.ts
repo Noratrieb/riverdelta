@@ -3,7 +3,7 @@ export function encodeUtf8(s: string): Uint8Array {
 }
 
 export class Ids {
-  nextId: number = 0;
+  nextId = 0;
 
   public next(): number {
     return this.nextId++;
@@ -22,13 +22,13 @@ export function unwrap<T>(value: T | undefined): T {
  * It uses JSON+string equality instead of refernece equality.
  */
 export class ComplexMap<K, V> {
-  inner: Map<string | number, V> = new Map();
+  inner = new Map<string | number, V>();
 
   public get(key: K): V | undefined {
     return this.inner.get(this.mangleKey(key));
   }
 
-  public set(key: K, value: V) {
+  public set(key: K, value: V): void {
     this.inner.set(this.mangleKey(key), value);
   }
 

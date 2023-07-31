@@ -444,7 +444,7 @@ export class InferContext {
     }
   }
 
-  public assign(lhs_: Ty, rhs_: Ty, span: Span) {
+  public assign(lhs_: Ty, rhs_: Ty, span: Span): void {
     const lhs = this.resolveIfPossible(lhs_);
     const rhs = this.resolveIfPossible(rhs_);
 
@@ -586,7 +586,7 @@ export function checkBody(
 
           const type: Type | undefined = loweredBindingTy && {
             ...expr.type!,
-            ty: loweredBindingTy!,
+            ty: loweredBindingTy,
           };
 
           return {
@@ -689,7 +689,7 @@ export function checkBody(
         case "call": {
           const lhs = this.expr(expr.lhs);
           lhs.ty = infcx.resolveIfPossible(lhs.ty!);
-          const lhsTy = lhs.ty!;
+          const lhsTy = lhs.ty;
           if (lhsTy.kind !== "fn") {
             throw new CompilerError(
               `expression of type ${printTy(lhsTy)} is not callable`,
@@ -700,7 +700,7 @@ export function checkBody(
           const args = expr.args.map((arg) => this.expr(arg));
 
           lhsTy.params.forEach((param, i) => {
-            if (!args[i]) {
+            if (args.length <= i) {
               throw new CompilerError(
                 `missing argument of type ${printTy(param)}`,
                 expr.span
@@ -905,7 +905,8 @@ export function checkBody(
 
   const resolveTy = (ty: Ty, span: Span) => {
     const resTy = infcx.resolveIfPossible(ty);
-    if (!resTy) {
+    // TODO: When doing deep resolution, we need to check for _any_ vars.
+    if (resTy.kind === "var") {
       throw new CompilerError("cannot infer type", span);
     }
     return resTy;
