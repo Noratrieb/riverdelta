@@ -120,6 +120,7 @@ export function typeck(
   otherCrates: Crate<Typecked>[]
 ): Crate<Typecked> {
   const itemTys = new ComplexMap<ItemId, Ty | null>();
+
   function typeOfItem(itemId: ItemId, cause: Span): Ty {
     if (itemId.crateId !== ast.id) {
       console.log(otherCrates);
@@ -132,6 +133,7 @@ export function typeck(
         case "function":
         case "import":
         case "type":
+        case "global":
           return item.node.ty!;
         case "mod": {
           throw new CompilerError(
@@ -203,6 +205,11 @@ export function typeck(
           cause
         );
       }
+      case "global": {
+        const ty = lowerAstTy(item.node.type);
+        itemTys.set(item.id, ty);
+        return ty;
+      }
     }
   }
 
@@ -227,13 +234,24 @@ export function typeck(
     );
   }
 
+  function findItem(itemId: ItemId): Item<Resolved> {
+    if (itemId.crateId === ast.id) {
+      return unwrap(ast.itemsById.get(itemId));
+    }
+    return unwrap(
+      unwrap(
+        otherCrates.find((crate) => crate.id === itemId.crateId)
+      ).itemsById.get(itemId)
+    );
+  }
+
   const checker: Folder<Resolved, Typecked> = {
     ...mkDefaultFolder(),
     itemInner(item: Item<Resolved>): Item<Typecked> {
       switch (item.kind) {
         case "function": {
           const fnTy = typeOfItem(item.id, item.span) as TyFn;
-          const body = checkBody(item.node.body, fnTy, typeOfItem);
+          const body = checkBody(item.node.body, fnTy, typeOfItem, findItem);
 
           const returnType = item.node.returnType && {
             ...item.node.returnType,
@@ -347,6 +365,30 @@ export function typeck(
           return {
             ...item,
             node: { ...item.node },
+          };
+        }
+        case "global": {
+          const ty = typeOfItem(item.id, item.span);
+          const { init } = item.node;
+
+          if (init.kind !== "literal" || init.value.kind !== "int") {
+            throw new CompilerError(
+              "globals must be initialized with an integer literal",
+              init.span
+            );
+          }
+
+          const initTy = init.value.type === "I32" ? TY_I32 : TY_INT;
+          const infcx = new InferContext();
+          infcx.assign(ty, initTy, init.span);
+
+          return {
+            ...item,
+            node: {
+              ...item.node,
+              ty,
+              init: { ...init, ty },
+            },
           };
         }
       }
@@ -560,7 +602,8 @@ export class InferContext {
 export function checkBody(
   body: Expr<Resolved>,
   fnTy: TyFn,
-  typeOfItem: (itemId: ItemId, cause: Span) => Ty
+  typeOfItem: (itemId: ItemId, cause: Span) => Ty,
+  findItem: (itemId: ItemId) => Item<Resolved>
 ): Expr<Typecked> {
   const localTys = [...fnTy.params];
   const loopState: { hasBreak: boolean; loopId: LoopId }[] = [];
@@ -644,11 +687,26 @@ export function checkBody(
           infcx.assign(lhs.ty, rhs.ty, expr.span);
 
           switch (lhs.kind) {
-            case "ident":
-              if (lhs.value.res.kind !== "local") {
-                throw new CompilerError("cannot assign to items", expr.span);
+            case "ident": {
+              const { res } = lhs.value;
+              switch (res.kind) {
+                case "local":
+                  break;
+                case "item": {
+                  const item = findItem(res.id);
+                  if (item.kind !== "global") {
+                    throw new CompilerError("cannot assign to item", expr.span);
+                  }
+                  break;
+                }
+                case "builtin":
+                  throw new CompilerError(
+                    "cannot assign to builtins",
+                    expr.span
+                  );
               }
               break;
+            }
             default: {
               throw new CompilerError(
                 "invalid left-hand side of assignment",

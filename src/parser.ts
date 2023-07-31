@@ -29,6 +29,7 @@ import {
   Parsed,
   ExternItem,
   ItemId,
+  GlobalItem,
 } from "./ast";
 import { CompilerError, Span, spanMerge } from "./error";
 import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
@@ -180,6 +181,24 @@ function parseItem(t: Token[]): [Token[], Item<Parsed>] {
     };
 
     return [t, { kind: "mod", node, span: name.span, id: ItemId.dummy() }];
+  } else if (tok.kind === "global") {
+    let name;
+    [t, name] = expectNext<TokenIdent>(t, "identifier");
+    [t] = expectNext(t, ":");
+    let type;
+    [t, type] = parseType(t);
+    [t] = expectNext(t, "=");
+    let init;
+    [t, init] = parseExpr(t);
+    [t] = expectNext(t, ";");
+
+    const node: GlobalItem<Parsed> = {
+      name: name.ident,
+      type,
+      init,
+    };
+
+    return [t, { kind: "global", node, span: name.span, id: ItemId.dummy() }];
   } else {
     unexpectedToken(tok, "item");
   }

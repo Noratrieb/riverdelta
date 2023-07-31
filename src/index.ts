@@ -13,10 +13,10 @@ import { Crate, Built, Typecked } from "./ast";
 import { Ids } from "./utils";
 
 const INPUT = `
-extern mod std;
+global HELLO: I32 = 0_I32;
 
 function main() = (
-  std.printlnInt(10000);
+  HELLO = 1_I32;
 ); 
 `;
 

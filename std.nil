@@ -57,3 +57,9 @@ function println(s: String) = (
   print(s);
   print("\n");
 );
+
+mod alloc (
+    function allocateItem(size: I32): I32 = (
+        
+    );
+)

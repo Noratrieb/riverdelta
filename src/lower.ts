@@ -3,8 +3,10 @@ import {
   Expr,
   ExprBlock,
   FunctionDef,
+  GlobalItem,
   ImportDef,
   Item,
+  ItemId,
   LoopId,
   Resolution,
   Ty,
@@ -13,6 +15,7 @@ import {
   Typecked,
   varUnreachable,
 } from "./ast";
+import { printTy } from "./printer";
 import { ComplexMap, encodeUtf8, unwrap } from "./utils";
 import * as wasm from "./wasm/defs";
 
@@ -25,10 +28,19 @@ const STRING_ABI: ArgRetAbi = STRING_TYPES;
 
 const WASM_PAGE = 65536;
 
-type Relocation = {
-  kind: "funccall";
-  instr: wasm.Instr & { func: wasm.FuncIdx };
-} & { res: Resolution };
+const DUMMY_IDX = 9999999;
+
+type RelocationKind =
+  | {
+      kind: "funccall";
+      instr: wasm.Instr & { func: wasm.FuncIdx };
+    }
+  | {
+      kind: "globalref";
+      instr: wasm.Instr & { imm: wasm.GlobalIdx };
+    };
+
+type Relocation = RelocationKind & { res: Resolution };
 
 type FuncOrImport =
   | { kind: "func"; idx: wasm.FuncIdx }
@@ -39,6 +51,7 @@ export type Context = {
   funcTypes: ComplexMap<wasm.FuncType, wasm.TypeIdx>;
   reservedHeapMemoryStart: number;
   funcIndices: ComplexMap<Resolution, FuncOrImport>;
+  globalIndices: ComplexMap<Resolution, wasm.GlobalIdx>;
   crates: Crate<Typecked>[];
   relocations: Relocation[];
 };
@@ -89,6 +102,12 @@ function appendData(cx: Context, newData: Uint8Array): number {
   }
 }
 
+function findItem(cx: Context, id: ItemId): Item<Typecked> {
+  return unwrap(
+    unwrap(cx.crates.find((crate) => crate.id === id.crateId)).itemsById.get(id)
+  );
+}
+
 export function lower(crates: Crate<Typecked>[]): wasm.Module {
   const mod: wasm.Module = {
     types: [],
@@ -118,6 +137,7 @@ export function lower(crates: Crate<Typecked>[]): wasm.Module {
     mod,
     funcTypes: new ComplexMap(),
     funcIndices: new ComplexMap(),
+    globalIndices: new ComplexMap(),
     reservedHeapMemoryStart: 0,
     crates,
     relocations: [],
@@ -136,6 +156,17 @@ export function lower(crates: Crate<Typecked>[]): wasm.Module {
         }
         case "mod": {
           lowerMod(item.node.contents);
+          break;
+        }
+        case "global": {
+          lowerGlobal(cx, item, item.node);
+          break;
+        }
+        case "extern":
+        case "type":
+          break;
+        default: {
+          const _: never = item;
         }
       }
     });
@@ -162,6 +193,20 @@ export function lower(crates: Crate<Typecked>[]): wasm.Module {
           );
         }
         rel.instr.func = idx.kind === "func" ? offset + idx.idx : idx.idx;
+        break;
+      }
+      case "globalref": {
+        const idx = cx.globalIndices.get(rel.res);
+        if (idx === undefined) {
+          throw new Error(
+            `no global found for relocation '${JSON.stringify(rel.res)}'`
+          );
+        }
+        rel.instr.imm = idx;
+        break;
+      }
+      default: {
+        const _: never = rel;
       }
     }
   });
@@ -199,6 +244,43 @@ function lowerImport(
   }
 
   cx.funcIndices.set({ kind: "item", id: item.id }, { kind: "import", idx });
+}
+
+function lowerGlobal(
+  cx: Context,
+  item: Item<Typecked>,
+  def: GlobalItem<Typecked>
+) {
+  const globalIdx = cx.mod.globals.length;
+
+  let valtype: "i32" | "i64";
+  switch (def.init.ty.kind) {
+    case "i32":
+      valtype = "i32";
+      break;
+    case "int":
+      valtype = "i64";
+      break;
+    default:
+      throw new Error(`invalid global ty: ${printTy(def.init.ty)}`);
+  }
+
+  if (def.init.kind !== "literal" || def.init.value.kind !== "int") {
+    throw new Error(`invalid global init: ${JSON.stringify(def)}`);
+  }
+
+  const init: wasm.Instr = {
+    kind: `${valtype}.const`,
+    imm: def.init.value.value,
+  };
+
+  cx.mod.globals.push({
+    _name: mangleDefPath(item.defPath),
+    type: { type: valtype, mut: "var" },
+    init: [init],
+  });
+
+  cx.globalIndices.set({ kind: "item", id: item.id }, globalIdx);
 }
 
 type FuncContext = {
@@ -304,7 +386,18 @@ function lowerExpr(
               break;
             }
             case "item": {
-              throw new Error("cannot store to item");
+              const item = findItem(fcx.cx, res.id);
+              if (item.kind !== "global") {
+                throw new Error("cannot store to non-global item");
+              }
+
+              const instr: wasm.Instr = { kind: "global.set", imm: DUMMY_IDX };
+              const rel: Relocation = { kind: "globalref", instr, res };
+
+              fcx.cx.relocations.push(rel);
+              instrs.push(instr);
+
+              break;
             }
             case "builtin": {
               throw new Error("cannot store to builtin");
@@ -374,8 +467,23 @@ function lowerExpr(
           loadVariable(instrs, location);
           break;
         }
-        case "item":
-          todo("item ident res");
+        case "item": {
+          const item = findItem(fcx.cx, res.id);
+          switch (item.kind) {
+            case "global": {
+              const instr: wasm.Instr = { kind: "global.get", imm: DUMMY_IDX };
+              const rel: Relocation = { kind: "globalref", instr, res };
+              instrs.push(instr);
+              fcx.cx.relocations.push(rel);
+              break;
+            }
+            default: {
+              todo("non-global item ident res");
+            }
+          }
+
+          break;
+        }
         case "builtin":
           switch (res.name) {
             case "false":
@@ -561,7 +669,7 @@ function lowerExpr(
         }
       }
 
-      const callInstr: wasm.Instr = { kind: "call", func: 9999999999 };
+      const callInstr: wasm.Instr = { kind: "call", func: DUMMY_IDX };
       fcx.cx.relocations.push({
         kind: "funccall",
         instr: callInstr,
@@ -865,7 +973,7 @@ function addRt(cx: Context, crates: Crate<Typecked>[]) {
 
   const crate0 = unwrap(crates.find((crate) => crate.id === 0));
 
-  const mainCall: wasm.Instr = { kind: "call", func: 9999999 };
+  const mainCall: wasm.Instr = { kind: "call", func: DUMMY_IDX };
   cx.relocations.push({
     kind: "funccall",
     instr: mainCall,

@@ -24,7 +24,7 @@ function printStringLiteral(lit: StringLiteral): string {
 }
 
 function printItem(item: Item<AnyPhase>): string {
-  const id = `/*${item.id}*/ `;
+  const id = `/*${item.id.toString()}*/ `;
 
   switch (item.kind) {
     case "function": {
@@ -41,6 +41,15 @@ function printItem(item: Item<AnyPhase>): string {
     }
     case "extern": {
       return id + `extern mod ${item.node.name};`;
+    }
+    case "global": {
+      return (
+        id +
+        `global ${item.node.name}: ${printType(item.node.type)} = ${printExpr(
+          item.node.init,
+          0
+        )};`
+      );
     }
   }
 }
@@ -207,7 +216,7 @@ function printRes(res: Resolution): string {
     case "local":
       return `#${res.index}`;
     case "item":
-      return `#G${res.id}`;
+      return `#I${res.id.toString()}`;
     case "builtin": {
       return `#B`;
     }

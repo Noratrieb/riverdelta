@@ -81,6 +81,9 @@ export class ItemId {
   }
 
   toString(): string {
+    if (this.crateId === 0) {
+      return `${this.itemIdx}`;
+    }
     return `[${this.crateId}@${this.itemIdx}]`;
   }
 }
@@ -105,6 +108,10 @@ export type ItemKind<P extends Phase> =
   | {
       kind: "extern";
       node: ExternItem;
+    }
+  | {
+      kind: "global";
+      node: GlobalItem<P>;
     };
 
 export type Item<P extends Phase> = ItemKind<P> & {
@@ -152,6 +159,13 @@ export type ModItem<P extends Phase> = {
 };
 
 export type ExternItem = { name: string };
+
+export type GlobalItem<P extends Phase> = {
+  name: string;
+  type: Type<P>;
+  init: Expr<P>;
+  ty?: Ty;
+};
 
 export type ExprEmpty = { kind: "empty" };
 
@@ -633,6 +647,17 @@ export function superFoldItem<From extends Phase, To extends Phase>(
     }
     case "extern": {
       return { ...item, kind: "extern" };
+    }
+    case "global": {
+      return {
+        ...item,
+        kind: "global",
+        node: {
+          name: item.node.name,
+          type: folder.type(item.node.type),
+          init: folder.expr(item.node.init),
+        },
+      };
     }
   }
 }
