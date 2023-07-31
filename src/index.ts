@@ -16,8 +16,8 @@ const INPUT = `
 extern mod std;
 
 function main() = (
-  std.pow(10, 2);
-);
+  std.printlnInt(10000);
+); 
 `;
 
 function main() {
