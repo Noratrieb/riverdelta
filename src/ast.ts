@@ -467,8 +467,8 @@ export const DEFAULT_FOLDER: Folder = {
     throw new Error("folders need to implement `ast`");
   },
   item(item) {
-    const newItem = this.itemInner(item);
-    this.ast().itemsById.set(item.id, item);
+    const newItem = this.itemInner(item);    
+    this.ast().itemsById.set(item.id, newItem);
     return newItem;
   },
   itemInner(item) {

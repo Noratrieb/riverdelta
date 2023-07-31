@@ -12,15 +12,11 @@ import { exec } from "child_process";
 
 const INPUT = `
 function main() = (
-  owo.uwu.main();
-  owo.owo();
+  prIntln(0);
 );
 
-mod owo (
-  mod uwu (
-    function main() =;
-  );
-  function owo() = ;
+function prIntln(x: Int) = (
+  print("\n");
 );
 `;
 
