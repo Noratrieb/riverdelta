@@ -4,7 +4,7 @@ import {
   Ast,
   BinaryKind,
   COMPARISON_KINDS,
-  DEFAULT_FOLDER,
+  mkDefaultFolder,
   Expr,
   ExprLoop,
   ExprStructLiteral,
@@ -12,7 +12,7 @@ import {
   Folder,
   FunctionArg,
   FunctionDef,
-  Identifier,
+  Ident,
   ImportDef,
   Item,
   LOGICAL_KINDS,
@@ -25,6 +25,8 @@ import {
   foldAst,
   superFoldExpr,
   superFoldItem,
+  Built,
+  Parsed,
 } from "./ast";
 import { CompilerError, Span, spanMerge } from "./error";
 import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
@@ -32,8 +34,8 @@ import { Ids } from "./utils";
 
 type Parser<T> = (t: Token[]) => [Token[], T];
 
-export function parse(packageName: string, t: Token[]): Ast {
-  const items: Item[] = [];
+export function parse(packageName: string, t: Token[]): Ast<Built> {
+  const items: Item<Parsed>[] = [];
 
   while (t.length > 0) {
     let item;
@@ -48,7 +50,7 @@ export function parse(packageName: string, t: Token[]): Ast {
   return ast;
 }
 
-function parseItem(t: Token[]): [Token[], Item] {
+function parseItem(t: Token[]): [Token[], Item<Parsed>] {
   let tok;
   [t, tok] = next(t);
   if (tok.kind === "function") {
@@ -62,7 +64,7 @@ function parseItem(t: Token[]): [Token[], Item] {
 
     [t] = expectNext(t, ";");
 
-    const def: FunctionDef = {
+    const def: FunctionDef<Parsed> = {
       ...sig,
       body,
     };
@@ -84,7 +86,7 @@ function parseItem(t: Token[]): [Token[], Item] {
     [t] = expectNext(t, "{");
 
     let fields;
-    [t, fields] = parseCommaSeparatedList<FieldDef>(t, "}", (t) => {
+    [t, fields] = parseCommaSeparatedList<FieldDef<Parsed>>(t, "}", (t) => {
       let name;
       [t, name] = expectNext<TokenIdent>(t, "identifier");
       [t] = expectNext(t, ":");
@@ -104,7 +106,7 @@ function parseItem(t: Token[]): [Token[], Item] {
 
     [t] = expectNext(t, ";");
 
-    const def: TypeDef = {
+    const def: TypeDef<Parsed> = {
       name: name.ident,
       fields,
     };
@@ -123,7 +125,7 @@ function parseItem(t: Token[]): [Token[], Item] {
 
     [t] = expectNext(t, ";");
 
-    const def: ImportDef = {
+    const def: ImportDef<Parsed> = {
       module: { kind: "str", value: module.value, span: module.span },
       func: { kind: "str", value: func.value, span: func.span },
       ...sig,
@@ -135,7 +137,7 @@ function parseItem(t: Token[]): [Token[], Item] {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
 
-    const node: ModItem = {
+    const node: ModItem<Parsed> = {
       name: name.ident,
       modKind: { kind: "extern" },
     };
@@ -149,7 +151,7 @@ function parseItem(t: Token[]): [Token[], Item] {
 
     [t] = expectNext(t, "(");
 
-    const contents: Item[] = [];
+    const contents: Item<Parsed>[] = [];
 
     while (next(t)[1].kind !== ")") {
       let item;
@@ -161,7 +163,7 @@ function parseItem(t: Token[]): [Token[], Item] {
     [t] = expectNext(t, ")");
     [t] = expectNext(t, ";");
 
-    const node: ModItem = {
+    const node: ModItem<Parsed> = {
       name: name.ident,
       modKind: { kind: "inline", contents },
     };
@@ -174,8 +176,8 @@ function parseItem(t: Token[]): [Token[], Item] {
 
 type FunctionSig = {
   name: string;
-  params: FunctionArg[];
-  returnType?: Type;
+  params: FunctionArg<Parsed>[];
+  returnType?: Type<Parsed>;
 };
 
 function parseFunctionSig(t: Token[]): [Token[], FunctionSig] {
@@ -184,7 +186,7 @@ function parseFunctionSig(t: Token[]): [Token[], FunctionSig] {
 
   [t] = expectNext(t, "(");
 
-  let params: FunctionArg[];
+  let params: FunctionArg<Parsed>[];
   [t, params] = parseCommaSeparatedList(t, ")", (t) => {
     let name;
     [t, name] = expectNext<TokenIdent & { span: Span }>(t, "identifier");
@@ -205,7 +207,7 @@ function parseFunctionSig(t: Token[]): [Token[], FunctionSig] {
   return [t, { name: name.ident, params, returnType }];
 }
 
-function parseExpr(t: Token[]): [Token[], Expr] {
+function parseExpr(t: Token[]): [Token[], Expr<Parsed>] {
   /*
   EXPR = ASSIGNMENT
 
@@ -237,16 +239,21 @@ function parseExpr(t: Token[]): [Token[], Expr] {
   return parseExprAssignment(t);
 }
 
-function mkBinaryExpr(lhs: Expr, rhs: Expr, span: Span, kind: string): Expr {
+function mkBinaryExpr(
+  lhs: Expr<Parsed>,
+  rhs: Expr<Parsed>,
+  span: Span,
+  kind: string
+): Expr<Parsed> {
   return { kind: "binary", binaryKind: kind as BinaryKind, lhs, rhs, span };
 }
 
 function mkParserExprBinary(
-  lower: Parser<Expr>,
+  lower: Parser<Expr<Parsed>>,
   kinds: string[],
   mkExpr = mkBinaryExpr
-): Parser<Expr> {
-  function parser(t: Token[]): [Token[], Expr] {
+): Parser<Expr<Parsed>> {
+  function parser(t: Token[]): [Token[], Expr<Parsed>] {
     let lhs;
     [t, lhs] = lower(t);
 
@@ -288,7 +295,7 @@ const parseExprAssignment = mkParserExprBinary(
   (lhs, rhs, span) => ({ kind: "assign", lhs, rhs, span })
 );
 
-function parseExprUnary(t: Token[]): [Token[], Expr] {
+function parseExprUnary(t: Token[]): [Token[], Expr<Parsed>] {
   const [, peak] = next(t);
   if (peak.kind in UNARY_KINDS) {
     let rhs;
@@ -306,8 +313,8 @@ function parseExprUnary(t: Token[]): [Token[], Expr] {
 
   return parseExprCall(t);
 }
-function parseExprCall(t: Token[]): [Token[], Expr] {
-  let lhs: Expr;
+function parseExprCall(t: Token[]): [Token[], Expr<Parsed>] {
+  let lhs: Expr<Parsed>;
   [t, lhs] = parseExprAtom(t);
 
   while (next(t)[1].kind === "(" || next(t)[1].kind === ".") {
@@ -343,13 +350,13 @@ function parseExprCall(t: Token[]): [Token[], Expr] {
   return [t, lhs];
 }
 
-function parseExprAtom(startT: Token[]): [Token[], Expr] {
+function parseExprAtom(startT: Token[]): [Token[], Expr<Parsed>] {
   // eslint-disable-next-line prefer-const
   let [t, tok] = next(startT);
   const span = tok.span;
 
   if (tok.kind === "(") {
-    let expr: Expr;
+    let expr: Expr<Parsed>;
     [t, expr] = parseExpr(t);
 
     // This could be a block or a tuple literal. We can only know after
@@ -447,7 +454,7 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
     let rhs;
     [t, rhs] = parseExpr(t);
 
-    const nameIdent: Identifier = { name: name.ident, span: name.span };
+    const nameIdent: Ident = { name: name.ident, span: name.span };
 
     return [
       t,
@@ -493,11 +500,13 @@ function parseExprAtom(startT: Token[]): [Token[], Expr] {
   return [startT, { kind: "empty", span }];
 }
 
-function parseStructInit(t: Token[]): [Token[], ExprStructLiteral["fields"]] {
+function parseStructInit(
+  t: Token[]
+): [Token[], ExprStructLiteral<Parsed>["fields"]] {
   [t] = expectNext(t, "{");
 
   let fields;
-  [t, fields] = parseCommaSeparatedList<[Identifier, Expr]>(t, "}", (t) => {
+  [t, fields] = parseCommaSeparatedList<[Ident, Expr<Parsed>]>(t, "}", (t) => {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
     [t] = expectNext(t, ":");
@@ -510,7 +519,7 @@ function parseStructInit(t: Token[]): [Token[], ExprStructLiteral["fields"]] {
   return [t, fields];
 }
 
-function parseType(t: Token[]): [Token[], Type] {
+function parseType(t: Token[]): [Token[], Type<Parsed>] {
   let tok;
   [t, tok] = next(t);
   const span = tok.span;
@@ -649,22 +658,19 @@ function unexpectedToken(token: Token, expected: string): never {
   throw new CompilerError(`unexpected token, expected ${expected}`, token.span);
 }
 
-function validateAst(ast: Ast) {
+function validateAst(ast: Ast<Built>) {
   const seenItemIds = new Set();
 
-  const validator: Folder = {
-    ...DEFAULT_FOLDER,
-    ast() {
-      return ast;
-    },
-    itemInner(item: Item): Item {
+  const validator: Folder<Built, Built> = {
+    ...mkDefaultFolder(),
+    itemInner(item: Item<Built>): Item<Built> {
       if (seenItemIds.has(item.id)) {
         throw new Error(`duplicate item id: ${item.id} for ${item.node.name}`);
       }
       seenItemIds.add(item.id);
       return superFoldItem(item, this);
     },
-    expr(expr: Expr): Expr {
+    expr(expr: Expr<Built>): Expr<Built> {
       if (expr.kind === "block") {
         expr.exprs.forEach((inner) => {
           if (inner.kind === "let") {
@@ -680,7 +686,7 @@ function validateAst(ast: Ast) {
       } else if (expr.kind === "let") {
         throw new CompilerError("let is only allowed in blocks", expr.span);
       } else if (expr.kind === "binary") {
-        const checkPrecedence = (inner: Expr, side: string) => {
+        const checkPrecedence = (inner: Expr<Built>, side: string) => {
           if (inner.kind === "binary") {
             const ourClass = binaryExprPrecedenceClass(expr.binaryKind);
             const innerClass = binaryExprPrecedenceClass(inner.binaryKind);
@@ -702,39 +708,48 @@ function validateAst(ast: Ast) {
         return superFoldExpr(expr, this);
       }
     },
+    ident(ident) {
+      return ident;
+    },
+    type(type) {
+      return type;
+    },
   };
 
   foldAst(ast, validator);
 }
 
-function buildAst(packageName: string, rootItems: Item[]): Ast {
+function buildAst(packageName: string, rootItems: Item<Parsed>[]): Ast<Built> {
   const itemId = new Ids();
   const loopId = new Ids();
 
-  const ast: Ast = {
+  const ast: Ast<Built> = {
     rootItems,
     itemsById: new Map(),
     packageName,
   };
 
-  const assigner: Folder = {
-    ...DEFAULT_FOLDER,
-    ast() {
-      return ast;
-    },
-    itemInner(item: Item): Item {
+  const assigner: Folder<Parsed, Built> = {
+    ...mkDefaultFolder(),
+    itemInner(item: Item<Parsed>): Item<Built> {
       const id = itemId.next();
       ast.itemsById.set(id, item);
       return { ...superFoldItem(item, this), id };
     },
-    expr(expr: Expr): Expr {
+    expr(expr: Expr<Parsed>): Expr<Built> {
       if (expr.kind === "loop") {
         return {
-          ...(superFoldExpr(expr, this) as ExprLoop & Expr),
+          ...(superFoldExpr(expr, this) as ExprLoop<Built> & Expr<Built>),
           loopId: loopId.next(),
         };
       }
       return superFoldExpr(expr, this);
+    },
+    ident(ident) {
+      return ident;
+    },
+    type(type) {
+      return type;
     },
   };
 

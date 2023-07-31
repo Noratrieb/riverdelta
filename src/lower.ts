@@ -10,6 +10,7 @@ import {
   Ty,
   TyFn,
   TyTuple,
+  Typecked,
   varUnreachable,
 } from "./ast";
 import { ComplexMap, encodeUtf8, unwrap } from "./utils";
@@ -38,7 +39,7 @@ export type Context = {
   funcTypes: ComplexMap<wasm.FuncType, wasm.TypeIdx>;
   reservedHeapMemoryStart: number;
   funcIndices: ComplexMap<Resolution, FuncOrImport>;
-  ast: Ast;
+  ast: Ast<Typecked>;
   relocations: Relocation[];
 };
 
@@ -88,7 +89,7 @@ function appendData(cx: Context, newData: Uint8Array): number {
   }
 }
 
-export function lower(ast: Ast): wasm.Module {
+export function lower(ast: Ast<Typecked>): wasm.Module {
   const mod: wasm.Module = {
     types: [],
     funcs: [],
@@ -122,7 +123,7 @@ export function lower(ast: Ast): wasm.Module {
     relocations: [],
   };
 
-  function lowerMod(items: Item[]) {
+  function lowerMod(items: Item<Typecked>[]) {
     items.forEach((item) => {
       switch (item.kind) {
         case "function": {
@@ -172,7 +173,11 @@ export function lower(ast: Ast): wasm.Module {
   return mod;
 }
 
-function lowerImport(cx: Context, item: Item, def: ImportDef) {
+function lowerImport(
+  cx: Context,
+  item: Item<Typecked>,
+  def: ImportDef<Typecked>
+) {
   const existing = cx.mod.imports.findIndex(
     (imp) => imp.module === def.module.value && imp.name === def.func.value
   );
@@ -201,8 +206,8 @@ function lowerImport(cx: Context, item: Item, def: ImportDef) {
 
 type FuncContext = {
   cx: Context;
-  item: Item;
-  func: FunctionDef;
+  item: Item<Typecked>;
+  func: FunctionDef<Typecked>;
   wasmType: wasm.FuncType;
   wasm: wasm.Func;
   varLocations: VarLocation[];
@@ -216,7 +221,11 @@ type ArgRetAbi = wasm.ValType[];
 
 type VarLocation = { localIdx: number; types: wasm.ValType[] };
 
-function lowerFunc(cx: Context, item: Item, func: FunctionDef) {
+function lowerFunc(
+  cx: Context,
+  item: Item<Typecked>,
+  func: FunctionDef<Typecked>
+) {
   const abi = computeAbi(func.ty!);
   const { type: wasmType, paramLocations } = wasmTypeForAbi(abi);
   const type = internFuncType(cx, wasmType);
@@ -255,7 +264,11 @@ Expression lowering.
 - the result of an expression evaluation is stored on the top of the stack
 */
 
-function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
+function lowerExpr(
+  fcx: FuncContext,
+  instrs: wasm.Instr[],
+  expr: Expr<Typecked>
+) {
   const ty = expr.ty!;
 
   exprKind: switch (expr.kind) {
@@ -284,7 +297,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       const { lhs } = expr;
       switch (lhs.kind) {
         case "ident": {
-          const res = lhs.value.res!;
+          const res = lhs.value.res;
 
           switch (res.kind) {
             case "local": {
@@ -355,7 +368,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
     }
     case "path":
     case "ident": {
-      const res = expr.kind === "ident" ? expr.value.res! : expr.res;
+      const res = expr.kind === "ident" ? expr.value.res : expr.res;
 
       switch (res.kind) {
         case "local": {
@@ -502,8 +515,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
         todo("non constant calls");
       }
 
-      const res =
-        expr.lhs.kind === "ident" ? expr.lhs.value.res! : expr.lhs.res;
+      const res = expr.lhs.kind === "ident" ? expr.lhs.value.res : expr.lhs.res;
 
       if (res.kind === "builtin") {
         switch (res.name) {
@@ -575,7 +587,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
 
       // TODO: Actually do this instead of being naive.
 
-      const _isPlace = (expr: Expr) =>
+      const _isPlace = (expr: Expr<Typecked>) =>
         expr.kind === "ident" || expr.kind === "fieldAccess";
 
       lowerExpr(fcx, instrs, expr.lhs);
@@ -711,7 +723,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
 
 function lowerExprBlockBody(
   fcx: FuncContext,
-  expr: ExprBlock & Expr
+  expr: ExprBlock<Typecked> & Expr<Typecked>
 ): wasm.Instr[] {
   fcx.currentBlockDepth++;
   const innerInstrs: wasm.Instr[] = [];
@@ -853,7 +865,7 @@ function todo(msg: string): never {
 }
 
 // Make the program runnable using wasi-preview-1
-function addRt(cx: Context, ast: Ast) {
+function addRt(cx: Context, ast: Ast<Typecked>) {
   const { mod } = cx;
 
   const mainCall: wasm.Instr = { kind: "call", func: 9999999 };

@@ -1,88 +1,115 @@
 import { Span } from "./error";
 import { LitIntType } from "./lexer";
 
-export type Ast = {
-  rootItems: Item[];
+export type Ast<P extends Phase> = {
+  rootItems: Item<P>[];
   typeckResults?: TypeckResults;
-  itemsById: Map<ItemId, Item>;
+  itemsById: Map<ItemId, Item<P>>;
   packageName: string;
 };
 
-export type Identifier = {
+export type Phase = {
+  res: unknown;
+};
+
+type NoRes = object;
+type HasRes = { res: Resolution };
+
+export type Parsed = {
+  res: NoRes;
+};
+export type Built = {
+  res: NoRes;
+};
+export type Resolved = {
+  res: HasRes;
+};
+export type Typecked = {
+  res: HasRes;
+};
+export type AnyPhase = {
+  res: NoRes | HasRes;
+};
+
+export type Ident = {
   name: string;
   span: Span;
-  res?: Resolution;
 };
+
+export type IdentWithRes<P extends Phase> = {
+  name: string;
+  span: Span;
+} & P["res"];
 
 export type ItemId = number;
 
-export type ItemKind =
+export type ItemKind<P extends Phase> =
   | {
       kind: "function";
-      node: FunctionDef;
+      node: FunctionDef<P>;
     }
   | {
       kind: "type";
-      node: TypeDef;
+      node: TypeDef<P>;
     }
   | {
       kind: "import";
-      node: ImportDef;
+      node: ImportDef<P>;
     }
   | {
       kind: "mod";
-      node: ModItem;
+      node: ModItem<P>;
     };
 
-export type Item = ItemKind & {
+export type Item<P extends Phase> = ItemKind<P> & {
   span: Span;
   id: ItemId;
   defPath?: string[];
 };
 
-export type FunctionDef = {
+export type FunctionDef<P extends Phase> = {
   name: string;
-  params: FunctionArg[];
-  body: Expr;
-  returnType?: Type;
+  params: FunctionArg<P>[];
+  body: Expr<P>;
+  returnType?: Type<P>;
   ty?: TyFn;
 };
 
-export type FunctionArg = {
+export type FunctionArg<P extends Phase> = {
   name: string;
-  type: Type;
+  type: Type<P>;
   span: Span;
 };
 
-export type TypeDef = {
+export type TypeDef<P extends Phase> = {
   name: string;
-  fields: FieldDef[];
+  fields: FieldDef<P>[];
   ty?: TyStruct;
 };
 
-export type FieldDef = {
-  name: Identifier;
-  type: Type;
+export type FieldDef<P extends Phase> = {
+  name: Ident;
+  type: Type<P>;
 };
 
-export type ImportDef = {
+export type ImportDef<P extends Phase> = {
   module: StringLiteral;
   func: StringLiteral;
   name: string;
-  params: FunctionArg[];
-  returnType?: Type;
+  params: FunctionArg<P>[];
+  returnType?: Type<P>;
   ty?: TyFn;
 };
 
-export type ModItem = {
+export type ModItem<P extends Phase> = {
   name: string;
-  modKind: ModItemKind;
+  modKind: ModItemKind<P>;
 };
 
-export type ModItemKind =
+export type ModItemKind<P extends Phase> =
   | {
       kind: "inline";
-      contents: Item[];
+      contents: Item<P>[];
     }
   | {
       kind: "extern";
@@ -90,11 +117,11 @@ export type ModItemKind =
 
 export type ExprEmpty = { kind: "empty" };
 
-export type ExprLet = {
+export type ExprLet<P extends Phase> = {
   kind: "let";
-  name: Identifier;
-  type?: Type;
-  rhs: Expr;
+  name: Ident;
+  type?: Type<P>;
+  rhs: Expr<P>;
   // IMPORTANT: This is (sadly) shared with ExprBlock.
   // TODO: Stop this sharing and just store the stack of blocks in typeck.
   local?: LocalInfo;
@@ -102,15 +129,15 @@ export type ExprLet = {
 
 // A bit like ExprBinary except there are restrictions
 // on the LHS and precedence is unrestricted.
-export type ExprAssign = {
+export type ExprAssign<P extends Phase> = {
   kind: "assign";
-  lhs: Expr;
-  rhs: Expr;
+  lhs: Expr<P>;
+  rhs: Expr<P>;
 };
 
-export type ExprBlock = {
+export type ExprBlock<P extends Phase> = {
   kind: "block";
-  exprs: Expr[];
+  exprs: Expr<P>[];
   // IMPORTANT: This is (sadly) shared with ExprLet.
   locals?: LocalInfo[];
 };
@@ -120,9 +147,9 @@ export type ExprLiteral = {
   value: Literal;
 };
 
-export type ExprIdent = {
+export type ExprIdent<P extends Phase> = {
   kind: "ident";
-  value: Identifier;
+  value: IdentWithRes<P>;
 };
 
 /**
@@ -139,28 +166,28 @@ export type ExprPath = {
   res: Resolution;
 };
 
-export type ExprBinary = {
+export type ExprBinary<P extends Phase> = {
   kind: "binary";
   binaryKind: BinaryKind;
-  lhs: Expr;
-  rhs: Expr;
+  lhs: Expr<P>;
+  rhs: Expr<P>;
 };
 
-export type ExprUnary = {
+export type ExprUnary<P extends Phase> = {
   kind: "unary";
   unaryKind: UnaryKind;
-  rhs: Expr;
+  rhs: Expr<P>;
 };
 
-export type ExprCall = {
+export type ExprCall<P extends Phase> = {
   kind: "call";
-  lhs: Expr;
-  args: Expr[];
+  lhs: Expr<P>;
+  args: Expr<P>[];
 };
 
-export type ExprFieldAccess = {
+export type ExprFieldAccess<P extends Phase> = {
   kind: "fieldAccess";
-  lhs: Expr;
+  lhs: Expr<P>;
   field: {
     value: string | number;
     span: Span;
@@ -168,18 +195,18 @@ export type ExprFieldAccess = {
   };
 };
 
-export type ExprIf = {
+export type ExprIf<P extends Phase> = {
   kind: "if";
-  cond: Expr;
-  then: Expr;
-  else?: Expr;
+  cond: Expr<P>;
+  then: Expr<P>;
+  else?: Expr<P>;
 };
 
 export type LoopId = number;
 
-export type ExprLoop = {
+export type ExprLoop<P extends Phase> = {
   kind: "loop";
-  body: Expr;
+  body: Expr<P>;
   loopId: LoopId;
 };
 
@@ -188,36 +215,36 @@ export type ExprBreak = {
   target?: LoopId;
 };
 
-export type ExprStructLiteral = {
+export type ExprStructLiteral<P extends Phase> = {
   kind: "structLiteral";
-  name: Identifier;
-  fields: [Identifier, Expr][];
+  name: IdentWithRes<P>;
+  fields: [Ident, Expr<P>][];
 };
 
-export type TupleLiteral = {
+export type TupleLiteral<P extends Phase> = {
   kind: "tupleLiteral";
-  fields: Expr[];
+  fields: Expr<P>[];
 };
 
-export type ExprKind =
+export type ExprKind<P extends Phase> =
   | ExprEmpty
-  | ExprLet
-  | ExprAssign
-  | ExprBlock
+  | ExprLet<P>
+  | ExprAssign<P>
+  | ExprBlock<P>
   | ExprLiteral
-  | ExprIdent
+  | ExprIdent<P>
   | ExprPath
-  | ExprBinary
-  | ExprUnary
-  | ExprCall
-  | ExprFieldAccess
-  | ExprIf
-  | ExprLoop
+  | ExprBinary<P>
+  | ExprUnary<P>
+  | ExprCall<P>
+  | ExprFieldAccess<P>
+  | ExprIf<P>
+  | ExprLoop<P>
   | ExprBreak
-  | ExprStructLiteral
-  | TupleLiteral;
+  | ExprStructLiteral<P>
+  | TupleLiteral<P>;
 
-export type Expr = ExprKind & {
+export type Expr<P extends Phase> = ExprKind<P> & {
   span: Span;
   ty?: Ty;
 };
@@ -291,22 +318,22 @@ export function binaryExprPrecedenceClass(k: BinaryKind): number {
 export type UnaryKind = "!" | "-";
 export const UNARY_KINDS: UnaryKind[] = ["!", "-"];
 
-export type TypeKind =
+export type TypeKind<P extends Phase> =
   | {
       kind: "ident";
-      value: Identifier;
+      value: IdentWithRes<P>;
     }
   | {
       kind: "list";
-      elem: Type;
+      elem: Type<P>;
     }
   | {
       kind: "tuple";
-      elems: Type[];
+      elems: Type<P>[];
     }
   | { kind: "never" };
 
-export type Type = TypeKind & {
+export type Type<P extends Phase> = TypeKind<P> & {
   span: Span;
   ty?: Ty;
 };
@@ -446,60 +473,68 @@ export type TypeckResults = {
 
 // folders
 
-export type FoldFn<T> = (value: T) => T;
+export type FoldFn<From, To> = (value: From) => To;
 
-export type Folder = {
-  ast: () => Ast;
+export type Folder<From extends Phase, To extends Phase> = {
+  newItemsById: Map<ItemId, Item<To>>;
   /**
    * This should not be overridden.
    */
-  item: FoldFn<Item>;
-  itemInner: FoldFn<Item>;
-  expr: FoldFn<Expr>;
-  ident: FoldFn<Identifier>;
-  type: FoldFn<Type>;
+  item: FoldFn<Item<From>, Item<To>>;
+  itemInner: FoldFn<Item<From>, Item<To>>;
+  expr: FoldFn<Expr<From>, Expr<To>>;
+  ident: FoldFn<IdentWithRes<From>, IdentWithRes<To>>;
+  type: FoldFn<Type<From>, Type<To>>;
+};
+
+type ItemFolder<From extends Phase, To extends Phase> = {
+  newItemsById: Map<ItemId, Item<To>>;
+  item: FoldFn<Item<From>, Item<To>>;
+  itemInner: FoldFn<Item<From>, Item<To>>;
 };
 
 const ITEM_DEFAULT = Symbol("item must not be overriden");
 
-export const DEFAULT_FOLDER: Folder = {
-  ast() {
-    throw new Error("folders need to implement `ast`");
-  },
-  item(item) {
-    const newItem = this.itemInner(item);    
-    this.ast().itemsById.set(item.id, newItem);
-    return newItem;
-  },
-  itemInner(item) {
-    return superFoldItem(item, this);
-  },
-  expr(expr) {
-    return superFoldExpr(expr, this);
-  },
-  ident(ident) {
-    return ident;
-  },
-  type(type) {
-    return superFoldType(type, this);
-  },
-};
-(DEFAULT_FOLDER.item as any)[ITEM_DEFAULT] = ITEM_DEFAULT;
+export function mkDefaultFolder<
+  From extends Phase,
+  To extends Phase
+>(): ItemFolder<From, To> {
+  const folder: ItemFolder<From, To> = {
+    newItemsById: new Map(),
+    item(item) {
+      const newItem = this.itemInner(item);
+      this.newItemsById.set(item.id, newItem);
+      return newItem;
+    },
+    itemInner(_item) {
+      throw new Error("unimplemented");
+    },
+  };
+  (folder.item as any)[ITEM_DEFAULT] = ITEM_DEFAULT;
 
-export function foldAst(ast: Ast, folder: Folder): Ast {
+  return folder;
+}
+
+export function foldAst<From extends Phase, To extends Phase>(
+  ast: Ast<From>,
+  folder: Folder<From, To>
+): Ast<To> {
   if ((folder.item as any)[ITEM_DEFAULT] !== ITEM_DEFAULT) {
     throw new Error("must not override `item` on folders");
   }
 
   return {
     rootItems: ast.rootItems.map((item) => folder.item(item)),
-    itemsById: ast.itemsById,
+    itemsById: folder.newItemsById,
     typeckResults: ast.typeckResults,
     packageName: ast.packageName,
   };
 }
 
-export function superFoldItem(item: Item, folder: Folder): Item {
+export function superFoldItem<From extends Phase, To extends Phase>(
+  item: Item<From>,
+  folder: Folder<From, To>
+): Item<To> {
   switch (item.kind) {
     case "function": {
       const args = item.node.params.map(({ name, type, span }) => ({
@@ -550,7 +585,7 @@ export function superFoldItem(item: Item, folder: Folder): Item {
       };
     }
     case "mod": {
-      let kind: ModItemKind;
+      let kind: ModItemKind<To>;
       const { modKind: itemKind } = item.node;
       switch (itemKind.kind) {
         case "inline":
@@ -576,7 +611,10 @@ export function superFoldItem(item: Item, folder: Folder): Item {
   }
 }
 
-export function superFoldExpr(expr: Expr, folder: Folder): Expr {
+export function superFoldExpr<From extends Phase, To extends Phase>(
+  expr: Expr<From>,
+  folder: Folder<From, To>
+): Expr<To> {
   const span = expr.span;
   switch (expr.kind) {
     case "empty": {
@@ -687,7 +725,10 @@ export function superFoldExpr(expr: Expr, folder: Folder): Expr {
   }
 }
 
-export function superFoldType(type: Type, folder: Folder): Type {
+export function superFoldType<From extends Phase, To extends Phase>(
+  type: Type<From>,
+  folder: Folder<From, To>
+): Type<To> {
   const span = type.span;
   switch (type.kind) {
     case "ident": {

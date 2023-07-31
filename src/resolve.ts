@@ -1,18 +1,21 @@
 import {
   Ast,
   BUILTINS,
+  Built,
   BuiltinName,
-  DEFAULT_FOLDER,
   Expr,
   Folder,
-  Identifier,
+  Ident,
   Item,
   ItemId,
   LocalInfo,
   ModItem,
   Resolution,
+  Resolved,
+  mkDefaultFolder,
   superFoldExpr,
   superFoldItem,
+  superFoldType,
 } from "./ast";
 import { CompilerError, spanMerge, todo } from "./error";
 import { unwrap } from "./utils";
@@ -20,13 +23,14 @@ import { unwrap } from "./utils";
 const BUILTIN_SET = new Set<string>(BUILTINS);
 
 type Context = {
-  ast: Ast;
+  ast: Ast<Built>;
   modContentsCache: Map<ItemId, Map<string, ItemId>>;
+  newItemsById: Map<ItemId, Item<Resolved>>;
 };
 
 function resolveModItem(
   cx: Context,
-  mod: ModItem,
+  mod: ModItem<Built>,
   modId: ItemId,
   name: string
 ): ItemId | undefined {
@@ -49,18 +53,26 @@ function resolveModItem(
   }
 }
 
-export function resolve(ast: Ast): Ast {
-  const cx: Context = { ast, modContentsCache: new Map() };
+export function resolve(ast: Ast<Built>): Ast<Resolved> {
+  const cx: Context = {
+    ast,
+    modContentsCache: new Map(),
+    newItemsById: new Map(),
+  };
 
   const rootItems = resolveModule(cx, [ast.packageName], ast.rootItems);
-  return { ...ast, rootItems };
+  return {
+    itemsById: cx.newItemsById,
+    rootItems,
+    packageName: ast.packageName,
+  };
 }
 
 function resolveModule(
   cx: Context,
   modName: string[],
-  contents: Item[]
-): Item[] {
+  contents: Item<Built>[]
+): Item<Resolved>[] {
   const items = new Map<string, number>();
 
   contents.forEach((item) => {
@@ -85,7 +97,7 @@ function resolveModule(
     }
   };
 
-  const resolveIdent = (ident: Identifier): Resolution => {
+  const resolveIdent = (ident: Ident): Resolution => {
     const lastIdx = scopes.length - 1;
     for (let i = lastIdx; i >= 0; i--) {
       const candidate = scopes[i];
@@ -115,11 +127,8 @@ function resolveModule(
 
   const blockLocals: LocalInfo[][] = [];
 
-  const resolver: Folder = {
-    ...DEFAULT_FOLDER,
-    ast() {
-      return cx.ast;
-    },
+  const resolver: Folder<Built, Resolved> = {
+    ...mkDefaultFolder(),
     itemInner(item) {
       const defPath = [...modName, item.node.name];
 
@@ -178,7 +187,9 @@ function resolveModule(
           const prevScopeLength = scopes.length;
           blockLocals.push([]);
 
-          const exprs = expr.exprs.map<Expr>((inner) => this.expr(inner));
+          const exprs = expr.exprs.map<Expr<Resolved>>((inner) =>
+            this.expr(inner)
+          );
 
           scopes.length = prevScopeLength;
           const locals = blockLocals.pop();
@@ -263,6 +274,10 @@ function resolveModule(
       const res = resolveIdent(ident);
       return { name: ident.name, span: ident.span, res };
     },
+    type(type) {
+      return superFoldType(type, this);
+    },
+    newItemsById: cx.newItemsById,
   };
 
   return contents.map((item) => resolver.item(item));

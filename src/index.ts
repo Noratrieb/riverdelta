@@ -9,6 +9,7 @@ import { writeModuleWatToString } from "./wasm/wat";
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
+import { Ast, Built, Typecked } from "./ast";
 
 const INPUT = `
 function main() = (
@@ -55,7 +56,7 @@ function main() {
     console.log("-----TOKENS------------");
     console.log(tokens);
 
-    const ast = parse(packageName, tokens);
+    const ast: Ast<Built> = parse(packageName, tokens);
     console.log("-----AST---------------");
 
     console.dir(ast.rootItems, { depth: 50 });
@@ -70,7 +71,7 @@ function main() {
     console.log(resolvedPrinted);
 
     console.log("-----AST typecked------");
-    const typecked = typeck(resolved);
+    const typecked: Ast<Typecked> = typeck(resolved);
     const typeckPrinted = printAst(typecked);
     console.log(typeckPrinted);
 

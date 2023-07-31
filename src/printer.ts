@@ -1,8 +1,9 @@
 import {
+  AnyPhase,
   Ast,
   Expr,
   FunctionDef,
-  Identifier,
+  IdentWithRes,
   ImportDef,
   Item,
   ModItem,
@@ -14,7 +15,7 @@ import {
   tyIsUnit,
 } from "./ast";
 
-export function printAst(ast: Ast): string {
+export function printAst(ast: Ast<AnyPhase>): string {
   return ast.rootItems.map(printItem).join("\n");
 }
 
@@ -22,7 +23,7 @@ function printStringLiteral(lit: StringLiteral): string {
   return `"${lit.value.replace("\n", "\\n")}"`;
 }
 
-function printItem(item: Item): string {
+function printItem(item: Item<AnyPhase>): string {
   const id = `/*${item.id}*/ `;
 
   switch (item.kind) {
@@ -41,7 +42,7 @@ function printItem(item: Item): string {
   }
 }
 
-function printFunction(func: FunctionDef): string {
+function printFunction(func: FunctionDef<AnyPhase>): string {
   const args = func.params
     .map(({ name, type }) => `${name}: ${printType(type)}`)
     .join(", ");
@@ -49,7 +50,7 @@ function printFunction(func: FunctionDef): string {
   return `function ${func.name}(${args})${ret} = ${printExpr(func.body, 0)};`;
 }
 
-function printTypeDef(type: TypeDef): string {
+function printTypeDef(type: TypeDef<AnyPhase>): string {
   const fields = type.fields.map(
     ({ name, type }) => `${ind(1)}${name.name}: ${printType(type)},`
   );
@@ -60,7 +61,7 @@ function printTypeDef(type: TypeDef): string {
   return `type ${type.name} = ${fieldPart};`;
 }
 
-function printImportDef(def: ImportDef): string {
+function printImportDef(def: ImportDef<AnyPhase>): string {
   const args = def.params
     .map(({ name, type }) => `${name}: ${printType(type)}`)
     .join(", ");
@@ -71,7 +72,7 @@ function printImportDef(def: ImportDef): string {
   )}(${args})${ret};`;
 }
 
-function printMod(mod: ModItem): string {
+function printMod(mod: ModItem<AnyPhase>): string {
   switch (mod.modKind.kind) {
     case "inline":
       return `mod ${mod.name} (\n${mod.modKind.contents
@@ -82,7 +83,7 @@ function printMod(mod: ModItem): string {
   }
 }
 
-function printExpr(expr: Expr, indent: number): string {
+function printExpr(expr: Expr<AnyPhase>, indent: number): string {
   switch (expr.kind) {
     case "empty": {
       return "";
@@ -192,7 +193,7 @@ function printExpr(expr: Expr, indent: number): string {
   }
 }
 
-function printType(type: Type): string {
+function printType(type: Type<AnyPhase>): string {
   switch (type.kind) {
     case "ident":
       return printIdent(type.value);
@@ -217,8 +218,8 @@ function printRes(res: Resolution): string {
   }
 }
 
-function printIdent(ident: Identifier): string {
-  const res = ident.res ? printRes(ident.res) : "";
+function printIdent(ident: IdentWithRes<AnyPhase>): string {
+  const res = "res" in ident ? printRes(ident.res) : "";
   return `${ident.name}${res}`;
 }
 

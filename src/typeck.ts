@@ -2,19 +2,21 @@ import {
   Ast,
   BuiltinName,
   COMPARISON_KINDS,
-  DEFAULT_FOLDER,
+  mkDefaultFolder,
   EQUALITY_KINDS,
   Expr,
   ExprBinary,
   ExprUnary,
   foldAst,
   Folder,
-  Identifier,
+  Ident,
+  IdentWithRes,
   ItemId,
   LOGICAL_KINDS,
   LoopId,
   ModItemKind,
   Resolution,
+  Resolved,
   Ty,
   TY_BOOL,
   TY_I32,
@@ -25,7 +27,9 @@ import {
   TyFn,
   tyIsUnit,
   Type,
+  Typecked,
   TyStruct,
+  Item,
 } from "./ast";
 import { CompilerError, Span } from "./error";
 import { printTy } from "./printer";
@@ -84,8 +88,8 @@ function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
 
 // TODO: Cleanup, maybe get the ident switch into this function because typeOfItem is unused.
 function lowerAstTyBase(
-  type: Type,
-  lowerIdentTy: (ident: Identifier) => Ty,
+  type: Type<Resolved>,
+  lowerIdentTy: (ident: IdentWithRes<Resolved>) => Ty,
   typeOfItem: (index: number, cause: Span) => Ty
 ): Ty {
   switch (type.kind) {
@@ -112,7 +116,7 @@ function lowerAstTyBase(
   }
 }
 
-export function typeck(ast: Ast): Ast {
+export function typeck(ast: Ast<Resolved>): Ast<Typecked> {
   const itemTys = new Map<number, Ty | null>();
   function typeOfItem(index: ItemId, cause: Span): Ty {
     const item = unwrap(ast.itemsById.get(index));
@@ -165,11 +169,11 @@ export function typeck(ast: Ast): Ast {
     }
   }
 
-  function lowerAstTy(type: Type): Ty {
+  function lowerAstTy(type: Type<Resolved>): Ty {
     return lowerAstTyBase(
       type,
       (ident) => {
-        const res = ident.res!;
+        const res = ident.res;
         switch (res.kind) {
           case "local": {
             throw new Error("Item type cannot refer to local variable");
@@ -186,12 +190,9 @@ export function typeck(ast: Ast): Ast {
     );
   }
 
-  const checker: Folder = {
-    ...DEFAULT_FOLDER,
-    ast() {
-      return ast;
-    },
-    itemInner(item) {
+  const checker: Folder<Resolved, Typecked> = {
+    ...mkDefaultFolder(),
+    itemInner(item: Item<Resolved>): Item<Typecked> {
       switch (item.kind) {
         case "function": {
           const fnTy = typeOfItem(item.id, item.span) as TyFn;
@@ -298,7 +299,7 @@ export function typeck(ast: Ast): Ast {
         case "mod": {
           switch (item.node.modKind.kind) {
             case "inline": {
-              const modKind: ModItemKind = {
+              const modKind: ModItemKind<Typecked> = {
                 kind: "inline",
                 contents: item.node.modKind.contents.map((item) =>
                   this.item(item)
@@ -322,6 +323,15 @@ export function typeck(ast: Ast): Ast {
           }
         }
       }
+    },
+    expr(_expr) {
+      throw new Error("expressions need to be handled in checkBody");
+    },
+    ident(ident) {
+      return ident;
+    },
+    type(_type) {
+      throw new Error("all types should be typechecked manually");
     },
   };
 
@@ -518,10 +528,10 @@ export class InferContext {
 }
 
 export function checkBody(
-  body: Expr,
+  body: Expr<Resolved>,
   fnTy: TyFn,
   typeOfItem: (index: number, cause: Span) => Ty
-): Expr {
+): Expr<Typecked> {
   const localTys = [...fnTy.params];
   const loopState: { hasBreak: boolean; loopId: LoopId }[] = [];
 
@@ -541,11 +551,11 @@ export function checkBody(
     }
   }
 
-  function lowerAstTy(type: Type): Ty {
+  function lowerAstTy(type: Type<Resolved>): Ty {
     return lowerAstTyBase(
       type,
       (ident) => {
-        const res = ident.res!;
+        const res = ident.res;
         switch (res.kind) {
           case "local": {
             const idx = localTys.length - 1 - res.index;
@@ -562,8 +572,8 @@ export function checkBody(
     );
   }
 
-  const checker: Folder = {
-    ...DEFAULT_FOLDER,
+  const checker: Folder<Resolved, Typecked> = {
+    ...mkDefaultFolder(),
     expr(expr) {
       switch (expr.kind) {
         case "empty": {
@@ -584,7 +594,7 @@ export function checkBody(
 
           expr.local!.ty = bindingTy;
 
-          const type: Type | undefined = loweredBindingTy && {
+          const type: Type<Typecked> | undefined = loweredBindingTy && {
             ...expr.type!,
             ty: loweredBindingTy,
           };
@@ -606,7 +616,7 @@ export function checkBody(
 
           switch (lhs.kind) {
             case "ident":
-              if (lhs.value.res!.kind !== "local") {
+              if (lhs.value.res.kind !== "local") {
                 throw new CompilerError("cannot assign to items", expr.span);
               }
               break;
@@ -664,7 +674,7 @@ export function checkBody(
           return { ...expr, ty };
         }
         case "ident": {
-          const ty = typeOf(expr.value.res!, expr.value.span);
+          const ty = typeOf(expr.value.res, expr.value.span);
 
           return { ...expr, ty };
         }
@@ -842,12 +852,11 @@ export function checkBody(
           };
         }
         case "structLiteral": {
-          const fields = expr.fields.map<[Identifier, Expr]>(([name, expr]) => [
-            name,
-            this.expr(expr),
-          ]);
+          const fields = expr.fields.map<[Ident, Expr<Typecked>]>(
+            ([name, expr]) => [name, this.expr(expr)]
+          );
 
-          const structTy = typeOf(expr.name.res!, expr.name.span);
+          const structTy = typeOf(expr.name.res, expr.name.span);
 
           if (structTy.kind !== "struct") {
             throw new CompilerError(
@@ -897,6 +906,15 @@ export function checkBody(
         }
       }
     },
+    itemInner(_item) {
+      throw new Error("cannot deal with items inside body");
+    },
+    ident(ident) {
+      return ident;
+    },
+    type(_type) {
+      throw new Error("all types in the body should be handled elsewhere");
+    },
   };
 
   const checked = checker.expr(body);
@@ -912,8 +930,8 @@ export function checkBody(
     return resTy;
   };
 
-  const resolver: Folder = {
-    ...DEFAULT_FOLDER,
+  const resolver: Folder<Typecked, Typecked> = {
+    ...mkDefaultFolder(),
     expr(expr) {
       const ty = resolveTy(expr.ty!, expr.span);
 
@@ -925,6 +943,13 @@ export function checkBody(
 
       return { ...expr, ty };
     },
+    type(type) {
+      const ty = resolveTy(type.ty!, type.span);
+      return { ...type, ty };
+    },
+    ident(ident) {
+      return ident;
+    },
   };
 
   const resolved = resolver.expr(checked);
@@ -932,7 +957,9 @@ export function checkBody(
   return resolved;
 }
 
-function checkBinary(expr: Expr & ExprBinary): Expr {
+function checkBinary(
+  expr: Expr<Typecked> & ExprBinary<Typecked>
+): Expr<Typecked> {
   const lhsTy = expr.lhs.ty!;
   const rhsTy = expr.rhs.ty!;
 
@@ -973,7 +1000,9 @@ function checkBinary(expr: Expr & ExprBinary): Expr {
   );
 }
 
-function checkUnary(expr: Expr & ExprUnary): Expr {
+function checkUnary(
+  expr: Expr<Typecked> & ExprUnary<Typecked>
+): Expr<Typecked> {
   const rhsTy = expr.rhs.ty!;
 
   if (
