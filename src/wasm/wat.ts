@@ -215,7 +215,7 @@ function printBlockType(type: Blocktype, f: FmtCtx) {
 }
 
 function printMemarg(arg: MemArg, f: FmtCtx) {
-  if (arg.offset === undefined || arg.offset === 0) {
+  if (arg.offset !== undefined && arg.offset !== 0) {
     f.word(`offset=${arg.offset}`);
   }
   if (arg.align !== undefined) {
