@@ -272,6 +272,19 @@ export function tokenize(input: string): Token[] {
   return tokens;
 }
 
+export function isValidIdent(ident: string): boolean {
+  if (!isIdentStart(ident[0])) {
+    return false;
+  }
+  for (let i = 1; i < ident.length; i++) {
+    const char = ident[i];
+    if (!isIdentContinue(char)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function isIdentStart(char: string): boolean {
   return (
     (char <= "Z" && char >= "A") || (char <= "z" && char >= "a") || char === "_"

@@ -26,19 +26,21 @@ import {
 
 const identity = (s: string) => s;
 
-class Formatter {
+class FmtCtx {
   print: (chunk: string) => void;
   indentation: number;
   wordsInSexpr: number[];
   freshLinebreak: boolean;
   color: boolean;
+  mod: Module;
 
-  constructor(print: (chunk: string) => void, color = true) {
+  constructor(print: (chunk: string) => void, mod: Module, color = true) {
     this.print = print;
     this.indentation = 0;
     this.wordsInSexpr = [];
     this.freshLinebreak = false;
     this.color = color;
+    this.mod = mod;
   }
 
   linebreak() {
@@ -103,6 +105,10 @@ class Formatter {
     this.wordsInSexpr[last]++;
   }
 
+  comment(content: string | number) {
+    this.word(`(;${content};)`, chalk.gray);
+  }
+
   startSexpr() {
     this.word("(");
     this.wordsInSexpr.push(0);
@@ -121,21 +127,18 @@ class Formatter {
 export function writeModuleWatToString(module: Module, color = false): string {
   const parts: string[] = [];
   const writer = (s: string) => parts.push(s);
-  printModule(module, new Formatter(writer, color));
+  printModule(module, new FmtCtx(writer, module, color));
   return parts.join("");
 }
 
-export function writeModuleWat(module: Module, f: Formatter) {
-  printModule(module, f);
-}
 // base
 
-function printString(s: string, f: Formatter) {
+function printString(s: string, f: FmtCtx) {
   // TODO: escaping
   f.word(`"${s}"`);
 }
 
-function printBinaryString(buf: Uint8Array, f: Formatter) {
+function printBinaryString(buf: Uint8Array, f: FmtCtx) {
   const parts: string[] = [];
   for (let i = 0; i < buf.length; i++) {
     const byte = buf[i];
@@ -151,7 +154,7 @@ function printBinaryString(buf: Uint8Array, f: Formatter) {
   f.word(`"${parts.join("")}"`);
 }
 
-function printId(id: string | undefined, f: Formatter) {
+function printId(id: string | undefined, f: FmtCtx) {
   if (id) {
     f.word(`$${id}`);
   }
@@ -159,11 +162,11 @@ function printId(id: string | undefined, f: Formatter) {
 
 // types
 
-function printValType(type: ValType, f: Formatter) {
+function printValType(type: ValType, f: FmtCtx) {
   f.type(type);
 }
 
-function printFuncType(type: FuncType, f: Formatter) {
+function printFuncType(type: FuncType, f: FmtCtx) {
   f.sexpr(() => {
     f.keyword("func");
     f.sexpr(() => {
@@ -177,17 +180,17 @@ function printFuncType(type: FuncType, f: Formatter) {
   });
 }
 
-function printLimits(limits: Limits, f: Formatter) {
+function printLimits(limits: Limits, f: FmtCtx) {
   f.word(limits.min);
   f.word(limits.max);
 }
 
-function printTableType(type: TableType, f: Formatter) {
+function printTableType(type: TableType, f: FmtCtx) {
   printLimits(type.limits, f);
   printValType(type.reftype, f);
 }
 
-function printGlobalType(type: GlobalType, f: Formatter) {
+function printGlobalType(type: GlobalType, f: FmtCtx) {
   if (type.mut === "const") {
     printValType(type.type, f);
   } else {
@@ -200,7 +203,7 @@ function printGlobalType(type: GlobalType, f: Formatter) {
 
 // instrs
 
-function printBlockType(type: Blocktype, f: Formatter) {
+function printBlockType(type: Blocktype, f: FmtCtx) {
   f.sexpr(() => {
     f.keyword("type");
     if (type.kind === "typeidx") {
@@ -211,7 +214,7 @@ function printBlockType(type: Blocktype, f: Formatter) {
   });
 }
 
-function printMemarg(arg: MemArg, f: Formatter) {
+function printMemarg(arg: MemArg, f: FmtCtx) {
   if (arg.offset /*0->false*/) {
     f.word(`offset=${arg.offset}`);
   }
@@ -225,7 +228,7 @@ function printMemarg(arg: MemArg, f: Formatter) {
  * Start: indented start of first instr
  * End: start of next line
  */
-function printInstrBlock(instrs: Instr[], f: Formatter) {
+function printInstrBlock(instrs: Instr[], f: FmtCtx) {
   instrs.forEach((nested, i) => {
     printInstr(nested, f);
     if (i !== instrs.length - 1) {
@@ -235,7 +238,7 @@ function printInstrBlock(instrs: Instr[], f: Formatter) {
   f.breakDedent();
 }
 
-function printInstr(instr: Instr, f: Formatter) {
+function printInstr(instr: Instr, f: FmtCtx) {
   switch (instr.kind) {
     case "block":
     case "loop":
@@ -430,10 +433,15 @@ function printInstr(instr: Instr, f: Formatter) {
       instr.labels.forEach((label) => f.word(label));
       f.word(instr.label);
       break;
-    case "call":
+    case "call": {
       f.controlFlow(instr.kind);
       f.word(instr.func);
+      const name = f.mod.funcs[instr.func]?._name;
+      if (name) {
+        f.comment(name);
+      }
       break;
+    }
     case "call_indirect":
       f.controlFlow(instr.kind);
       f.word(instr.table);
@@ -504,14 +512,14 @@ function printInstr(instr: Instr, f: Formatter) {
 
 // modules
 
-function printType(type: FuncType, f: Formatter) {
+function printType(type: FuncType, f: FmtCtx) {
   f.sexpr(() => {
     f.keyword("type");
     printFuncType(type, f);
   });
 }
 
-function printImport(import_: Import, f: Formatter) {
+function printImport(import_: Import, f: FmtCtx) {
   f.sexpr(() => {
     f.keyword("import");
     printString(import_.module, f);
@@ -541,12 +549,12 @@ function printImport(import_: Import, f: Formatter) {
   });
 }
 
-function printFunction(func: Func, idx: number, f: Formatter) {
+function printFunction(func: Func, idx: number, f: FmtCtx) {
   f.sexpr(() => {
     f.keyword("func");
     printId(func._name, f);
 
-    f.word(`(;${idx};)`, chalk.gray);
+    f.comment(idx);
 
     f.sexpr(() => {
       f.keyword("type");
@@ -571,7 +579,7 @@ function printFunction(func: Func, idx: number, f: Formatter) {
   });
 }
 
-function printTable(table: Table, f: Formatter) {
+function printTable(table: Table, f: FmtCtx) {
   f.sexpr(() => {
     f.keyword("table");
     printId(table._name, f);
@@ -579,7 +587,7 @@ function printTable(table: Table, f: Formatter) {
   });
 }
 
-function printMem(mem: Mem, f: Formatter) {
+function printMem(mem: Mem, f: FmtCtx) {
   f.sexpr(() => {
     f.keyword("memory");
     printId(mem._name, f);
@@ -588,7 +596,7 @@ function printMem(mem: Mem, f: Formatter) {
   });
 }
 
-function printGlobal(global: Global, f: Formatter) {
+function printGlobal(global: Global, f: FmtCtx) {
   f.sexpr(() => {
     f.keyword("global");
     printId(global._name, f);
@@ -600,7 +608,7 @@ function printGlobal(global: Global, f: Formatter) {
   });
 }
 
-function printExport(export_: Export, f: Formatter) {
+function printExport(export_: Export, f: FmtCtx) {
   const desc = export_.desc;
 
   f.sexpr(() => {
@@ -614,18 +622,18 @@ function printExport(export_: Export, f: Formatter) {
   });
 }
 
-function printStart(start: Start, f: Formatter) {
+function printStart(start: Start, f: FmtCtx) {
   f.sexpr(() => {
     f.keyword("start");
     f.word(start.func);
   });
 }
 
-function printElem(_elem: Elem, f: Formatter) {
+function printElem(_elem: Elem, f: FmtCtx) {
   todo();
 }
 
-function printData(data: Data, f: Formatter) {
+function printData(data: Data, f: FmtCtx) {
   let mode = data.mode;
 
   f.sexpr(() => {
@@ -656,7 +664,7 @@ function printData(data: Data, f: Formatter) {
   });
 }
 
-function printModule(module: Module, f: Formatter) {
+function printModule(module: Module, f: FmtCtx) {
   f.sexpr(() => {
     f.keyword("module");
     printId(module._name, f);

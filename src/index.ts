@@ -1,5 +1,5 @@
 import { withErrorHandler } from "./error";
-import { tokenize } from "./lexer";
+import { isValidIdent, tokenize } from "./lexer";
 import { lower as lowerToWasm } from "./lower";
 import { parse } from "./parser";
 import { printAst } from "./printer";
@@ -7,27 +7,49 @@ import { resolve } from "./resolve";
 import { typeck } from "./typeck";
 import { writeModuleWatToString } from "./wasm/wat";
 import fs from "fs";
+import path from "path";
 import { exec } from "child_process";
 
 const INPUT = `
 function main() = (
-  owo.uwu.meow();
+  owo.uwu.main();
+  owo.owo();
 );
 
 mod owo (
   mod uwu (
-    function meow() =;
+    function main() =;
   );
+  function owo() = ;
 );
 `;
 
 function main() {
   let input: string;
+  let packageName: string;
   if (process.argv.length > 2) {
-    input = fs.readFileSync(process.argv[2], { encoding: "utf-8" });
+    const filename = process.argv[2];
+    if (path.extname(filename) !== ".nil") {
+      console.error(
+        `error: filename must have \`.nil\` extension: \`${filename}\``
+      );
+      process.exit(1);
+    }
+
+    input = fs.readFileSync(filename, { encoding: "utf-8" });
+    packageName = path.basename(filename, ".nil");
   } else {
     input = INPUT;
+    packageName = "test";
   }
+
+  if (!isValidIdent(packageName)) {
+    console.error(`error: package name \`${packageName}\` is not a valid identifer`);
+    process.exit(1);
+  }
+
+  console.log(`package name: '${packageName}'`);
+  
 
   withErrorHandler(input, () => {
     const start = Date.now();
@@ -36,7 +58,7 @@ function main() {
     console.log("-----TOKENS------------");
     console.log(tokens);
 
-    const ast = parse(tokens);
+    const ast = parse(packageName, tokens);
     console.log("-----AST---------------");
 
     console.dir(ast.rootItems, { depth: 50 });

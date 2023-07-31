@@ -12,7 +12,7 @@ import {
   TyTuple,
   varUnreachable,
 } from "./ast";
-import { encodeUtf8, unwrap } from "./utils";
+import { ComplexMap, encodeUtf8, unwrap } from "./utils";
 import * as wasm from "./wasm/defs";
 
 const USIZE: wasm.ValType = "i32";
@@ -29,43 +29,37 @@ type Relocation = {
   instr: wasm.Instr & { func: wasm.FuncIdx };
 } & { res: Resolution };
 
-type StringifiedMap<K, V> = { _map: Map<string, V> };
-
-function setMap<K, V>(map: StringifiedMap<K, V>, key: K, value: V) {
-  map._map.set(JSON.stringify(key), value);
-}
-
-function getMap<K, V>(map: StringifiedMap<K, V>, key: K): V | undefined {
-  return map._map.get(JSON.stringify(key));
-}
-
 type FuncOrImport =
   | { kind: "func"; idx: wasm.FuncIdx }
   | { kind: "import"; idx: number };
 
 export type Context = {
   mod: wasm.Module;
-  funcTypes: StringifiedMap<wasm.FuncType, wasm.TypeIdx>;
+  funcTypes: ComplexMap<wasm.FuncType, wasm.TypeIdx>;
   reservedHeapMemoryStart: number;
-  funcIndices: StringifiedMap<Resolution, FuncOrImport>;
+  funcIndices: ComplexMap<Resolution, FuncOrImport>;
   ast: Ast;
   relocations: Relocation[];
 };
 
+function mangleDefPath(defPath: string[]): string {
+  return `nil__${defPath.map(escapeIdentName).join("__")}`;
+}
+
 function escapeIdentName(name: string): string {
   // This allows the implementation to use 2 leading underscores
-  // for any names and it will not conflict.
-  return name.startsWith("__") ? `_${name}` : name;
+  // to separate ident parts of in a loading position and avoid conflicts.
+  return name.replace(/__/g, "___");
 }
 
 function internFuncType(cx: Context, type: wasm.FuncType): wasm.TypeIdx {
-  const existing = getMap(cx.funcTypes, type);
+  const existing = cx.funcTypes.get(type);
   if (existing !== undefined) {
     return existing;
   }
   const idx = cx.mod.types.length;
   cx.mod.types.push(type);
-  setMap(cx.funcTypes, type, idx);
+  cx.funcTypes.set(type, idx);
   return idx;
 }
 
@@ -121,25 +115,34 @@ export function lower(ast: Ast): wasm.Module {
 
   const cx: Context = {
     mod,
-    funcTypes: { _map: new Map() },
-    funcIndices: { _map: new Map() },
+    funcTypes: new ComplexMap(),
+    funcIndices: new ComplexMap(),
     reservedHeapMemoryStart: 0,
     ast,
     relocations: [],
   };
 
-  ast.rootItems.forEach((item) => {
-    switch (item.kind) {
-      case "function": {
-        lowerFunc(cx, item, item.node);
-        break;
+  function lowerMod(items: Item[]) {
+    items.forEach((item) => {
+      switch (item.kind) {
+        case "function": {
+          lowerFunc(cx, item, item.node);
+          break;
+        }
+        case "import": {
+          lowerImport(cx, item, item.node);
+          break;
+        }
+        case "mod": {
+          if (item.node.modKind.kind === "inline") {
+            lowerMod(item.node.modKind.contents);
+          }
+        }
       }
-      case "import": {
-        lowerImport(cx, item, item.node);
-        break;
-      }
-    }
-  });
+    });
+  }
+
+  lowerMod(ast.rootItems);
 
   const HEAP_ALIGN = 0x08;
   cx.reservedHeapMemoryStart =
@@ -154,7 +157,7 @@ export function lower(ast: Ast): wasm.Module {
   cx.relocations.forEach((rel) => {
     switch (rel.kind) {
       case "funccall": {
-        const idx = getMap<Resolution, FuncOrImport>(cx.funcIndices, rel.res);
+        const idx = cx.funcIndices.get(rel.res);
         if (idx === undefined) {
           throw new Error(
             `no function found for relocation '${JSON.stringify(rel.res)}'`
@@ -193,11 +196,7 @@ function lowerImport(cx: Context, item: Item, def: ImportDef) {
     });
   }
 
-  setMap<Resolution, FuncOrImport>(
-    cx.funcIndices,
-    { kind: "item", id: item.id },
-    { kind: "import", idx }
-  );
+  cx.funcIndices.set({ kind: "item", id: item.id }, { kind: "import", idx });
 }
 
 type FuncContext = {
@@ -223,7 +222,7 @@ function lowerFunc(cx: Context, item: Item, func: FunctionDef) {
   const type = internFuncType(cx, wasmType);
 
   const wasmFunc: wasm.Func = {
-    _name: escapeIdentName(func.name),
+    _name: mangleDefPath(item.defPath!),
     type,
     locals: [],
     body: [],
@@ -244,8 +243,8 @@ function lowerFunc(cx: Context, item: Item, func: FunctionDef) {
 
   const idx = fcx.cx.mod.funcs.length;
   fcx.cx.mod.funcs.push(wasmFunc);
-  setMap<Resolution, FuncOrImport>(
-    fcx.cx.funcIndices,
+
+  fcx.cx.funcIndices.set(
     { kind: "item", id: fcx.item.id },
     { kind: "func", idx }
   );
@@ -353,8 +352,10 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       }
       break;
     }
+    case "path":
     case "ident": {
-      const res = expr.value.res!;
+      const res = expr.kind === "ident" ? expr.value.res! : expr.res;
+
       switch (res.kind) {
         case "local": {
           const location =
@@ -381,9 +382,6 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       }
 
       break;
-    }
-    case "path": {
-      todo("path");
     }
     case "binary": {
       // By evaluating the LHS first, the RHS is on top, which
@@ -498,12 +496,15 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       break;
     }
     case "call": {
-      if (expr.lhs.kind !== "ident") {
+      if (expr.lhs.kind !== "ident" && expr.lhs.kind !== "path") {
         todo("non constant calls");
       }
 
-      if (expr.lhs.value.res!.kind === "builtin") {
-        switch (expr.lhs.value.res!.name) {
+      const res =
+        expr.lhs.kind === "ident" ? expr.lhs.value.res! : expr.lhs.res;
+
+      if (res.kind === "builtin") {
+        switch (res.name) {
           case "trap": {
             instrs.push({ kind: "unreachable" });
             break exprKind;
@@ -553,7 +554,7 @@ function lowerExpr(fcx: FuncContext, instrs: wasm.Instr[], expr: Expr) {
       fcx.cx.relocations.push({
         kind: "funccall",
         instr: callInstr,
-        res: expr.lhs.value.res!,
+        res,
       });
 
       expr.args.forEach((arg) => {
@@ -893,7 +894,7 @@ function addRt(cx: Context, ast: Ast) {
   const iovecArray = reserveMemory(8);
 
   const print: wasm.Func = {
-    _name: "___print",
+    _name: "nil__print",
     locals: [],
     type: internFuncType(cx, { params: [POINTER, USIZE], returns: [] }),
     body: [
@@ -917,8 +918,7 @@ function addRt(cx: Context, ast: Ast) {
   const printIdx = cx.mod.funcs.length;
   cx.mod.funcs.push(print);
 
-  setMap(
-    cx.funcIndices,
+  cx.funcIndices.set(
     { kind: "builtin", name: "print" },
     { kind: "func", idx: printIdx }
   );

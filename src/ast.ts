@@ -5,6 +5,7 @@ export type Ast = {
   rootItems: Item[];
   typeckResults?: TypeckResults;
   itemsById: Map<ItemId, Item>;
+  packageName: string;
 };
 
 export type Identifier = {
@@ -36,6 +37,7 @@ export type ItemKind =
 export type Item = ItemKind & {
   span: Span;
   id: ItemId;
+  defPath?: string[];
 };
 
 export type FunctionDef = {
@@ -493,6 +495,7 @@ export function foldAst(ast: Ast, folder: Folder): Ast {
     rootItems: ast.rootItems.map((item) => folder.item(item)),
     itemsById: ast.itemsById,
     typeckResults: ast.typeckResults,
+    packageName: ast.packageName,
   };
 }
 

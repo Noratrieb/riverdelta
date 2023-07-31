@@ -32,7 +32,7 @@ import { Ids } from "./utils";
 
 type Parser<T> = (t: Token[]) => [Token[], T];
 
-export function parse(t: Token[]): Ast {
+export function parse(packageName: string, t: Token[]): Ast {
   const items: Item[] = [];
 
   while (t.length > 0) {
@@ -41,7 +41,7 @@ export function parse(t: Token[]): Ast {
     items.push(item);
   }
 
-  const ast = assignIds(items);
+  const ast = buildAst(packageName, items);
 
   validateAst(ast);
 
@@ -711,13 +711,14 @@ function validateAst(ast: Ast) {
   foldAst(ast, validator);
 }
 
-function assignIds(rootItems: Item[]): Ast {
+function buildAst(packageName: string, rootItems: Item[]): Ast {
   const itemId = new Ids();
   const loopId = new Ids();
 
   const ast: Ast = {
     rootItems,
     itemsById: new Map(),
+    packageName,
   };
 
   const assigner: Folder = {

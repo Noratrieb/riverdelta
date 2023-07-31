@@ -16,3 +16,26 @@ export function unwrap<T>(value: T | undefined): T {
   }
   return value;
 }
+
+/**
+ * A `Map` that can have arbitrarily complex keys.
+ * It uses JSON+string equality instead of refernece equality.
+ */
+export class ComplexMap<K, V> {
+  inner: Map<string | number, V> = new Map();
+
+  public get(key: K): V | undefined {
+    return this.inner.get(this.mangleKey(key));
+  }
+
+  public set(key: K, value: V) {
+    this.inner.set(this.mangleKey(key), value);
+  }
+
+  private mangleKey(key: K): string | number {
+    if (typeof key === "string" || typeof key === "number") {
+      return key;
+    }
+    return JSON.stringify(key);
+  }
+}
