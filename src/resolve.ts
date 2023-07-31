@@ -18,6 +18,7 @@ import {
   superFoldType,
   ExternItem,
   Typecked,
+  findCrateItem,
 } from "./ast";
 import { CompilerError, Span, spanMerge } from "./error";
 import { ComplexMap, Ids, unwrap } from "./utils";
@@ -40,6 +41,13 @@ type Context = {
   crateId: Ids;
 };
 
+function findItem(cx: Context, id: ItemId): Item<Built> {
+  const crate = unwrap(
+    [cx.ast, ...cx.crates].find((crate) => crate.id === id.crateId)
+  );
+  return findCrateItem(crate, id);
+}
+
 function resolveModItem(
   cx: Context,
   mod: ModItem<Built> | ExternItem,
@@ -56,20 +64,14 @@ function resolveModItem(
   if ("contents" in mod) {
     contents = new Map(mod.contents.map((item) => [item.node.name, item.id]));
   } else {
-    console.log("resolve...");
-
     const [loadedCrate, itsDeps] = cx.crateLoader(
       item.node.name,
       item.span,
       cx.crateId,
       cx.crates
     );
-    console.log("hmm");
-
     cx.crates.push(loadedCrate);
     cx.crates.push(...itsDeps);
-
-    console.log(cx.crates);
 
     contents = new Map(
       loadedCrate.rootItems.map((item) => [item.node.name, item.id])
@@ -154,6 +156,13 @@ function resolveModule(
       return {
         kind: "item",
         id: item,
+      };
+    }
+
+    if (ident.name === cx.ast.packageName) {
+      return {
+        kind: "item",
+        id: new ItemId(cx.ast.id, 0),
       };
     }
 
@@ -271,7 +280,8 @@ function resolveModule(
               lhs.kind === "ident" ? [lhs.value.name] : lhs.segments;
 
             if (res.kind === "item") {
-              const module = unwrap(cx.ast.itemsById.get(res.id));
+              const module = findItem(cx, res.id);
+
               if (module.kind === "mod" || module.kind === "extern") {
                 if (typeof expr.field.value === "number") {
                   throw new CompilerError(

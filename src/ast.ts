@@ -1,6 +1,6 @@
-import { Span } from "./error";
+import { DUMMY_SPAN, Span } from "./error";
 import { LitIntType } from "./lexer";
-import { ComplexMap } from "./utils";
+import { ComplexMap, unwrap } from "./utils";
 
 export type Phase = {
   res: unknown;
@@ -430,6 +430,9 @@ export const BUILTINS = [
   "__i64_load",
   "__string_ptr",
   "__string_len",
+  "__memory_size",
+  "__memory_grow",
+  "__i32_extend_to_i64_u"
 ] as const;
 
 export type BuiltinName = (typeof BUILTINS)[number];
@@ -520,6 +523,29 @@ export const TY_NEVER: Ty = { kind: "never" };
 export type TypeckResults = {
   main: Resolution | undefined;
 };
+
+export function findCrateItem<P extends Phase>(
+  crate: Crate<P>,
+  id: ItemId
+): Item<P> {
+  if (id.crateId !== crate.id) {
+    throw new Error("trying to get item from the wrong crate");
+  }
+  if (id.itemIdx === 0) {
+    // Return a synthetic module representing the crate root.
+    return {
+      kind: "mod",
+      node: {
+        contents: crate.rootItems,
+        name: crate.packageName,
+      },
+      span: DUMMY_SPAN,
+      id,
+    };
+  }
+
+  return unwrap(crate.itemsById.get(id));
+}
 
 // folders
 

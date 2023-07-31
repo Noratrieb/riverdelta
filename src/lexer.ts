@@ -37,7 +37,8 @@ export type DatalessToken =
   | "=="
   | "<="
   | ">="
-  | "!=";
+  | "!="
+  | "end of file";
 
 export type TokenIdent = { kind: "identifier"; ident: string };
 
@@ -109,6 +110,9 @@ export function tokenize(input: string): Token[] {
           throw new CompilerError("unterminated block comment", span);
         }
       }
+      i++;
+      i++;
+      continue;
     }
 
     if (SINGLE_PUNCT.includes(next)) {

@@ -29,7 +29,7 @@ const EXAMPLE_MODULE: Module = {
           type: { kind: "typeidx", idx: 1 },
           instrs: [{ kind: "local.get", imm: 0 }],
         },
-        { kind: "i32.const", imm: 1 },
+        { kind: "i32.const", imm: 1n },
         { kind: "i32.add" },
       ],
     },
@@ -49,7 +49,7 @@ const EXAMPLE_MODULE: Module = {
   globals: [
     {
       type: { mut: "const", type: "i32" },
-      init: [{ kind: "i32.const", imm: 0 }],
+      init: [{ kind: "i32.const", imm: 0n }],
       _name: "globalling",
     },
   ],
@@ -70,7 +70,7 @@ const EXAMPLE_MODULE: Module = {
       mode: {
         kind: "active",
         memory: 0,
-        offset: [{ kind: "i32.const", imm: 0 }],
+        offset: [{ kind: "i32.const", imm: 0n }],
       },
       init: new Uint8Array(),
       _name: "very-active-data",
@@ -86,7 +86,7 @@ it("should print a Wasm module with the correct formatting", () => {
       (type (func (param i32) (result i32)))
       (type (func (param) (result i32)))
       (import "left-pad" "padLeft" (func (type 0)))
-      (func $addOne (type 0)
+      (func $addOne (;1;) (type 0)
         (local i32 i32)
         local.set 0
         block (type 1)

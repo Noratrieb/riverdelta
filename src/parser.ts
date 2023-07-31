@@ -31,7 +31,7 @@ import {
   ItemId,
   GlobalItem,
 } from "./ast";
-import { CompilerError, Span, spanMerge } from "./error";
+import { CompilerError, DUMMY_SPAN, EOF_SPAN, Span, spanMerge } from "./error";
 import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
 import { ComplexMap, ComplexSet, Ids } from "./utils";
 
@@ -165,7 +165,7 @@ function parseItem(t: Token[]): [Token[], Item<Parsed>] {
 
     const contents: Item<Parsed>[] = [];
 
-    while (next(t)[1].kind !== ")") {
+    while (peekKind(t) !== ")") {
       let item;
       [t, item] = parseItem(t);
 
@@ -287,13 +287,15 @@ function mkParserExprBinary(
     let lhs;
     [t, lhs] = lower(t);
 
-    const [, peek] = next(t);
-    if (kinds.includes(peek.kind)) {
-      [t] = next(t);
+    const peek = peekKind(t);
+    if (peek && kinds.includes(peek)) {
+      let tok;
+      [t, tok] = next(t);
       let rhs;
       [t, rhs] = parser(t);
       const span = spanMerge(lhs.span, rhs.span);
-      return [t, mkExpr(lhs, rhs, span, peek.kind)];
+
+      return [t, mkExpr(lhs, rhs, span, tok.kind)];
     }
 
     return [t, lhs];
@@ -326,17 +328,19 @@ const parseExprAssignment = mkParserExprBinary(
 );
 
 function parseExprUnary(t: Token[]): [Token[], Expr<Parsed>] {
-  const [, peak] = next(t);
-  if (peak.kind in UNARY_KINDS) {
+  const peek = peekKind(t);
+  if (peek && UNARY_KINDS.includes(peek as UnaryKind)) {
+    let tok: Token;
+    [t, tok] = expectNext(t, peek);
     let rhs;
     [t, rhs] = parseExprUnary(t);
     return [
       t,
       {
         kind: "unary",
-        unaryKind: peak.kind as UnaryKind,
+        unaryKind: tok.kind as UnaryKind,
         rhs,
-        span: peak.span,
+        span: tok.span,
       },
     ];
   }
@@ -347,7 +351,7 @@ function parseExprCall(t: Token[]): [Token[], Expr<Parsed>] {
   let lhs: Expr<Parsed>;
   [t, lhs] = parseExprAtom(t);
 
-  while (next(t)[1].kind === "(" || next(t)[1].kind === ".") {
+  while (peekKind(t) === "(" || peekKind(t) === ".") {
     let tok;
     [t, tok] = next(t);
 
@@ -402,7 +406,7 @@ function parseExprAtom(startT: Token[]): [Token[], Expr<Parsed>] {
     // It's a block.
     if (peek.kind === ";") {
       const exprs = [expr];
-      while (next(t)[1].kind !== ")") {
+      while (peekKind(t) !== ")") {
         [t] = expectNext(t, ";");
         [t, expr] = parseExpr(t);
         exprs.push(expr);
@@ -578,14 +582,14 @@ function parseType(t: Token[]): [Token[], Type<Parsed>] {
       // `()` is a the unit type, an empty tuple.
       // `(T)` is just `T`
       // `(T,)` is a tuple
-      if (next(t)[1]?.kind === ")") {
+      if (peekKind(t) === ")") {
         [t] = next(t);
         return [t, { kind: "tuple", elems: [], span }];
       }
       let head;
       [t, head] = parseType(t);
 
-      if (next(t)[1]?.kind === ")") {
+      if (peekKind(t) === ")") {
         [t] = next(t);
         // Just a type inside parens, not a tuple. `(T,)` is a tuple.
         return [t, head];
@@ -618,7 +622,7 @@ function parseCommaSeparatedList<R>(
 
   // () | (a) | (a,) | (a, b)
 
-  while (next(t)[1]?.kind !== terminator) {
+  while (peekKind(t) !== terminator) {
     let nextValue;
     [t, nextValue] = parser(t);
 
@@ -629,7 +633,7 @@ function parseCommaSeparatedList<R>(
     if (!comma) {
       // No comma? Fine, you don't like trailing commas.
       // But this better be the end.
-      if (next(t)[1]?.kind !== terminator) {
+      if (peekKind(t) !== terminator) {
         unexpectedToken(next(t)[1], `, or ${terminator}`);
       }
       break;
@@ -645,11 +649,14 @@ function eat<T extends BaseToken>(
   t: Token[],
   kind: T["kind"]
 ): [Token[], T | undefined] {
-  const [tnext, tok] = next(t);
-  if (tok.kind === kind) {
-    return [tnext, tok as unknown as T];
+  if (peekKind(t) === kind) {
+    return expectNext(t, kind);
   }
   return [t, undefined];
+}
+
+function peekKind(t: Token[]): Token["kind"] | undefined {
+  return maybeNextT(t)?.[1]?.kind;
 }
 
 function expectNext<T extends BaseToken>(
@@ -657,7 +664,13 @@ function expectNext<T extends BaseToken>(
   kind: T["kind"]
 ): [Token[], T & Token] {
   let tok;
-  [t, tok] = next(t);
+  [t, tok] = maybeNextT(t);
+  if (!tok) {
+    throw new CompilerError(
+      `expected \`${kind}\`, found end of file`,
+      EOF_SPAN
+    );
+  }
   if (tok.kind !== kind) {
     throw new CompilerError(
       `expected \`${kind}\`, found \`${tok.kind}\``,
@@ -670,10 +683,7 @@ function expectNext<T extends BaseToken>(
 function next(t: Token[]): [Token[], Token] {
   const [rest, next] = maybeNextT(t);
   if (!next) {
-    throw new CompilerError("unexpected end of file", {
-      start: Number.MAX_SAFE_INTEGER,
-      end: Number.MAX_SAFE_INTEGER,
-    });
+    throw new CompilerError("unexpected end of file", EOF_SPAN);
   }
   return [rest, next];
 }
@@ -757,6 +767,7 @@ function buildCrate(
   crateId: number
 ): Crate<Built> {
   const itemId = new Ids();
+  itemId.next(); // crate root ID
   const loopId = new Ids();
 
   const ast: Crate<Built> = {
@@ -789,5 +800,7 @@ function buildCrate(
     },
   };
 
-  return foldAst(ast, assigner);
+  const crate = foldAst(ast, assigner);
+
+  return crate;
 }

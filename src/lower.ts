@@ -13,6 +13,7 @@ import {
   TyFn,
   TyTuple,
   Typecked,
+  findCrateItem,
   varUnreachable,
 } from "./ast";
 import { printTy } from "./printer";
@@ -29,6 +30,8 @@ const STRING_ABI: ArgRetAbi = STRING_TYPES;
 const WASM_PAGE = 65536;
 
 const DUMMY_IDX = 9999999;
+
+const ALLOCATE_SYMBOL = "nil__std__rt__allocateItem";
 
 type RelocationKind =
   | {
@@ -86,7 +89,7 @@ function appendData(cx: Context, newData: Uint8Array): number {
       mode: {
         kind: "active",
         memory: 0,
-        offset: [{ kind: "i32.const", imm: 0 }],
+        offset: [{ kind: "i32.const", imm: 0n }],
       },
       _name: "staticdata",
     });
@@ -103,8 +106,9 @@ function appendData(cx: Context, newData: Uint8Array): number {
 }
 
 function findItem(cx: Context, id: ItemId): Item<Typecked> {
-  return unwrap(
-    unwrap(cx.crates.find((crate) => crate.id === id.crateId)).itemsById.get(id)
+  return findCrateItem(
+    unwrap(cx.crates.find((crate) => crate.id === id.crateId)),
+    id
   );
 }
 
@@ -271,7 +275,7 @@ function lowerGlobal(
 
   const init: wasm.Instr = {
     kind: `${valtype}.const`,
-    imm: def.init.value.value,
+    imm: BigInt(def.init.value.value),
   };
 
   cx.mod.globals.push({
@@ -299,6 +303,11 @@ type FnAbi = { params: ArgRetAbi[]; ret: ArgRetAbi };
 type ArgRetAbi = wasm.ValType[];
 
 type VarLocation = { localIdx: number; types: wasm.ValType[] };
+
+type StructLayout = {
+  size: number,
+  align: number,
+}
 
 function lowerFunc(
   cx: Context,
@@ -438,18 +447,18 @@ function lowerExpr(
           const utf8 = encodeUtf8(expr.value.value);
           const idx = appendData(fcx.cx, utf8);
 
-          instrs.push({ kind: "i32.const", imm: idx });
-          instrs.push({ kind: "i32.const", imm: utf8.length });
+          instrs.push({ kind: "i32.const", imm: BigInt(idx) });
+          instrs.push({ kind: "i32.const", imm: BigInt(utf8.length) });
 
           break;
         }
         case "int":
           switch (expr.value.type) {
             case "Int":
-              instrs.push({ kind: "i64.const", imm: expr.value.value });
+              instrs.push({ kind: "i64.const", imm: BigInt(expr.value.value) });
               break;
             case "I32":
-              instrs.push({ kind: "i32.const", imm: expr.value.value });
+              instrs.push({ kind: "i32.const", imm: BigInt(expr.value.value) });
               break;
           }
           break;
@@ -487,10 +496,10 @@ function lowerExpr(
         case "builtin":
           switch (res.name) {
             case "false":
-              instrs.push({ kind: "i32.const", imm: 0 });
+              instrs.push({ kind: "i32.const", imm: 0n });
               break;
             case "true":
-              instrs.push({ kind: "i32.const", imm: 1 });
+              instrs.push({ kind: "i32.const", imm: 1n });
               break;
             case "print":
               todo("print function");
@@ -603,11 +612,18 @@ function lowerExpr(
         case "!":
           if (ty.kind === "bool") {
             // `xor RHS, 1` flips the lowermost bit.
-            instrs.push({ kind: "i64.const", imm: 1 });
+            instrs.push({ kind: "i64.const", imm: 1n });
             instrs.push({ kind: "i64.xor" });
           } else if (ty.kind === "int") {
             // `xor RHS, -1` flips all bits.
-            todo("Thanks to JS, we cannot represent -1 i64 yet");
+            instrs.push({ kind: "i64.const", imm: -1n });
+            instrs.push({ kind: "i64.xor" });
+          } else if (ty.kind === "i32") {
+            // `xor RHS, -1` flips all bits.
+            instrs.push({ kind: "i32.const", imm: -1n });
+            instrs.push({ kind: "i32.xor" });
+          } else {
+            throw new Error("invalid type for !");
           }
           break;
         case "-":
@@ -621,36 +637,44 @@ function lowerExpr(
       }
 
       const res = expr.lhs.kind === "ident" ? expr.lhs.value.res : expr.lhs.res;
-
       if (res.kind === "builtin") {
+        const assertArgs = (n: number) => {
+          if (expr.args.length !== n) throw new Error("nope");
+        };
         switch (res.name) {
           case "trap": {
+            assertArgs(0);
             instrs.push({ kind: "unreachable" });
             break exprKind;
           }
           case "__i32_load": {
+            assertArgs(1);
             lowerExpr(fcx, instrs, expr.args[0]);
             instrs.push({ kind: "i64.load", imm: {} });
             break exprKind;
           }
           case "__i64_load": {
+            assertArgs(1);
             lowerExpr(fcx, instrs, expr.args[0]);
             instrs.push({ kind: "i64.load", imm: {} });
             break exprKind;
           }
           case "__i32_store": {
+            assertArgs(2);
             lowerExpr(fcx, instrs, expr.args[0]);
             lowerExpr(fcx, instrs, expr.args[1]);
             instrs.push({ kind: "i32.store", imm: {} });
             break exprKind;
           }
           case "__i64_store": {
+            assertArgs(3);
             lowerExpr(fcx, instrs, expr.args[0]);
             lowerExpr(fcx, instrs, expr.args[1]);
             instrs.push({ kind: "i64.store", imm: {} });
             break exprKind;
           }
           case "__string_ptr": {
+            assertArgs(1);
             lowerExpr(fcx, instrs, expr.args[0]);
             // ptr, len
             instrs.push({ kind: "drop" });
@@ -658,12 +682,30 @@ function lowerExpr(
             break exprKind;
           }
           case "__string_len": {
+            assertArgs(1);
             lowerExpr(fcx, instrs, expr.args[0]);
             // ptr, len
-            instrs.push({ kind: "i32.const", imm: 0 });
+            instrs.push({ kind: "i32.const", imm: 0n });
             // ptr, len, 0
             instrs.push({ kind: "select" });
             // len
+            break exprKind;
+          }
+          case "__memory_size": {
+            assertArgs(0);
+            instrs.push({ kind: "memory.size" });
+            break exprKind;
+          }
+          case "__memory_grow": {
+            assertArgs(1);
+            lowerExpr(fcx, instrs, expr.args[0]);
+            instrs.push({ kind: "memory.grow" });
+            break exprKind;
+          }
+          case "__i32_extend_to_i64_u": {
+            assertArgs(1);
+            lowerExpr(fcx, instrs, expr.args[0]);
+            instrs.push({ kind: "i64.extend_i32_u" });
             break exprKind;
           }
         }
@@ -1016,18 +1058,18 @@ function addRt(cx: Context, crates: Crate<Typecked>[]) {
     type: internFuncType(cx, { params: [POINTER, USIZE], returns: [] }),
     body: [
       // get the pointer and store it in the iovec
-      { kind: "i32.const", imm: iovecArray },
+      { kind: "i32.const", imm: BigInt(iovecArray) },
       { kind: "local.get", imm: 0 },
       { kind: "i32.store", imm: { offset: 0, align: 4 } },
       // get the length and store it in the iovec
-      { kind: "i32.const", imm: iovecArray + 4 },
+      { kind: "i32.const", imm: BigInt(iovecArray + 4) },
       { kind: "local.get", imm: 1 },
       { kind: "i32.store", imm: { offset: 0, align: 4 } },
       // now call stuff
-      { kind: "i32.const", imm: /*stdout*/ 1 },
-      { kind: "i32.const", imm: iovecArray },
-      { kind: "i32.const", imm: /*iovec len*/ 1 },
-      { kind: "i32.const", imm: /*out ptr*/ printReturnValue },
+      { kind: "i32.const", imm: /*stdout*/ 1n },
+      { kind: "i32.const", imm: BigInt(iovecArray) },
+      { kind: "i32.const", imm: /*iovec len*/ 1n },
+      { kind: "i32.const", imm: /*out ptr*/ BigInt(printReturnValue) },
       { kind: "call", func: 0 },
       { kind: "drop" },
     ],

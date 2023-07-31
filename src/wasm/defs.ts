@@ -4,7 +4,7 @@
 // Base types.
 
 export type u32 = number;
-export type u64 = number;
+export type u64 = bigint;
 export type f32 = number;
 export type f64 = number;
 export type VecByte = Uint8Array;
@@ -73,7 +73,7 @@ export type BitWidth = "32" | "64";
 export type Sign = "u" | "s";
 
 export type NumericInstr =
-  | { kind: "i32.const"; imm: u32 }
+  | { kind: "i32.const"; imm: bigint }
   | { kind: "i64.const"; imm: u64 }
   | { kind: "f32.const"; imm: f32 }
   | { kind: "f64.const"; imm: f64 }

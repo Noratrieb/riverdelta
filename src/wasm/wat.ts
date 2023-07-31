@@ -72,7 +72,7 @@ class FmtCtx {
     this.word(word, chalk.blue);
   }
 
-  type(word: string | number) {
+  type(word: string | number | bigint) {
     this.word(word, chalk.green);
   }
 
@@ -90,7 +90,10 @@ class FmtCtx {
     }
   }
 
-  word(word: string | number, color: (s: string) => string = identity) {
+  word(
+    word: string | number | bigint,
+    color: (s: string) => string = identity
+  ) {
     const last = this.wordsInSexpr.length - 1;
     if (this.wordsInSexpr[last] > 0 && !this.freshLinebreak) {
       // The first word hugs the left parenthesis.
@@ -436,9 +439,16 @@ function printInstr(instr: Instr, f: FmtCtx) {
     case "call": {
       f.controlFlow(instr.kind);
       f.word(instr.func);
-      const name = f.mod.funcs[instr.func]?._name;
-      if (name !== undefined) {
-        f.comment(name);
+      if (instr.func < f.mod.imports.length) {
+        const name = f.mod.imports[instr.func]?.name;
+        if (name !== undefined) {
+          f.comment(name);
+        }
+      } else {
+        const name = f.mod.funcs[instr.func - f.mod.imports.length]?._name;
+        if (name !== undefined) {
+          f.comment(name);
+        }
       }
       break;
     }

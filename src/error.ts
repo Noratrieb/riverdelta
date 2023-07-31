@@ -11,6 +11,7 @@ export function spanMerge(a: Span, b: Span): Span {
 }
 
 export const DUMMY_SPAN = { start: 0, end: 0 };
+export const EOF_SPAN = {start: Number.MAX_SAFE_INTEGER, end: Number.MAX_SAFE_INTEGER};
 
 export class CompilerError extends Error {
   msg: string;
@@ -59,7 +60,10 @@ function renderError(input: string, filename: string, e: CompilerError) {
   const startRelLine =
     e.span.start === Number.MAX_SAFE_INTEGER ? 0 : e.span.start - line.start;
 
-  const spanLength = min(e.span.end, line.end) - e.span.start;
+  const spanLength =
+    e.span.start === Number.MAX_SAFE_INTEGER
+      ? 1
+      : min(e.span.end, line.end) - e.span.start;
 
   console.error(
     `${" ".repeat(String(lineNo).length)}   ${" ".repeat(

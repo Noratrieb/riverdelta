@@ -13,11 +13,13 @@ import { Crate, Built, Typecked } from "./ast";
 import { Ids } from "./utils";
 
 const INPUT = `
-global HELLO: I32 = 0_I32;
+extern mod std;
+
+type A = { a: String };
 
 function main() = (
-  HELLO = 1_I32;
-); 
+  std.rt.allocateItem(0_I32, 0_I32);
+);
 `;
 
 function main() {
@@ -135,6 +137,8 @@ function loadCrate(
     const tokens = tokenize(input);
     const ast = parse(name, tokens, crateId.next());
     const [resolved, crates] = resolve(ast, loadCrate);
+    console.log(resolved);
+    
 
     const typecked = typeck(resolved, [...existingCrates, ...crates]);
     return [typecked, crates];

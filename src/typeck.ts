@@ -29,6 +29,7 @@ import {
   Typecked,
   TyStruct,
   Item,
+  findCrateItem,
 } from "./ast";
 import { CompilerError, Span } from "./error";
 import { printTy } from "./printer";
@@ -79,6 +80,12 @@ function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
       return mkTyFn([TY_STRING], TY_I32);
     case "__string_len":
       return mkTyFn([TY_STRING], TY_I32);
+    case "__memory_size":
+      return mkTyFn([], TY_I32);
+    case "__memory_grow":
+      return mkTyFn([TY_I32], TY_I32);
+    case "__i32_extend_to_i64_u":
+      return mkTyFn([TY_I32], TY_INT);
     default: {
       throw new CompilerError(`\`${name}\` cannot be used as a value`, span);
     }
@@ -123,12 +130,10 @@ export function typeck(
 
   function typeOfItem(itemId: ItemId, cause: Span): Ty {
     if (itemId.crateId !== ast.id) {
-      console.log(otherCrates);
-
       const crate = unwrap(
         otherCrates.find((crate) => crate.id === itemId.crateId)
       );
-      const item = unwrap(crate.itemsById.get(itemId));
+      const item = findCrateItem(crate, itemId);
       switch (item.kind) {
         case "function":
         case "import":
@@ -150,7 +155,7 @@ export function typeck(
       }
     }
 
-    const item = unwrap(ast.itemsById.get(itemId));
+    const item = findCrateItem(ast, itemId);
     const ty = itemTys.get(itemId);
     if (ty) {
       return ty;
@@ -236,12 +241,11 @@ export function typeck(
 
   function findItem(itemId: ItemId): Item<Resolved> {
     if (itemId.crateId === ast.id) {
-      return unwrap(ast.itemsById.get(itemId));
+      return findCrateItem(ast, itemId);
     }
-    return unwrap(
-      unwrap(
-        otherCrates.find((crate) => crate.id === itemId.crateId)
-      ).itemsById.get(itemId)
+    return findCrateItem(
+      unwrap(otherCrates.find((crate) => crate.id === itemId.crateId)),
+      itemId
     );
   }
 
@@ -1056,6 +1060,10 @@ function checkBinary(
       return { ...expr, lhs, rhs, ty: TY_BOOL };
     }
 
+    if (lhsTy.kind === "i32" && rhsTy.kind === "i32") {
+      return { ...expr, lhs, rhs, ty: TY_BOOL };
+    }
+
     if (lhsTy.kind === "string" && rhsTy.kind === "string") {
       return { ...expr, lhs, rhs, ty: TY_BOOL };
     }
@@ -1096,7 +1104,7 @@ function checkUnary(
 
   if (
     expr.unaryKind === "!" &&
-    (rhsTy.kind === "int" || rhsTy.kind === "bool")
+    (rhsTy.kind === "int" || rhsTy.kind === "i32" || rhsTy.kind === "bool")
   ) {
     return { ...expr, rhs, ty: rhsTy };
   }
