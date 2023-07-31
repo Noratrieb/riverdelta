@@ -28,10 +28,11 @@ import {
   Built,
   Parsed,
   ExternItem,
+  ItemId,
 } from "./ast";
 import { CompilerError, Span, spanMerge } from "./error";
 import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
-import { Ids } from "./utils";
+import { ComplexMap, ComplexSet, Ids } from "./utils";
 
 type Parser<T> = (t: Token[]) => [Token[], T];
 
@@ -81,7 +82,7 @@ function parseItem(t: Token[]): [Token[], Item<Parsed>] {
         node: def,
         span: tok.span,
         // Assigned later.
-        id: 0,
+        id: ItemId.dummy(),
       },
     ];
   } else if (tok.kind === "type") {
@@ -116,7 +117,10 @@ function parseItem(t: Token[]): [Token[], Item<Parsed>] {
       fields,
     };
 
-    return [t, { kind: "type", node: def, span: name.span, id: 0 }];
+    return [
+      t,
+      { kind: "type", node: def, span: name.span, id: ItemId.dummy() },
+    ];
   } else if (tok.kind === "import") {
     [t] = expectNext(t, "(");
     let module;
@@ -136,7 +140,10 @@ function parseItem(t: Token[]): [Token[], Item<Parsed>] {
       ...sig,
     };
 
-    return [t, { kind: "import", node: def, span: tok.span, id: 0 }];
+    return [
+      t,
+      { kind: "import", node: def, span: tok.span, id: ItemId.dummy() },
+    ];
   } else if (tok.kind === "extern") {
     [t] = expectNext(t, "mod");
     let name;
@@ -148,7 +155,7 @@ function parseItem(t: Token[]): [Token[], Item<Parsed>] {
 
     [t] = expectNext(t, ";");
 
-    return [t, { kind: "extern", node, span: name.span, id: 0 }];
+    return [t, { kind: "extern", node, span: name.span, id: ItemId.dummy() }];
   } else if (tok.kind === "mod") {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
@@ -172,7 +179,7 @@ function parseItem(t: Token[]): [Token[], Item<Parsed>] {
       contents,
     };
 
-    return [t, { kind: "mod", node, span: name.span, id: 0 }];
+    return [t, { kind: "mod", node, span: name.span, id: ItemId.dummy() }];
   } else {
     unexpectedToken(tok, "item");
   }
@@ -663,13 +670,15 @@ function unexpectedToken(token: Token, expected: string): never {
 }
 
 function validateAst(ast: Crate<Built>) {
-  const seenItemIds = new Set();
+  const seenItemIds = new ComplexSet();
 
   const validator: Folder<Built, Built> = {
     ...mkDefaultFolder(),
     itemInner(item: Item<Built>): Item<Built> {
       if (seenItemIds.has(item.id)) {
-        throw new Error(`duplicate item id: ${item.id} for ${item.node.name}`);
+        throw new Error(
+          `duplicate item id: ${item.id.toString()} for ${item.node.name}`
+        );
       }
       seenItemIds.add(item.id);
       return superFoldItem(item, this);
@@ -734,14 +743,14 @@ function buildCrate(
   const ast: Crate<Built> = {
     id: crateId,
     rootItems,
-    itemsById: new Map(),
+    itemsById: new ComplexMap(),
     packageName,
   };
 
   const assigner: Folder<Parsed, Built> = {
     ...mkDefaultFolder(),
     itemInner(item: Item<Parsed>): Item<Built> {
-      const id = itemId.next();
+      const id = new ItemId(crateId, itemId.next());
       return { ...superFoldItem(item, this), id };
     },
     expr(expr: Expr<Parsed>): Expr<Built> {

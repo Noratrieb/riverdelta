@@ -23,7 +23,11 @@ export class CompilerError extends Error {
   }
 }
 
-export function withErrorPrinter(input: string, filename: string, f: () => void): void {
+export function withErrorPrinter(
+  input: string,
+  filename: string,
+  f: () => void
+): void {
   try {
     f();
   } catch (e) {
@@ -50,7 +54,6 @@ function renderError(input: string, filename: string, e: CompilerError) {
   const lineNo = lineIdx + 1;
   console.error(`error: ${e.message}`);
   console.error(` --> ${filename}:${lineNo}`);
-  
 
   console.error(`${lineNo} | ${spanToSnippet(input, line)}`);
   const startRelLine =

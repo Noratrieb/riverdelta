@@ -20,7 +20,7 @@ import {
   Typecked,
 } from "./ast";
 import { CompilerError, Span, spanMerge } from "./error";
-import { Ids, unwrap } from "./utils";
+import { ComplexMap, Ids, unwrap } from "./utils";
 
 const BUILTIN_SET = new Set<string>(BUILTINS);
 
@@ -34,8 +34,8 @@ export type CrateLoader = (
 type Context = {
   ast: Crate<Built>;
   crates: Crate<Typecked>[];
-  modContentsCache: Map<ItemId, Map<string, ItemId>>;
-  newItemsById: Map<ItemId, Item<Resolved>>;
+  modContentsCache: ComplexMap<ItemId, Map<string, ItemId>>;
+  newItemsById: ComplexMap<ItemId, Item<Resolved>>;
   crateLoader: CrateLoader;
   crateId: Ids;
 };
@@ -56,14 +56,20 @@ function resolveModItem(
   if ("contents" in mod) {
     contents = new Map(mod.contents.map((item) => [item.node.name, item.id]));
   } else {
+    console.log("resolve...");
+
     const [loadedCrate, itsDeps] = cx.crateLoader(
       item.node.name,
       item.span,
       cx.crateId,
       cx.crates
     );
+    console.log("hmm");
+
     cx.crates.push(loadedCrate);
     cx.crates.push(...itsDeps);
+
+    console.log(cx.crates);
 
     contents = new Map(
       loadedCrate.rootItems.map((item) => [item.node.name, item.id])
@@ -83,8 +89,8 @@ export function resolve(
   const cx: Context = {
     ast,
     crates: [],
-    modContentsCache: new Map(),
-    newItemsById: new Map(),
+    modContentsCache: new ComplexMap(),
+    newItemsById: new ComplexMap(),
     crateLoader,
     crateId,
   };
@@ -106,7 +112,7 @@ function resolveModule(
   modName: string[],
   contents: Item<Built>[]
 ): Item<Resolved>[] {
-  const items = new Map<string, number>();
+  const items = new Map<string, ItemId>();
 
   contents.forEach((item) => {
     const existing = items.get(item.node.name);
@@ -266,11 +272,7 @@ function resolveModule(
 
             if (res.kind === "item") {
               const module = unwrap(cx.ast.itemsById.get(res.id));
-              console.log("nested", module.kind, res.id, cx.ast.itemsById);
-              
               if (module.kind === "mod" || module.kind === "extern") {
-                console.log("resolve");
-                
                 if (typeof expr.field.value === "number") {
                   throw new CompilerError(
                     "module contents cannot be indexed with a number",

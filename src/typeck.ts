@@ -32,7 +32,7 @@ import {
 } from "./ast";
 import { CompilerError, Span } from "./error";
 import { printTy } from "./printer";
-import { unwrap } from "./utils";
+import { ComplexMap, unwrap } from "./utils";
 
 function mkTyFn(params: Ty[], returnTy: Ty): Ty {
   return { kind: "fn", params, returnTy };
@@ -89,7 +89,7 @@ function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
 function lowerAstTyBase(
   type: Type<Resolved>,
   lowerIdentTy: (ident: IdentWithRes<Resolved>) => Ty,
-  typeOfItem: (index: number, cause: Span) => Ty
+  typeOfItem: (itemId: ItemId, cause: Span) => Ty
 ): Ty {
   switch (type.kind) {
     case "ident": {
@@ -115,19 +115,51 @@ function lowerAstTyBase(
   }
 }
 
-export function typeck(ast: Crate<Resolved>): Crate<Typecked> {
-  const itemTys = new Map<number, Ty | null>();
-  function typeOfItem(index: ItemId, cause: Span): Ty {
-    const item = unwrap(ast.itemsById.get(index));
+export function typeck(
+  ast: Crate<Resolved>,
+  otherCrates: Crate<Typecked>[]
+): Crate<Typecked> {
+  const itemTys = new ComplexMap<ItemId, Ty | null>();
+  function typeOfItem(itemId: ItemId, cause: Span): Ty {
+    if (itemId.crateId !== ast.id) {
+      console.log(otherCrates);
 
-    const ty = itemTys.get(index);
+      const crate = unwrap(
+        otherCrates.find((crate) => crate.id === itemId.crateId)
+      );
+      const item = unwrap(crate.itemsById.get(itemId));
+      switch (item.kind) {
+        case "function":
+        case "import":
+        case "type":
+          return item.node.ty!;
+        case "mod": {
+          throw new CompilerError(
+            `module ${item.node.name} cannot be used as a type or value`,
+            cause
+          );
+        }
+        case "extern": {
+          throw new CompilerError(
+            `extern declaration ${item.node.name} cannot be used as a type or value`,
+            cause
+          );
+        }
+      }
+    }
+
+    const item = unwrap(ast.itemsById.get(itemId));
+    const ty = itemTys.get(itemId);
     if (ty) {
       return ty;
     }
     if (ty === null) {
-      throw new CompilerError(`cycle computing type of #G${index}`, item.span);
+      throw new CompilerError(
+        `cycle computing type of #G${itemId.toString()}`,
+        item.span
+      );
     }
-    itemTys.set(index, null);
+    itemTys.set(itemId, null);
     switch (item.kind) {
       case "function":
       case "import": {
@@ -528,7 +560,7 @@ export class InferContext {
 export function checkBody(
   body: Expr<Resolved>,
   fnTy: TyFn,
-  typeOfItem: (index: number, cause: Span) => Ty
+  typeOfItem: (itemId: ItemId, cause: Span) => Ty
 ): Expr<Typecked> {
   const localTys = [...fnTy.params];
   const loopState: { hasBreak: boolean; loopId: LoopId }[] = [];

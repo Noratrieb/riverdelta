@@ -72,7 +72,7 @@ function main() {
     console.log(resolvedPrinted);
 
     console.log("-----AST typecked------");
-    const typecked: Crate<Typecked> = typeck(resolved);
+    const typecked: Crate<Typecked> = typeck(resolved, crates);
     const typeckPrinted = printAst(typecked);
     console.log(typeckPrinted);
 
@@ -135,7 +135,8 @@ function loadCrate(
     const tokens = tokenize(input);
     const ast = parse(name, tokens, crateId.next());
     const [resolved, crates] = resolve(ast, loadCrate);
-    const typecked = typeck(resolved);
+
+    const typecked = typeck(resolved, [...existingCrates, ...crates]);
     return [typecked, crates];
   } catch (e) {
     withErrorPrinter(input, filename, () => {

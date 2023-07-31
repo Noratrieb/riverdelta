@@ -22,20 +22,32 @@ export function unwrap<T>(value: T | undefined): T {
  * It uses JSON+string equality instead of refernece equality.
  */
 export class ComplexMap<K, V> {
-  inner = new Map<string | number, V>();
+  private inner = new Map<string | number, V>();
 
   public get(key: K): V | undefined {
-    return this.inner.get(this.mangleKey(key));
+    return this.inner.get(mangleKey(key));
   }
 
   public set(key: K, value: V): void {
-    this.inner.set(this.mangleKey(key), value);
+    this.inner.set(mangleKey(key), value);
+  }
+}
+
+export class ComplexSet<K> {
+  private inner = new Set();
+
+  public has(key: K): boolean {
+    return this.inner.has(mangleKey(key));
   }
 
-  private mangleKey(key: K): string | number {
-    if (typeof key === "string" || typeof key === "number") {
-      return key;
-    }
-    return JSON.stringify(key);
+  public add(key: K): void {
+    this.inner.add(mangleKey(key));
   }
+}
+
+function mangleKey<K>(key: K): string | number {
+  if (typeof key === "string" || typeof key === "number") {
+    return key;
+  }
+  return JSON.stringify(key);
 }

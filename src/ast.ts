@@ -1,5 +1,6 @@
 import { Span } from "./error";
 import { LitIntType } from "./lexer";
+import { ComplexMap } from "./utils";
 
 export type Phase = {
   res: unknown;
@@ -52,7 +53,7 @@ export type CrateId = number;
 export type Crate<P extends Phase> = {
   id: CrateId;
   rootItems: Item<P>[];
-  itemsById: Map<ItemId, Item<P>>;
+  itemsById: ComplexMap<ItemId, Item<P>>;
   packageName: string;
 } & P["typeckResults"];
 
@@ -66,7 +67,23 @@ export type IdentWithRes<P extends Phase> = {
   span: Span;
 } & P["res"];
 
-export type ItemId = number;
+export class ItemId {
+  public crateId: number;
+  public itemIdx: number;
+
+  constructor(crateId: number, itemIdx: number) {
+    this.crateId = crateId;
+    this.itemIdx = itemIdx;
+  }
+
+  static dummy(): ItemId {
+    return new ItemId(999999, 999999);
+  }
+
+  toString(): string {
+    return `[${this.crateId}@${this.itemIdx}]`;
+  }
+}
 
 export type ItemKind<P extends Phase> =
   | {
@@ -495,7 +512,7 @@ export type TypeckResults = {
 export type FoldFn<From, To> = (value: From) => To;
 
 export type Folder<From extends Phase, To extends Phase> = {
-  newItemsById: Map<ItemId, Item<To>>;
+  newItemsById: ComplexMap<ItemId, Item<To>>;
   /**
    * This should not be overridden.
    */
@@ -507,7 +524,7 @@ export type Folder<From extends Phase, To extends Phase> = {
 };
 
 type ItemFolder<From extends Phase, To extends Phase> = {
-  newItemsById: Map<ItemId, Item<To>>;
+  newItemsById: ComplexMap<ItemId, Item<To>>;
   item: FoldFn<Item<From>, Item<To>>;
   itemInner: FoldFn<Item<From>, Item<To>>;
 };
@@ -519,7 +536,7 @@ export function mkDefaultFolder<
   To extends Phase
 >(): ItemFolder<From, To> {
   const folder: ItemFolder<From, To> = {
-    newItemsById: new Map(),
+    newItemsById: new ComplexMap(),
     item(item) {
       const newItem = this.itemInner(item);
       this.newItemsById.set(newItem.id, newItem);
