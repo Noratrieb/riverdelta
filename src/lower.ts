@@ -102,7 +102,7 @@ function appendData(cx: Context, newData: Uint8Array): number {
     return 0;
   } else {
     console.log("appending", newData);
-    
+
     const data = datas[0];
     const idx = data.init.length;
     const init = new Uint8Array(data.init.length + newData.length);
@@ -970,7 +970,11 @@ function lowerExpr(
       // TODO: scratch locals...
       const ptrLocal = fcx.wasmType.params.length + fcx.wasm.locals.length;
       fcx.wasm.locals.push("i32");
-      instrs.push({ kind: "local.set", imm: ptrLocal });
+      instrs.push({ kind: "local.tee", imm: ptrLocal });
+
+      // Store the refcount
+      instrs.push({ kind: "i32.const", imm: 0n });
+      instrs.push({ kind: "i32.store", imm: { align: 4 } });
 
       // Now, set all fields.
       expr.fields.forEach((field, i) => {
@@ -1169,13 +1173,15 @@ function sizeOfValtype(type: wasm.ValType): number {
 export function layoutOfStruct(ty: TyStruct): StructLayout {
   const fieldWasmTys = ty.fields.map(([, field]) => wasmTypeForBody(field));
 
+  // TODO: Use the max alignment instead.
   const align = fieldWasmTys.some((field) =>
     field.some((type) => type === "i64")
   )
     ? 8
     : 4;
 
-  let offset = 0;
+  // i32 refcount is at offset 0.
+  let offset = 4;
 
   const fields: StructFieldLayout[] = fieldWasmTys.map((field, i) => {
     const value: StructFieldLayout = {

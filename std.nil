@@ -98,12 +98,12 @@ mod rt (
             // 16 pages, very arbitrary.
             let result = __memory_grow(16_I32);
             // If allocation failed we get -1. We don't have negative numbers yet, lol.
-            if result > 100000000_I32 then (
+            if result > 4294967295_I32 then (
                 std.abort("failed to grow memory");
             );
         );
 
-        0_I32
+        actualObjPtr
     );
 );
 
