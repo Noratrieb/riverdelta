@@ -101,8 +101,6 @@ function appendData(cx: Context, newData: Uint8Array): number {
     });
     return 0;
   } else {
-    console.log("appending", newData);
-
     const data = datas[0];
     const idx = data.init.length;
     const init = new Uint8Array(data.init.length + newData.length);

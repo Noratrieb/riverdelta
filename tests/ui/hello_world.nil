@@ -1,0 +1,2 @@
+//@check-pass
+function main() = print("Hello, world!\n");

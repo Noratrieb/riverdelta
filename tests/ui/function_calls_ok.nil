@@ -1,0 +1,19 @@
+//@check-pass
+
+function main() = (
+    noArgs();
+    singleArg("hi!");
+    manyArgs(1,2,3,4,5,6);
+
+    let a: () = returnNothing();
+    let b: () = returnExplicitUnit();
+    let c: String = returnString();
+);
+
+function noArgs() =;
+function singleArg(a: String) =;
+function manyArgs(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) =;
+
+function returnNothing() =;
+function returnExplicitUnit(): () =;
+function returnString(): String = "uwu";

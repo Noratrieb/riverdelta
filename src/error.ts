@@ -11,7 +11,10 @@ export function spanMerge(a: Span, b: Span): Span {
 }
 
 export const DUMMY_SPAN = { start: 0, end: 0 };
-export const EOF_SPAN = {start: Number.MAX_SAFE_INTEGER, end: Number.MAX_SAFE_INTEGER};
+export const EOF_SPAN = {
+  start: Number.MAX_SAFE_INTEGER,
+  end: Number.MAX_SAFE_INTEGER,
+};
 
 export class CompilerError extends Error {
   msg: string;
@@ -24,16 +27,18 @@ export class CompilerError extends Error {
   }
 }
 
-export function withErrorPrinter(
+export function withErrorPrinter<R>(
   input: string,
   filename: string,
-  f: () => void
-): void {
+  f: () => R,
+  afterError: (e: CompilerError) => R
+): R {
   try {
-    f();
+    return f();
   } catch (e) {
     if (e instanceof CompilerError) {
       renderError(input, filename, e);
+      return afterError(e);
     } else {
       throw e;
     }

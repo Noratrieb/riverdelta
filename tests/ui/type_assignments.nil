@@ -1,0 +1,21 @@
+//@check-pass
+
+type CustomType = {};
+
+function main() = ();
+
+function assigns(
+    a: Int,
+    b: I32,
+    c: String,
+    d: Bool,
+    e: CustomType,
+    f: (Int, I32),
+) = (
+    let a1: Int = a;
+    let b1: I32 = b;
+    let c1: String = c;
+    let d1: Bool = d;
+    let e1: CustomType = e;
+    let f1: (Int, I32) = f;
+);
