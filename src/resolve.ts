@@ -17,36 +17,19 @@ import {
   superFoldItem,
   superFoldType,
   ExternItem,
-  Typecked,
-  findCrateItem,
 } from "./ast";
-import { CompilerError, Span, spanMerge } from "./error";
-import { ComplexMap, Ids, unwrap } from "./utils";
+import { GlobalContext } from "./context";
+import { CompilerError, spanMerge } from "./error";
+import { ComplexMap } from "./utils";
 
 const BUILTIN_SET = new Set<string>(BUILTINS);
 
-export type CrateLoader = (
-  name: string,
-  span: Span,
-  crateId: Ids,
-  existingCrates: Crate<Typecked>[]
-) => [Crate<Typecked>, Crate<Typecked>[]];
-
 type Context = {
   ast: Crate<Built>;
-  crates: Crate<Typecked>[];
+  gcx: GlobalContext;
   modContentsCache: ComplexMap<ItemId, Map<string, ItemId>>;
   newItemsById: ComplexMap<ItemId, Item<Resolved>>;
-  crateLoader: CrateLoader;
-  crateId: Ids;
 };
-
-function findItem(cx: Context, id: ItemId): Item<Built> {
-  const crate = unwrap(
-    [cx.ast, ...cx.crates].find((crate) => crate.id === id.crateId)
-  );
-  return findCrateItem(crate, id);
-}
 
 function resolveModItem(
   cx: Context,
@@ -64,15 +47,7 @@ function resolveModItem(
   if ("contents" in mod) {
     contents = new Map(mod.contents.map((item) => [item.node.name, item.id]));
   } else {
-    const [loadedCrate, itsDeps] = cx.crateLoader(
-      item.node.name,
-      item.span,
-      cx.crateId,
-      cx.crates
-    );
-    cx.crates.push(loadedCrate);
-    cx.crates.push(...itsDeps);
-
+    const loadedCrate = cx.gcx.crateLoader(cx.gcx, item.node.name, item.span);
     contents = new Map(
       loadedCrate.rootItems.map((item) => [item.node.name, item.id])
     );
@@ -83,30 +58,23 @@ function resolveModItem(
 }
 
 export function resolve(
-  ast: Crate<Built>,
-  crateLoader: CrateLoader
-): [Crate<Resolved>, Crate<Typecked>[]] {
-  const crateId = new Ids();
-  crateId.next(); // Local crate.
+  gcx: GlobalContext,
+  ast: Crate<Built>
+): Crate<Resolved> {
   const cx: Context = {
     ast,
-    crates: [],
+    gcx,
     modContentsCache: new ComplexMap(),
     newItemsById: new ComplexMap(),
-    crateLoader,
-    crateId,
   };
 
   const rootItems = resolveModule(cx, [ast.packageName], ast.rootItems);
-  return [
-    {
-      id: ast.id,
-      itemsById: cx.newItemsById,
-      rootItems,
-      packageName: ast.packageName,
-    },
-    cx.crates,
-  ];
+  return {
+    id: ast.id,
+    itemsById: cx.newItemsById,
+    rootItems,
+    packageName: ast.packageName,
+  };
 }
 
 function resolveModule(
@@ -280,7 +248,7 @@ function resolveModule(
               lhs.kind === "ident" ? [lhs.value.name] : lhs.segments;
 
             if (res.kind === "item") {
-              const module = findItem(cx, res.id);
+              const module = cx.gcx.findItem(res.id, cx.ast);
 
               if (module.kind === "mod" || module.kind === "extern") {
                 if (typeof expr.field.value === "number") {

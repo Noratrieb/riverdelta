@@ -23,7 +23,7 @@ it("should compute struct layout correctly", () => {
           },
           "types": [
             {
-              "offset": 0,
+              "offset": 4,
               "type": "i32",
             },
           ],

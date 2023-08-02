@@ -2,6 +2,7 @@ import {
   Crate,
   Expr,
   ExprBlock,
+  Final,
   Folder,
   FunctionDef,
   GlobalItem,
@@ -60,7 +61,7 @@ export type Context = {
   reservedHeapMemoryStart: number;
   funcIndices: ComplexMap<Resolution, FuncOrImport>;
   globalIndices: ComplexMap<Resolution, wasm.GlobalIdx>;
-  crates: Crate<Typecked>[];
+  crates: Crate<Final>[];
   relocations: Relocation[];
   knownDefPaths: ComplexMap<string[], ItemId>;
 };
@@ -154,7 +155,7 @@ function getKnownDefPaths(
   return knows;
 }
 
-export function lower(crates: Crate<Typecked>[]): wasm.Module {
+export function lower(crates: Crate<Final>[]): wasm.Module {
   const knownDefPaths = getKnownDefPaths(crates);
 
   const mod: wasm.Module = {

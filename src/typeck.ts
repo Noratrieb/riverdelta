@@ -31,9 +31,10 @@ import {
   findCrateItem,
   StructLiteralField,
 } from "./ast";
+import { GlobalContext } from "./context";
 import { CompilerError, Span } from "./error";
 import { printTy } from "./printer";
-import { ComplexMap, unwrap } from "./utils";
+import { ComplexMap } from "./utils";
 
 function mkTyFn(params: Ty[], returnTy: Ty): Ty {
   return { kind: "fn", params, returnTy };
@@ -123,17 +124,15 @@ function lowerAstTyBase(
 }
 
 export function typeck(
-  ast: Crate<Resolved>,
-  otherCrates: Crate<Typecked>[]
+  gcx: GlobalContext,
+  ast: Crate<Resolved>
 ): Crate<Typecked> {
   const itemTys = new ComplexMap<ItemId, Ty | null>();
 
   function typeOfItem(itemId: ItemId, cause: Span): Ty {
     if (itemId.crateId !== ast.id) {
-      const crate = unwrap(
-        otherCrates.find((crate) => crate.id === itemId.crateId)
-      );
-      const item = findCrateItem(crate, itemId);
+      const item = gcx.findItem(itemId, ast);
+
       switch (item.kind) {
         case "function":
         case "import":
@@ -239,23 +238,13 @@ export function typeck(
     );
   }
 
-  function findItem(itemId: ItemId): Item<Resolved> {
-    if (itemId.crateId === ast.id) {
-      return findCrateItem(ast, itemId);
-    }
-    return findCrateItem(
-      unwrap(otherCrates.find((crate) => crate.id === itemId.crateId)),
-      itemId
-    );
-  }
-
   const checker: Folder<Resolved, Typecked> = {
     ...mkDefaultFolder(),
     itemInner(item: Item<Resolved>): Item<Typecked> {
       switch (item.kind) {
         case "function": {
           const fnTy = typeOfItem(item.id, item.span) as TyFn;
-          const body = checkBody(item.node.body, fnTy, typeOfItem, findItem);
+          const body = checkBody(gcx, ast, item.node.body, fnTy, typeOfItem);
 
           const returnType = item.node.returnType && {
             ...item.node.returnType,
@@ -604,10 +593,11 @@ export class InferContext {
 }
 
 export function checkBody(
+  gcx: GlobalContext,
+  ast: Crate<Resolved>,
   body: Expr<Resolved>,
   fnTy: TyFn,
-  typeOfItem: (itemId: ItemId, cause: Span) => Ty,
-  findItem: (itemId: ItemId) => Item<Resolved>
+  typeOfItem: (itemId: ItemId, cause: Span) => Ty
 ): Expr<Typecked> {
   const localTys = [...fnTy.params];
   const loopState: { hasBreak: boolean; loopId: LoopId }[] = [];
@@ -697,7 +687,7 @@ export function checkBody(
                 case "local":
                   break;
                 case "item": {
-                  const item = findItem(res.id);
+                  const item = gcx.findItem(res.id, ast);
                   if (item.kind !== "global") {
                     throw new CompilerError("cannot assign to item", expr.span);
                   }

@@ -41,6 +41,8 @@ export type Typecked = {
   typeckResults: HasTypeckResults;
 };
 
+export type Final = Typecked;
+
 export type AnyPhase = {
   res: No | HasRes;
   defPath: No | HasDefPath;
@@ -56,6 +58,8 @@ export type Crate<P extends Phase> = {
   itemsById: ComplexMap<ItemId, Item<P>>;
   packageName: string;
 } & P["typeckResults"];
+
+export type DepCrate = Crate<Final>;
 
 export type Ident = {
   name: string;

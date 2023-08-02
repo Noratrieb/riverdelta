@@ -9,8 +9,8 @@ import { writeModuleWatToString } from "./wasm/wat";
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
-import { Crate, Built, Typecked } from "./ast";
-import { Ids } from "./utils";
+import { Crate, Built, Typecked, DepCrate } from "./ast";
+import { GlobalContext, CrateLoader } from "./context";
 
 const INPUT = `
 extern mod std;
@@ -105,6 +105,9 @@ function main() {
     process.exit(1);
   }
 
+  const gcx = new GlobalContext(loadCrate);
+  const mainCrate = gcx.crateId.next();
+
   withErrorPrinter(
     input,
     filename,
@@ -117,7 +120,7 @@ function main() {
         console.log(tokens);
       }
 
-      const ast: Crate<Built> = parse(packageName, tokens, 0);
+      const ast: Crate<Built> = parse(packageName, tokens, mainCrate);
       if (debug.has("ast")) {
         console.log("-----AST---------------");
 
@@ -131,7 +134,7 @@ function main() {
       if (debug.has("resolved")) {
         console.log("-----AST resolved------");
       }
-      const [resolved, crates] = resolve(ast, loadCrate);
+      const resolved = resolve(gcx, ast);
       if (debug.has("resolved")) {
         const resolvedPrinted = printAst(resolved);
         console.log(resolvedPrinted);
@@ -140,7 +143,7 @@ function main() {
       if (debug.has("typecked")) {
         console.log("-----AST typecked------");
       }
-      const typecked: Crate<Typecked> = typeck(resolved, crates);
+      const typecked: Crate<Typecked> = typeck(gcx, resolved);
       if (debug.has("typecked")) {
         const typeckPrinted = printAst(typecked);
         console.log(typeckPrinted);
@@ -149,7 +152,7 @@ function main() {
       if (debug.has("wat")) {
         console.log("-----wasm--------------");
       }
-      const wasmModule = lowerToWasm([typecked, ...crates]);
+      const wasmModule = lowerToWasm([typecked, ...gcx.depCrates]);
       const moduleStringColor = writeModuleWatToString(wasmModule, true);
       const moduleString = writeModuleWatToString(wasmModule);
 
@@ -186,42 +189,54 @@ function main() {
   );
 }
 
-function loadCrate(
+const loadCrate: CrateLoader = (
+  gcx: GlobalContext,
   name: string,
-  span: Span,
-  crateId: Ids,
-  existingCrates: Crate<Typecked>[]
-): [Crate<Typecked>, Crate<Typecked>[]] {
+  span: Span
+): DepCrate => {
   // We really, really want a good algorithm for finding crates.
   // But right now we just look for files in the CWD.
 
-  const existing = existingCrates.find((crate) => crate.packageName === name);
+  const existing = gcx.depCrates.find((crate) => crate.packageName === name);
   if (existing) {
-    return [existing, []];
+    return existing;
   }
 
-  const filename = `${name}.nil`;
-  let input: string;
-  try {
-    input = fs.readFileSync(filename, { encoding: "utf-8" });
-  } catch (e) {
+  const options = [`${name}.nil`, `${name}/${name}.mod.nil`];
+
+  let input: string | undefined = undefined;
+  let filename: string | undefined = undefined;
+  options.forEach((tryName) => {
+    try {
+      input = fs.readFileSync(tryName, { encoding: "utf-8" });
+      filename = tryName;
+    } catch (e) {}
+  });
+
+  if (input === undefined || filename === undefined) {
     throw new CompilerError(
-      `failed to load ${name}, could not fine \`${filename}\``,
+      `failed to load ${name}, could not find ${options.join(" or ")}`,
       span
     );
   }
 
+  const inputString: string = input;
+
   return withErrorPrinter(
-    input,
+    inputString,
     filename,
-    () => {
-      const tokens = tokenize(input);
-      const ast = parse(name, tokens, crateId.next());
-      const [resolved, crates] = resolve(ast, loadCrate);
+    (): DepCrate => {
+      const crateId = gcx.crateId.next();
+
+      const tokens = tokenize(inputString);
+      const ast = parse(name, tokens, crateId);
+      const resolved = resolve(gcx, ast);
       console.log(resolved);
 
-      const typecked = typeck(resolved, [...existingCrates, ...crates]);
-      return [typecked, crates];
+      const typecked = typeck(gcx, resolved);
+
+      gcx.depCrates.push(typecked);
+      return typecked;
     },
     () => {
       throw new CompilerError(
@@ -230,6 +245,6 @@ function loadCrate(
       );
     }
   );
-}
+};
 
 main();

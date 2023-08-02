@@ -47,6 +47,11 @@ module.exports = {
     ],
     // No, I will use `type` instead of `interface`.
     "@typescript-eslint/consistent-type-definitions": ["error", "type"],
+
+    // This lint is horrible with noisy false positives every time there are typescript errors.
+    "@typescript-eslint/no-unsafe-return": "off",
+    "@typescript-eslint/no-unsafe-assignment": "off",
+
     // Useful extra lints that are not on by default:
     "@typescript-eslint/explicit-module-boundary-types": "warn",
     // This has caused several bugs before. Thanks eslint!
