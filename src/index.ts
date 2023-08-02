@@ -13,7 +13,6 @@ import { GlobalContext, parseArgs } from "./context";
 import { loadCrate } from "./loader";
 
 const INPUT = `
-extern mod a;
 type A = { a: Int };
 
 function main() = (

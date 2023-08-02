@@ -13,9 +13,22 @@ export function loadModuleFile(
   moduleName: string,
   span: Span
 ): LoadedFile {
+  let searchDir: string;
+  if (relativeTo.endsWith(".mod.nil")) {
+    // x/uwu.mod.nil searches in x/
+    searchDir = path.dirname(relativeTo);
+  } else if (relativeTo.endsWith(".nil")) {
+    throw new CompilerError(
+      `.nil files cannot have submodules. use .mod.nil in a subdirectory`,
+      span
+    );
+  } else {
+    searchDir = relativeTo;
+  }
+
   const options = [
-    path.join(relativeTo, `${moduleName}.nil`),
-    path.join(relativeTo, moduleName, `${moduleName}.mod.nil`),
+    path.join(searchDir, `${moduleName}.nil`),
+    path.join(searchDir, moduleName, `${moduleName}.mod.nil`),
   ];
 
   let content: string | undefined = undefined;
@@ -45,15 +58,17 @@ export const loadCrate: CrateLoader = (
   // We really, really want a good algorithm for finding crates.
   // But right now we just look for files in the CWD.
 
-  const existing = gcx.finalizedCrates.find((crate) => crate.packageName === name);
+  const existing = gcx.finalizedCrates.find(
+    (crate) => crate.packageName === name
+  );
   if (existing) {
     return existing;
   }
 
-  const file = loadModuleFile(".", name, span);
-
   return withErrorPrinter(
     (): DepCrate => {
+      const file = loadModuleFile(".", name, span);
+
       const crateId = gcx.crateId.next();
 
       const tokens = tokenize(file);

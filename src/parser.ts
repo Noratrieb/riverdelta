@@ -33,7 +33,14 @@ import {
   StructLiteralField,
 } from "./ast";
 import { CompilerError, LoadedFile, Span } from "./error";
-import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
+import {
+  BaseToken,
+  Token,
+  TokenIdent,
+  TokenLitString,
+  tokenize,
+} from "./lexer";
+import { loadModuleFile } from "./loader";
 import { ComplexMap, ComplexSet, Ids } from "./utils";
 
 export type ParseState = { tokens: Token[]; file: LoadedFile };
@@ -46,6 +53,16 @@ export function parse(
   t: State,
   crateId: number
 ): Crate<Built> {
+  const [, items] = parseItems(t);
+
+  const ast: Crate<Built> = buildCrate(packageName, items, crateId, t.file);
+
+  validateAst(ast);
+
+  return ast;
+}
+
+function parseItems(t: State): [State, Item<Parsed>[]] {
   const items: Item<Parsed>[] = [];
 
   while (t.tokens.length > 0) {
@@ -54,11 +71,7 @@ export function parse(
     items.push(item);
   }
 
-  const ast: Crate<Built> = buildCrate(packageName, items, crateId, t.file);
-
-  validateAst(ast);
-
-  return ast;
+  return [t, items];
 }
 
 function parseItem(t: State): [State, Item<Parsed>] {
@@ -165,18 +178,32 @@ function parseItem(t: State): [State, Item<Parsed>] {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
 
-    [t] = expectNext(t, "(");
+    let contents: Item<Parsed>[] = [];
 
-    const contents: Item<Parsed>[] = [];
+    let popen = undefined;
+    [t, popen] = eat(t, "(");
+    if (popen) {
+      while (peekKind(t) !== ")") {
+        let item;
+        [t, item] = parseItem(t);
 
-    while (peekKind(t) !== ")") {
-      let item;
-      [t, item] = parseItem(t);
+        contents.push(item);
+      }
 
-      contents.push(item);
+      [t] = expectNext(t, ")");
+    } else {
+      if (name.span.file.path === undefined) {
+        throw new CompilerError(
+          `no known source file for statement, cannot load file relative to it`,
+          name.span
+        );
+      }
+      const file = loadModuleFile(name.span.file.path, name.ident, name.span);
+
+      const tokens = tokenize(file);
+      [, contents] = parseItems({ file, tokens });
     }
 
-    [t] = expectNext(t, ")");
     [t] = expectNext(t, ";");
 
     const node: ModItem<Parsed> = {

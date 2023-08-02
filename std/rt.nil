@@ -1,0 +1,38 @@
+// Start the heap at 1024. In practice this could probably be as low as we want.
+// TODO: The compiler should set this global to whatever it has calculated the heap
+// start to be. But well, 1024 ought to be enough for now. lol.
+global HEAD_PTR: I32 = 1024_I32;
+
+// Every struct has a header of an I32 as a refcount.
+
+// Allocate a new item. We do not deallocate anything yet.
+// lol.
+function allocateItem(objSize: I32, align: I32): I32 = (
+    if align < 4_I32 then std.abort("invalid alignment");
+
+    // Include the refcount header.
+    let actualSize = 4_I32 + objSize;
+
+    // Let's see whether we can fit the refcount into the align bits.
+    // I happen to know that everything will always be at least 4 bytes aligned.
+    let alignedPtr = std.alignUp(HEAD_PTR, align);
+    let actualObjPtr = if (alignedPtr - HEAD_PTR) > align then (
+        alignedPtr - 4_I32
+    ) else (
+        // Take up the next spot.
+        alignedPtr + align - 4_I32
+    );
+
+    let newHeadPtr = actualObjPtr + actualSize;
+
+    if newHeadPtr > __memory_size() then (
+        // 16 pages, very arbitrary.
+        let result = __memory_grow(16_I32);
+        // If allocation failed we get -1. We don't have negative numbers yet, lol.
+        if result > 4294967295_I32 then (
+            std.abort("failed to grow memory");
+        );
+    );
+
+    actualObjPtr
+);
