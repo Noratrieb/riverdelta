@@ -1,6 +1,8 @@
 import { Crate, DepCrate, Final, Item, ItemId, Phase } from "./ast";
 import { DUMMY_SPAN, Span } from "./error";
 import { Ids, unwrap } from "./utils";
+import fs from "fs";
+import path from "path";
 
 export type CrateLoader = (
   gcx: GlobalContext,
@@ -21,7 +23,7 @@ export class GlobalContext {
   public depCrates: Crate<Final>[] = [];
   public crateId: Ids = new Ids();
 
-  constructor(public crateLoader: CrateLoader) {}
+  constructor(public opts: Options, public crateLoader: CrateLoader) {}
 
   public findItem<P extends Phase>(
     id: ItemId,
@@ -46,4 +48,65 @@ export class GlobalContext {
 
     return unwrap(crate.itemsById.get(id));
   }
+}
+
+export type Options = {
+  input: string;
+  filename: string;
+  packageName: string;
+  debug: Set<string>;
+  noOutput: boolean;
+};
+
+export function parseArgs(hardcodedInput: string): Options {
+  let filename: string;
+  let input: string;
+  let packageName: string;
+  let debug = new Set<string>();
+  let noOutput = false;
+
+  if (process.argv.length > 2) {
+    filename = process.argv[2];
+    if (path.extname(filename) !== ".nil") {
+      console.error(process.argv);
+
+      console.error(
+        `error: filename must have \`.nil\` extension: \`${filename}\``
+      );
+      process.exit(1);
+    }
+
+    input = fs.readFileSync(filename, { encoding: "utf-8" });
+    packageName = path.basename(filename, ".nil");
+
+    const debugArg = process.argv.find((arg) => arg.startsWith("--debug="));
+    if (debugArg !== undefined) {
+      const debugs = debugArg.slice("--debug=".length);
+      debug = new Set(debugs.split(","));
+    }
+
+    if (process.argv.some((arg) => arg === "--no-output")) {
+      noOutput = true;
+    }
+  } else {
+    filename = "<hardcoded>";
+    input = hardcodedInput;
+    packageName = "test";
+    debug = new Set([
+      "tokens",
+      "parsed",
+      "resolved",
+      "typecked",
+      "wat",
+      "wasm-validate",
+    ]);
+  }
+
+  return {
+    filename,
+    input,
+    packageName,
+    debug,
+    noOutput,
+  };
 }

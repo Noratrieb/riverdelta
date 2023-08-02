@@ -74,6 +74,7 @@ export function resolve(
     itemsById: cx.newItemsById,
     rootItems,
     packageName: ast.packageName,
+    rootFile: ast.rootFile,
   };
 }
 

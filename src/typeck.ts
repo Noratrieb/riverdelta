@@ -423,6 +423,7 @@ export function typeck(
       throw new CompilerError(`\`main\` function not found`, {
         start: 0,
         end: 1,
+        file: ast.rootFile,
       });
     }
 

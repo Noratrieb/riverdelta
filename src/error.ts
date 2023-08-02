@@ -1,20 +1,32 @@
+export type LoadedFile = {
+  path?: string;
+  content: string;
+};
+
 export type Span = {
   start: number;
   end: number;
+  file: LoadedFile;
 };
 
 export function spanMerge(a: Span, b: Span): Span {
+  if (a.file !== b.file) {
+    throw new Error("cannot merge spans from different files");
+  }
+
   return {
     start: Math.min(a.start, b.start),
     end: Math.max(a.end, b.end),
+    file: a.file,
   };
 }
 
-export const DUMMY_SPAN = { start: 0, end: 0 };
-export const EOF_SPAN = {
+export const DUMMY_SPAN: Span = { start: 0, end: 0, file: { content: "" } };
+export const eofSpan = (file: LoadedFile): Span => ({
   start: Number.MAX_SAFE_INTEGER,
   end: Number.MAX_SAFE_INTEGER,
-};
+  file,
+});
 
 export class CompilerError extends Error {
   msg: string;
@@ -28,8 +40,6 @@ export class CompilerError extends Error {
 }
 
 export function withErrorPrinter<R>(
-  input: string,
-  filename: string,
   f: () => R,
   afterError: (e: CompilerError) => R
 ): R {
@@ -37,7 +47,7 @@ export function withErrorPrinter<R>(
     return f();
   } catch (e) {
     if (e instanceof CompilerError) {
-      renderError(input, filename, e);
+      renderError(e);
       return afterError(e);
     } else {
       throw e;
@@ -45,30 +55,33 @@ export function withErrorPrinter<R>(
   }
 }
 
-function renderError(input: string, filename: string, e: CompilerError) {
-  const lineSpans = lines(input);
+function renderError(e: CompilerError) {
+  const { span } = e;
+  const { content } = span.file;
+
+  const lineSpans = lines(span.file);
   const line =
-    e.span.start === Number.MAX_SAFE_INTEGER
+    span.start === Number.MAX_SAFE_INTEGER
       ? lineSpans[lineSpans.length - 1]
       : lineSpans.find(
-          (line) => line.start <= e.span.start && line.end >= e.span.start
+          (line) => line.start <= span.start && line.end >= span.start
         );
   if (!line) {
-    throw Error(`Span out of bounds: ${e.span.start}..${e.span.end}`);
+    throw Error(`Span out of bounds: ${span.start}..${span.end}`);
   }
   const lineIdx = lineSpans.indexOf(line);
   const lineNo = lineIdx + 1;
   console.error(`error: ${e.message}`);
-  console.error(` --> ${filename}:${lineNo}`);
+  console.error(` --> ${span.file.path ?? "<unknown>"}:${lineNo}`);
 
-  console.error(`${lineNo} | ${spanToSnippet(input, line)}`);
+  console.error(`${lineNo} | ${spanToSnippet(content, line)}`);
   const startRelLine =
-    e.span.start === Number.MAX_SAFE_INTEGER ? 0 : e.span.start - line.start;
+    span.start === Number.MAX_SAFE_INTEGER ? 0 : span.start - line.start;
 
   const spanLength =
-    e.span.start === Number.MAX_SAFE_INTEGER
+    span.start === Number.MAX_SAFE_INTEGER
       ? 1
-      : min(e.span.end, line.end) - e.span.start;
+      : min(span.end, line.end) - span.start;
 
   console.error(
     `${" ".repeat(String(lineNo).length)}   ${" ".repeat(
@@ -84,22 +97,18 @@ function spanToSnippet(input: string, span: Span): string {
   return input.slice(span.start, span.end);
 }
 
-export function lines(input: string): Span[] {
-  const lines: Span[] = [{ start: 0, end: 0 }];
+export function lines(file: LoadedFile): Span[] {
+  const lines: Span[] = [{ start: 0, end: 0, file }];
 
-  for (let i = 0; i < input.length; i++) {
-    if (input[i] === "\n") {
-      lines.push({ start: i + 1, end: i + 1 });
+  for (let i = 0; i < file.content.length; i++) {
+    if (file.content[i] === "\n") {
+      lines.push({ start: i + 1, end: i + 1, file });
     } else {
       lines[lines.length - 1].end++;
     }
   }
 
   return lines;
-}
-
-export function todo(msg: string): never {
-  throw new CompilerError(`TODO: ${msg}`, { start: 0, end: 0 });
 }
 
 function min(a: number, b: number): number {

@@ -1,4 +1,4 @@
-import { DUMMY_SPAN, Span } from "./error";
+import { DUMMY_SPAN, LoadedFile, Span } from "./error";
 import { LitIntType } from "./lexer";
 import { ComplexMap, unwrap } from "./utils";
 
@@ -57,6 +57,7 @@ export type Crate<P extends Phase> = {
   rootItems: Item<P>[];
   itemsById: ComplexMap<ItemId, Item<P>>;
   packageName: string;
+  rootFile: LoadedFile,
 } & P["typeckResults"];
 
 export type DepCrate = Crate<Final>;
@@ -615,6 +616,7 @@ export function foldAst<From extends Phase, To extends Phase>(
     itemsById: folder.newItemsById,
     typeckResults: "typeckResults" in ast ? ast.typeckResults : undefined,
     packageName: ast.packageName,
+    rootFile: ast.rootFile,
   };
 }
 

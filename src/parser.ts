@@ -32,33 +32,36 @@ import {
   GlobalItem,
   StructLiteralField,
 } from "./ast";
-import { CompilerError, EOF_SPAN, Span, spanMerge } from "./error";
+import { CompilerError, eofSpan, LoadedFile, Span, spanMerge } from "./error";
 import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
 import { ComplexMap, ComplexSet, Ids } from "./utils";
 
-type Parser<T> = (t: Token[]) => [Token[], T];
+export type ParseState = { tokens: Token[]; file: LoadedFile };
+type State = ParseState;
+
+type Parser<T> = (t: State) => [State, T];
 
 export function parse(
   packageName: string,
-  t: Token[],
+  t: State,
   crateId: number
 ): Crate<Built> {
   const items: Item<Parsed>[] = [];
 
-  while (t.length > 0) {
+  while (t.tokens.length > 0) {
     let item;
     [t, item] = parseItem(t);
     items.push(item);
   }
 
-  const ast: Crate<Built> = buildCrate(packageName, items, crateId);
+  const ast: Crate<Built> = buildCrate(packageName, items, crateId, t.file);
 
   validateAst(ast);
 
   return ast;
 }
 
-function parseItem(t: Token[]): [Token[], Item<Parsed>] {
+function parseItem(t: State): [State, Item<Parsed>] {
   let tok;
   [t, tok] = next(t);
   if (tok.kind === "function") {
@@ -211,7 +214,7 @@ type FunctionSig = {
   returnType?: Type<Parsed>;
 };
 
-function parseFunctionSig(t: Token[]): [Token[], FunctionSig] {
+function parseFunctionSig(t: State): [State, FunctionSig] {
   let name;
   [t, name] = expectNext<TokenIdent>(t, "identifier");
 
@@ -238,7 +241,7 @@ function parseFunctionSig(t: Token[]): [Token[], FunctionSig] {
   return [t, { name: name.ident, params, returnType }];
 }
 
-function parseExpr(t: Token[]): [Token[], Expr<Parsed>] {
+function parseExpr(t: State): [State, Expr<Parsed>] {
   /*
   EXPR = ASSIGNMENT
 
@@ -284,7 +287,7 @@ function mkParserExprBinary(
   kinds: string[],
   mkExpr = mkBinaryExpr
 ): Parser<Expr<Parsed>> {
-  function parser(t: Token[]): [Token[], Expr<Parsed>] {
+  function parser(t: State): [State, Expr<Parsed>] {
     let lhs;
     [t, lhs] = lower(t);
 
@@ -328,7 +331,7 @@ const parseExprAssignment = mkParserExprBinary(
   (lhs, rhs, span) => ({ kind: "assign", lhs, rhs, span })
 );
 
-function parseExprUnary(t: Token[]): [Token[], Expr<Parsed>] {
+function parseExprUnary(t: State): [State, Expr<Parsed>] {
   const peek = peekKind(t);
   if (peek && UNARY_KINDS.includes(peek as UnaryKind)) {
     let tok: Token;
@@ -348,7 +351,7 @@ function parseExprUnary(t: Token[]): [Token[], Expr<Parsed>] {
 
   return parseExprCall(t);
 }
-function parseExprCall(t: Token[]): [Token[], Expr<Parsed>] {
+function parseExprCall(t: State): [State, Expr<Parsed>] {
   let lhs: Expr<Parsed>;
   [t, lhs] = parseExprAtom(t);
 
@@ -385,7 +388,7 @@ function parseExprCall(t: Token[]): [Token[], Expr<Parsed>] {
   return [t, lhs];
 }
 
-function parseExprAtom(startT: Token[]): [Token[], Expr<Parsed>] {
+function parseExprAtom(startT: State): [State, Expr<Parsed>] {
   // eslint-disable-next-line prefer-const
   let [t, tok] = next(startT);
   const span = tok.span;
@@ -536,8 +539,8 @@ function parseExprAtom(startT: Token[]): [Token[], Expr<Parsed>] {
 }
 
 function parseStructInit(
-  t: Token[]
-): [Token[], ExprStructLiteral<Parsed>["fields"]] {
+  t: State
+): [State, ExprStructLiteral<Parsed>["fields"]] {
   [t] = expectNext(t, "{");
 
   let fields;
@@ -558,7 +561,7 @@ function parseStructInit(
   return [t, fields];
 }
 
-function parseType(t: Token[]): [Token[], Type<Parsed>] {
+function parseType(t: State): [State, Type<Parsed>] {
   let tok;
   [t, tok] = next(t);
   const span = tok.span;
@@ -619,10 +622,10 @@ function parseType(t: Token[]): [Token[], Type<Parsed>] {
 // helpers
 
 function parseCommaSeparatedList<R>(
-  t: Token[],
+  t: State,
   terminator: Token["kind"],
   parser: Parser<R>
-): [Token[], R[]] {
+): [State, R[]] {
   const items: R[] = [];
 
   // () | (a) | (a,) | (a, b)
@@ -651,29 +654,29 @@ function parseCommaSeparatedList<R>(
 }
 
 function eat<T extends BaseToken>(
-  t: Token[],
+  t: State,
   kind: T["kind"]
-): [Token[], T | undefined] {
+): [State, T | undefined] {
   if (peekKind(t) === kind) {
     return expectNext(t, kind);
   }
   return [t, undefined];
 }
 
-function peekKind(t: Token[]): Token["kind"] | undefined {
+function peekKind(t: State): Token["kind"] | undefined {
   return maybeNextT(t)?.[1]?.kind;
 }
 
 function expectNext<T extends BaseToken>(
-  t: Token[],
+  t: State,
   kind: T["kind"]
-): [Token[], T & Token] {
+): [State, T & Token] {
   let tok;
   [t, tok] = maybeNextT(t);
   if (!tok) {
     throw new CompilerError(
       `expected \`${kind}\`, found end of file`,
-      EOF_SPAN
+      eofSpan(t.file)
     );
   }
   if (tok.kind !== kind) {
@@ -685,18 +688,19 @@ function expectNext<T extends BaseToken>(
   return [t, tok as unknown as T & Token];
 }
 
-function next(t: Token[]): [Token[], Token] {
+function next(t: State): [State, Token] {
   const [rest, next] = maybeNextT(t);
   if (!next) {
-    throw new CompilerError("unexpected end of file", EOF_SPAN);
+    throw new CompilerError("unexpected end of file", eofSpan(t.file));
   }
   return [rest, next];
 }
 
-function maybeNextT(t: Token[]): [Token[], Token | undefined] {
-  const next = t[0];
-  const rest = t.slice(1);
-  return [rest, next];
+function maybeNextT(t: State): [State, Token | undefined] {
+  const next = t.tokens[0];
+  const rest = t.tokens.slice(1);
+
+  return [{ ...t, tokens: rest }, next];
 }
 
 function unexpectedToken(token: Token, expected: string): never {
@@ -769,7 +773,8 @@ function validateAst(ast: Crate<Built>) {
 function buildCrate(
   packageName: string,
   rootItems: Item<Parsed>[],
-  crateId: number
+  crateId: number,
+  rootFile: LoadedFile
 ): Crate<Built> {
   const itemId = new Ids();
   itemId.next(); // crate root ID
@@ -780,6 +785,7 @@ function buildCrate(
     rootItems,
     itemsById: new ComplexMap(),
     packageName,
+    rootFile,
   };
 
   const assigner: Folder<Parsed, Built> = {

@@ -1,4 +1,4 @@
-import { CompilerError, Span } from "./error";
+import { CompilerError, LoadedFile, Span } from "./error";
 
 export type DatalessToken =
   | "function"
@@ -85,13 +85,14 @@ const SINGLE_PUNCT: string[] = [
   "%",
 ];
 
-export function tokenize(input: string): Token[] {
+export function tokenize(file: LoadedFile): Token[] {
+  const { content: input } = file;
   const tokens: Token[] = [];
   let i = 0;
 
   finish: while (i < input.length) {
     const next = input[i];
-    const span: Span = { start: i, end: i + 1 };
+    const span: Span = { start: i, end: i + 1, file };
 
     if (next === "/" && input[i + 1] === "/") {
       while (input[i] !== "\n") {
@@ -205,7 +206,7 @@ export function tokenize(input: string): Token[] {
                 default:
                   throw new CompilerError(
                     `invalid escape character: ${input[i]}`,
-                    { start: span.end - 1, end: span.end }
+                    { start: span.end - 1, end: span.end, file }
                   );
               }
               continue;
