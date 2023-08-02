@@ -1012,6 +1012,8 @@ function lowerExpr(
       expr.fields.forEach((field) => lowerExpr(fcx, instrs, field));
       break;
     }
+    case "refcount":
+      todo("refcount");
     default: {
       const _: never = expr;
     }
