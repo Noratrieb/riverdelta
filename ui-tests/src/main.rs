@@ -8,7 +8,7 @@ fn main() {
         .args(&[
             "build",
             "--manifest-path",
-            "tests/Cargo.toml",
+            "ui-tests/Cargo.toml",
             "--bin",
             "nilc-wrapper",
         ])
@@ -20,9 +20,9 @@ fn main() {
         .then_some(())
         .unwrap_or_else(|| std::process::exit(1));
 
-    let mut config = Config::rustc("tests/ui");
+    let mut config = Config::rustc("ui-tests/ui");
     config.host = Some("wasm :3".into());
-    config.program = CommandBuilder::cmd("tests/target/debug/nilc-wrapper");
+    config.program = CommandBuilder::cmd("ui-tests/target/debug/nilc-wrapper");
     config.mode = Mode::Fail {
         require_patterns: false,
     };

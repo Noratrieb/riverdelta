@@ -8,7 +8,7 @@
     "build": "tsc",
     "fmt": "prettier -w .",
     "test": "jest",
-    "ui-test": "npm run build && cargo run --manifest-path tests/Cargo.toml --bin tests",
+    "ui-test": "npm run build && cargo run --manifest-path ui-tests/Cargo.toml --bin ui-tests",
     "lint": "eslint ."
   },
   "author": "",
