@@ -740,24 +740,6 @@ function lowerExpr(
             instrs.push({ kind: "i64.store", imm: {} });
             break exprKind;
           }
-          case "__string_ptr": {
-            assertArgs(1);
-            lowerExpr(fcx, instrs, expr.args[0]);
-            // ptr, len
-            instrs.push({ kind: "drop" });
-            // ptr
-            break exprKind;
-          }
-          case "__string_len": {
-            assertArgs(1);
-            lowerExpr(fcx, instrs, expr.args[0]);
-            // ptr, len
-            instrs.push({ kind: "i32.const", imm: 0n });
-            // ptr, len, 0
-            instrs.push({ kind: "select" });
-            // len
-            break exprKind;
-          }
           case "__memory_size": {
             assertArgs(0);
             instrs.push({ kind: "memory.size" });

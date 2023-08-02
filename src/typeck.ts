@@ -77,10 +77,6 @@ function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
       return mkTyFn([TY_I32], TY_I32);
     case "__i64_load":
       return mkTyFn([TY_I32], TY_INT);
-    case "__string_ptr":
-      return mkTyFn([TY_STRING], TY_I32);
-    case "__string_len":
-      return mkTyFn([TY_STRING], TY_I32);
     case "__memory_size":
       return mkTyFn([], TY_I32);
     case "__memory_grow":

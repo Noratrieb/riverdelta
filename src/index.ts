@@ -28,7 +28,15 @@ function uwu() = (
   /*-1*/
 );
 
-function eat(a: A) = ;
+type B = {
+  a: (Int, Int, Int, Int, Int),
+};
+
+function test(b: B) = (
+  b.a;
+); 
+
+function eat(a: A) =;
 `;
 
 function main() {

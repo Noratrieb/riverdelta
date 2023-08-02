@@ -443,8 +443,6 @@ export const BUILTINS = [
   "__i64_store",
   "__i32_load",
   "__i64_load",
-  "__string_ptr",
-  "__string_len",
   "__memory_size",
   "__memory_grow",
   "__i32_extend_to_i64_u",
