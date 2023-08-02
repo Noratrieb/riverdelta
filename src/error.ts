@@ -3,30 +3,35 @@ export type LoadedFile = {
   content: string;
 };
 
-export type Span = {
-  start: number;
-  end: number;
-  file: LoadedFile;
-};
+export class Span {
+  constructor(
+    public start: number,
+    public end: number,
+    public file: LoadedFile
+  ) {}
 
-export function spanMerge(a: Span, b: Span): Span {
-  if (a.file !== b.file) {
-    throw new Error("cannot merge spans from different files");
+  public merge(b: Span): Span {
+    if (this.file !== b.file) {
+      throw new Error("cannot merge spans from different files");
+    }
+
+    return new Span(
+      Math.min(this.start, b.start),
+      Math.max(this.end, b.end),
+      this.file
+    );
   }
 
-  return {
-    start: Math.min(a.start, b.start),
-    end: Math.max(a.end, b.end),
-    file: a.file,
-  };
-}
+  public static eof(file: LoadedFile): Span {
+    return new Span(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, file);
+  }
 
-export const DUMMY_SPAN: Span = { start: 0, end: 0, file: { content: "" } };
-export const eofSpan = (file: LoadedFile): Span => ({
-  start: Number.MAX_SAFE_INTEGER,
-  end: Number.MAX_SAFE_INTEGER,
-  file,
-});
+  public static startOfFile(file: LoadedFile): Span {
+    return new Span(0, 1, file);
+  }
+
+  public static DUMMY: Span = new Span(0, 0, { content: "" });
+}
 
 export class CompilerError extends Error {
   msg: string;
@@ -98,11 +103,11 @@ function spanToSnippet(input: string, span: Span): string {
 }
 
 export function lines(file: LoadedFile): Span[] {
-  const lines: Span[] = [{ start: 0, end: 0, file }];
+  const lines: Span[] = [new Span(0, 0, file)];
 
   for (let i = 0; i < file.content.length; i++) {
     if (file.content[i] === "\n") {
-      lines.push({ start: i + 1, end: i + 1, file });
+      lines.push(new Span(i + 1, i + 1, file));
     } else {
       lines[lines.length - 1].end++;
     }

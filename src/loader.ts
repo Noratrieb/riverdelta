@@ -45,7 +45,7 @@ export const loadCrate: CrateLoader = (
   // We really, really want a good algorithm for finding crates.
   // But right now we just look for files in the CWD.
 
-  const existing = gcx.depCrates.find((crate) => crate.packageName === name);
+  const existing = gcx.finalizedCrates.find((crate) => crate.packageName === name);
   if (existing) {
     return existing;
   }
@@ -64,7 +64,7 @@ export const loadCrate: CrateLoader = (
 
       const typecked = typeck(gcx, resolved);
 
-      gcx.depCrates.push(typecked);
+      gcx.finalizedCrates.push(typecked);
       return typecked;
     },
     () => {

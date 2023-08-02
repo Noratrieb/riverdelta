@@ -92,7 +92,7 @@ export function tokenize(file: LoadedFile): Token[] {
 
   finish: while (i < input.length) {
     const next = input[i];
-    const span: Span = { start: i, end: i + 1, file };
+    const span: Span = new Span(i, i + 1, file);
 
     if (next === "/" && input[i + 1] === "/") {
       while (input[i] !== "\n") {
@@ -206,7 +206,7 @@ export function tokenize(file: LoadedFile): Token[] {
                 default:
                   throw new CompilerError(
                     `invalid escape character: ${input[i]}`,
-                    { start: span.end - 1, end: span.end, file }
+                    new Span(span.end - 1, span.end, file)
                   );
               }
               continue;

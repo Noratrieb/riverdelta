@@ -32,7 +32,7 @@ import {
   GlobalItem,
   StructLiteralField,
 } from "./ast";
-import { CompilerError, eofSpan, LoadedFile, Span, spanMerge } from "./error";
+import { CompilerError, LoadedFile, Span } from "./error";
 import { BaseToken, Token, TokenIdent, TokenLitString } from "./lexer";
 import { ComplexMap, ComplexSet, Ids } from "./utils";
 
@@ -297,7 +297,7 @@ function mkParserExprBinary(
       [t, tok] = next(t);
       let rhs;
       [t, rhs] = parser(t);
-      const span = spanMerge(lhs.span, rhs.span);
+      const span = lhs.span.merge(rhs.span);
 
       return [t, mkExpr(lhs, rhs, span, tok.kind)];
     }
@@ -380,7 +380,7 @@ function parseExprCall(t: State): [State, Expr<Parsed>] {
         kind: "fieldAccess",
         lhs,
         field: { span: access.span, value },
-        span: spanMerge(lhs.span, access.span),
+        span: lhs.span.merge(access.span),
       };
     }
   }
@@ -676,7 +676,7 @@ function expectNext<T extends BaseToken>(
   if (!tok) {
     throw new CompilerError(
       `expected \`${kind}\`, found end of file`,
-      eofSpan(t.file)
+      Span.eof(t.file)
     );
   }
   if (tok.kind !== kind) {
@@ -691,7 +691,7 @@ function expectNext<T extends BaseToken>(
 function next(t: State): [State, Token] {
   const [rest, next] = maybeNextT(t);
   if (!next) {
-    throw new CompilerError("unexpected end of file", eofSpan(t.file));
+    throw new CompilerError("unexpected end of file", Span.eof(t.file));
   }
   return [rest, next];
 }

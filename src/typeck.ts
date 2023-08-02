@@ -28,7 +28,6 @@ import {
   Typecked,
   TyStruct,
   Item,
-  findCrateItem,
   StructLiteralField,
 } from "./ast";
 import { GlobalContext } from "./context";
@@ -154,7 +153,7 @@ export function typeck(
       }
     }
 
-    const item = findCrateItem(ast, itemId);
+    const item = gcx.findItem(itemId, ast);
     const ty = itemTys.get(itemId);
     if (ty) {
       return ty;
@@ -420,11 +419,10 @@ export function typeck(
   if (ast.id === 0) {
     // Only the final id=0 crate needs and cares about main.
     if (!main) {
-      throw new CompilerError(`\`main\` function not found`, {
-        start: 0,
-        end: 1,
-        file: ast.rootFile,
-      });
+      throw new CompilerError(
+        `\`main\` function not found`,
+        Span.startOfFile(ast.rootFile)
+      );
     }
 
     typecked.typeckResults = {

@@ -1,5 +1,5 @@
 import { Crate, DepCrate, Final, Item, ItemId, Phase } from "./ast";
-import { DUMMY_SPAN, Span } from "./error";
+import { Span } from "./error";
 import { Ids, unwrap } from "./utils";
 import fs from "fs";
 import path from "path";
@@ -20,17 +20,19 @@ export type CrateLoader = (
  * dependencies (which also use the same context) do not care about that.
  */
 export class GlobalContext {
-  public depCrates: Crate<Final>[] = [];
+  public finalizedCrates: Crate<Final>[] = [];
   public crateId: Ids = new Ids();
 
   constructor(public opts: Options, public crateLoader: CrateLoader) {}
 
   public findItem<P extends Phase>(
     id: ItemId,
-    localCrate: Crate<P>
+    localCrate?: Crate<P>
   ): Item<P | Final> {
     const crate = unwrap(
-      [localCrate, ...this.depCrates].find((crate) => crate.id === id.crateId)
+      [...(localCrate ? [localCrate] : []), ...this.finalizedCrates].find(
+        (crate) => crate.id === id.crateId
+      )
     );
 
     if (id.itemIdx === 0) {
@@ -41,7 +43,7 @@ export class GlobalContext {
           contents: crate.rootItems,
           name: crate.packageName,
         },
-        span: DUMMY_SPAN,
+        span: Span.startOfFile(crate.rootFile),
         id,
       };
     }

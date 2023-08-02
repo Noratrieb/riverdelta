@@ -1,4 +1,4 @@
-import { LoadedFile, withErrorPrinter } from "./error";
+import { LoadedFile, Span, withErrorPrinter } from "./error";
 import { isValidIdent, tokenize } from "./lexer";
 import { lower as lowerToWasm } from "./lower";
 import { ParseState, parse } from "./parser";
@@ -13,8 +13,6 @@ import { GlobalContext, parseArgs } from "./context";
 import { loadCrate } from "./loader";
 
 const INPUT = `
-extern mod std;
-
 type A = { a: Int };
 
 function main() = (
@@ -48,6 +46,8 @@ function main() {
 
   const gcx = new GlobalContext(opts, loadCrate);
   const mainCrate = gcx.crateId.next();
+
+  gcx.crateLoader(gcx, "std", Span.startOfFile(file));
 
   withErrorPrinter(
     () => {
@@ -93,7 +93,9 @@ function main() {
       if (debug.has("wat")) {
         console.log("-----wasm--------------");
       }
-      const wasmModule = lowerToWasm([typecked, ...gcx.depCrates]);
+
+      gcx.finalizedCrates.push(typecked);
+      const wasmModule = lowerToWasm(gcx);
       const moduleStringColor = writeModuleWatToString(wasmModule, true);
       const moduleString = writeModuleWatToString(wasmModule);
 

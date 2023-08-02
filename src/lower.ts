@@ -2,7 +2,6 @@ import {
   Crate,
   Expr,
   ExprBlock,
-  Final,
   Folder,
   FunctionDef,
   GlobalItem,
@@ -16,12 +15,12 @@ import {
   TyStruct,
   TyTuple,
   Typecked,
-  findCrateItem,
   mkDefaultFolder,
   superFoldExpr,
   superFoldItem,
   varUnreachable,
 } from "./ast";
+import { GlobalContext } from "./context";
 import { printTy } from "./printer";
 import { ComplexMap, encodeUtf8, unwrap } from "./utils";
 import * as wasm from "./wasm/defs";
@@ -61,7 +60,7 @@ export type Context = {
   reservedHeapMemoryStart: number;
   funcIndices: ComplexMap<Resolution, FuncOrImport>;
   globalIndices: ComplexMap<Resolution, wasm.GlobalIdx>;
-  crates: Crate<Final>[];
+  gcx: GlobalContext;
   relocations: Relocation[];
   knownDefPaths: ComplexMap<string[], ItemId>;
 };
@@ -112,13 +111,6 @@ function appendData(cx: Context, newData: Uint8Array): number {
   }
 }
 
-function findItem(cx: Context, id: ItemId): Item<Typecked> {
-  return findCrateItem(
-    unwrap(cx.crates.find((crate) => crate.id === id.crateId)),
-    id
-  );
-}
-
 const KNOWN_DEF_PATHS = [ALLOCATE_ITEM];
 
 function getKnownDefPaths(
@@ -155,8 +147,8 @@ function getKnownDefPaths(
   return knows;
 }
 
-export function lower(crates: Crate<Final>[]): wasm.Module {
-  const knownDefPaths = getKnownDefPaths(crates);
+export function lower(gcx: GlobalContext): wasm.Module {
+  const knownDefPaths = getKnownDefPaths(gcx.finalizedCrates);
 
   const mod: wasm.Module = {
     types: [],
@@ -183,12 +175,12 @@ export function lower(crates: Crate<Final>[]): wasm.Module {
   });
 
   const cx: Context = {
+    gcx,
     mod,
     funcTypes: new ComplexMap(),
     funcIndices: new ComplexMap(),
     globalIndices: new ComplexMap(),
     reservedHeapMemoryStart: 0,
-    crates,
     relocations: [],
     knownDefPaths,
   };
@@ -221,7 +213,7 @@ export function lower(crates: Crate<Final>[]): wasm.Module {
       }
     });
   }
-  crates.forEach((ast) => lowerMod(ast.rootItems));
+  gcx.finalizedCrates.forEach((ast) => lowerMod(ast.rootItems));
 
   const HEAP_ALIGN = 0x08;
   cx.reservedHeapMemoryStart =
@@ -229,7 +221,7 @@ export function lower(crates: Crate<Final>[]): wasm.Module {
       ? (mod.datas[0].init.length + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1)
       : 0;
 
-  addRt(cx, crates);
+  addRt(cx, gcx.finalizedCrates);
 
   // THE LINKER
   const offset = cx.mod.imports.length;
@@ -447,7 +439,7 @@ function lowerExpr(
               break;
             }
             case "item": {
-              const item = findItem(fcx.cx, res.id);
+              const item = fcx.cx.gcx.findItem(res.id);
               if (item.kind !== "global") {
                 throw new Error("cannot store to non-global item");
               }
@@ -529,7 +521,7 @@ function lowerExpr(
           break;
         }
         case "item": {
-          const item = findItem(fcx.cx, res.id);
+          const item = fcx.cx.gcx.findItem(res.id);
           switch (item.kind) {
             case "global": {
               const instr: wasm.Instr = { kind: "global.get", imm: DUMMY_IDX };

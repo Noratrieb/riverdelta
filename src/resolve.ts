@@ -19,7 +19,7 @@ import {
   ExternItem,
 } from "./ast";
 import { GlobalContext } from "./context";
-import { CompilerError, spanMerge } from "./error";
+import { CompilerError } from "./error";
 import { ComplexMap } from "./utils";
 
 const BUILTIN_SET = new Set<string>(BUILTINS);
@@ -128,11 +128,14 @@ function resolveModule(
       };
     }
 
-    if (ident.name === cx.ast.packageName) {
-      return {
-        kind: "item",
-        id: new ItemId(cx.ast.id, 0),
-      };
+    // All loaded crates are in scope.
+    for (const crate of [cx.ast, ...cx.gcx.finalizedCrates]) {
+      if (ident.name === crate.packageName) {
+        return {
+          kind: "item",
+          id: ItemId.crateRoot(crate.id),
+        };
+      }
     }
 
     if (BUILTIN_SET.has(ident.name)) {
@@ -278,7 +281,7 @@ function resolveModule(
                   kind: "path",
                   segments: [...segments, expr.field.value],
                   res: pathRes,
-                  span: spanMerge(lhs.span, expr.field.span),
+                  span: lhs.span.merge(expr.field.span),
                 };
               }
             }

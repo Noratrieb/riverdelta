@@ -1,6 +1,8 @@
 import { TY_INT, TY_STRING, TY_UNIT } from "./ast";
-import { DUMMY_SPAN as SPAN } from "./error";
+import { Span } from "./error";
 import { InferContext } from "./typeck";
+
+const SPAN: Span = Span.startOfFile({content: ""});
 
 it("should infer types across assignments", () => {
   const infcx = new InferContext();
