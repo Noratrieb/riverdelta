@@ -13,6 +13,7 @@ import { GlobalContext, parseArgs } from "./context";
 import { loadCrate } from "./loader";
 
 const INPUT = `
+extern mod a;
 type A = { a: Int };
 
 function main() = (
@@ -22,12 +23,7 @@ function main() = (
 
 function printA(a: A) = (
   print("ABCDEFGH\\n");
-  std.printlnInt(a.a);
   print("ABCDEFGH\\n");
-);
-
-function linkStd() = (
-  std.println("a");
 );
 `;
 
@@ -47,11 +43,11 @@ function main() {
   const gcx = new GlobalContext(opts, loadCrate);
   const mainCrate = gcx.crateId.next();
 
-  gcx.crateLoader(gcx, "std", Span.startOfFile(file));
-
   withErrorPrinter(
     () => {
       const start = Date.now();
+
+      gcx.crateLoader(gcx, "std", Span.startOfFile(file));
 
       const tokens = tokenize(file);
       if (debug.has("tokens")) {

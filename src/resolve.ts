@@ -19,7 +19,7 @@ import {
   ExternItem,
 } from "./ast";
 import { GlobalContext } from "./context";
-import { CompilerError } from "./error";
+import { CompilerError, Span } from "./error";
 import { ComplexMap } from "./utils";
 
 const BUILTIN_SET = new Set<string>(BUILTINS);
@@ -30,6 +30,16 @@ type Context = {
   modContentsCache: ComplexMap<ItemId, Map<string, ItemId>>;
   newItemsById: ComplexMap<ItemId, Item<Resolved>>;
 };
+
+function loadCrate(cx: Context, name: string, span: Span): Map<string, ItemId> {
+  const loadedCrate = cx.gcx.crateLoader(cx.gcx, name, span);
+
+  const contents = new Map(
+    loadedCrate.rootItems.map((item) => [item.node.name, item.id])
+  );
+
+  return contents;
+}
 
 function resolveModItem(
   cx: Context,
@@ -47,10 +57,7 @@ function resolveModItem(
   if ("contents" in mod) {
     contents = new Map(mod.contents.map((item) => [item.node.name, item.id]));
   } else {
-    const loadedCrate = cx.gcx.crateLoader(cx.gcx, item.node.name, item.span);
-    contents = new Map(
-      loadedCrate.rootItems.map((item) => [item.node.name, item.id])
-    );
+    contents = loadCrate(cx, item.node.name, item.span);
   }
 
   cx.modContentsCache.set(item.id, contents);
@@ -191,6 +198,12 @@ function resolveModule(
           };
         }
         case "extern": {
+          // Eagerly resolve the crate.
+          // Note that because you can reference extern crates before the item,
+          // we still need the loadCrate in the field access code above.
+
+          loadCrate(cx, item.node.name, item.span);
+
           const node: ExternItem = {
             ...item.node,
           };
