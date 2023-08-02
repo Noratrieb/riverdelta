@@ -47,7 +47,7 @@ function printItem(item: Item<AnyPhase>): string {
         id +
         `global ${item.node.name}: ${printType(item.node.type)} = ${printExpr(
           item.node.init,
-          0
+          0,
         )};`
       );
     }
@@ -64,7 +64,7 @@ function printFunction(func: FunctionDef<AnyPhase>): string {
 
 function printTypeDef(type: TypeDef<AnyPhase>): string {
   const fields = type.fields.map(
-    ({ name, type }) => `${ind(1)}${name.name}: ${printType(type)},`
+    ({ name, type }) => `${ind(1)}${name.name}: ${printType(type)},`,
   );
 
   const fieldPart =
@@ -80,7 +80,7 @@ function printImportDef(def: ImportDef<AnyPhase>): string {
   const ret = def.returnType ? `: ${printType(def.returnType)}` : "";
 
   return `import ${printStringLiteral(def.module)} ${printStringLiteral(
-    def.func
+    def.func,
   )}(${args})${ret};`;
 }
 
@@ -98,7 +98,7 @@ function printExpr(expr: Expr<AnyPhase>, indent: number): string {
 
       return `let ${expr.name.name}${type} = ${printExpr(
         expr.rhs,
-        indent + 1
+        indent + 1,
       )}`;
     }
     case "assign": {
@@ -146,7 +146,7 @@ function printExpr(expr: Expr<AnyPhase>, indent: number): string {
     case "binary": {
       return `${printExpr(expr.lhs, indent)} ${expr.binaryKind} ${printExpr(
         expr.rhs,
-        indent
+        indent,
       )}`;
     }
     case "unary": {
@@ -175,7 +175,7 @@ function printExpr(expr: Expr<AnyPhase>, indent: number): string {
         : "";
       return `if ${printExpr(expr.cond, indent + 1)} then ${printExpr(
         expr.then,
-        indent + 1
+        indent + 1,
       )}${elsePart}`;
     }
     case "loop": {

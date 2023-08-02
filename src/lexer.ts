@@ -206,7 +206,7 @@ export function tokenize(file: LoadedFile): Token[] {
                 default:
                   throw new CompilerError(
                     `invalid escape character: ${input[i]}`,
-                    new Span(span.end - 1, span.end, file)
+                    new Span(span.end - 1, span.end, file),
                   );
               }
               continue;
@@ -231,7 +231,7 @@ export function tokenize(file: LoadedFile): Token[] {
             const int = parseInt(digit, 10);
             if (Number.isNaN(int)) {
               throw new Error(
-                `\`${digit}\` was tokenized to a number even though it is not`
+                `\`${digit}\` was tokenized to a number even though it is not`,
               );
             }
 

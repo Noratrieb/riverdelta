@@ -51,7 +51,7 @@ type Parser<T> = (t: State) => [State, T];
 export function parse(
   packageName: string,
   t: State,
-  crateId: number
+  crateId: number,
 ): Crate<Built> {
   const [, items] = parseItems(t);
 
@@ -195,7 +195,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
       if (name.span.file.path === undefined) {
         throw new CompilerError(
           `no known source file for statement, cannot load file relative to it`,
-          name.span
+          name.span,
         );
       }
       const file = loadModuleFile(name.span.file.path, name.ident, name.span);
@@ -304,7 +304,7 @@ function mkBinaryExpr(
   lhs: Expr<Parsed>,
   rhs: Expr<Parsed>,
   span: Span,
-  kind: string
+  kind: string,
 ): Expr<Parsed> {
   return { kind: "binary", binaryKind: kind as BinaryKind, lhs, rhs, span };
 }
@@ -312,7 +312,7 @@ function mkBinaryExpr(
 function mkParserExprBinary(
   lower: Parser<Expr<Parsed>>,
   kinds: string[],
-  mkExpr = mkBinaryExpr
+  mkExpr = mkBinaryExpr,
 ): Parser<Expr<Parsed>> {
   function parser(t: State): [State, Expr<Parsed>] {
     let lhs;
@@ -337,25 +337,25 @@ function mkParserExprBinary(
 
 const parseExprArithFactor = mkParserExprBinary(
   parseExprUnary,
-  ARITH_FACTOR_KINDS
+  ARITH_FACTOR_KINDS,
 );
 
 const parseExprArithTerm = mkParserExprBinary(
   parseExprArithFactor,
-  ARITH_TERM_KINDS
+  ARITH_TERM_KINDS,
 );
 
 const parseExprLogical = mkParserExprBinary(parseExprArithTerm, LOGICAL_KINDS);
 
 const parseExprComparison = mkParserExprBinary(
   parseExprLogical,
-  COMPARISON_KINDS
+  COMPARISON_KINDS,
 );
 
 const parseExprAssignment = mkParserExprBinary(
   parseExprComparison,
   ["="],
-  (lhs, rhs, span) => ({ kind: "assign", lhs, rhs, span })
+  (lhs, rhs, span) => ({ kind: "assign", lhs, rhs, span }),
 );
 
 function parseExprUnary(t: State): [State, Expr<Parsed>] {
@@ -566,7 +566,7 @@ function parseExprAtom(startT: State): [State, Expr<Parsed>] {
 }
 
 function parseStructInit(
-  t: State
+  t: State,
 ): [State, ExprStructLiteral<Parsed>["fields"]] {
   [t] = expectNext(t, "{");
 
@@ -582,7 +582,7 @@ function parseStructInit(
       [t, expr] = parseExpr(t);
 
       return [t, { name: { name: name.ident, span: name.span }, expr }];
-    }
+    },
   );
 
   return [t, fields];
@@ -640,7 +640,7 @@ function parseType(t: State): [State, Type<Parsed>] {
     default: {
       throw new CompilerError(
         `unexpected token: \`${tok.kind}\`, expected type`,
-        span
+        span,
       );
     }
   }
@@ -651,7 +651,7 @@ function parseType(t: State): [State, Type<Parsed>] {
 function parseCommaSeparatedList<R>(
   t: State,
   terminator: Token["kind"],
-  parser: Parser<R>
+  parser: Parser<R>,
 ): [State, R[]] {
   const items: R[] = [];
 
@@ -682,7 +682,7 @@ function parseCommaSeparatedList<R>(
 
 function eat<T extends BaseToken>(
   t: State,
-  kind: T["kind"]
+  kind: T["kind"],
 ): [State, T | undefined] {
   if (peekKind(t) === kind) {
     return expectNext(t, kind);
@@ -696,20 +696,20 @@ function peekKind(t: State): Token["kind"] | undefined {
 
 function expectNext<T extends BaseToken>(
   t: State,
-  kind: T["kind"]
+  kind: T["kind"],
 ): [State, T & Token] {
   let tok;
   [t, tok] = maybeNextT(t);
   if (!tok) {
     throw new CompilerError(
       `expected \`${kind}\`, found end of file`,
-      Span.eof(t.file)
+      Span.eof(t.file),
     );
   }
   if (tok.kind !== kind) {
     throw new CompilerError(
       `expected \`${kind}\`, found \`${tok.kind}\``,
-      tok.span
+      tok.span,
     );
   }
   return [t, tok as unknown as T & Token];
@@ -742,7 +742,7 @@ function validateAst(ast: Crate<Built>) {
     itemInner(item: Item<Built>): Item<Built> {
       if (seenItemIds.has(item.id)) {
         throw new Error(
-          `duplicate item id: ${item.id.toString()} for ${item.node.name}`
+          `duplicate item id: ${item.id.toString()} for ${item.node.name}`,
         );
       }
       seenItemIds.add(item.id);
@@ -772,7 +772,7 @@ function validateAst(ast: Crate<Built>) {
             if (ourClass !== innerClass) {
               throw new CompilerError(
                 `mixing operators without parentheses is not allowed. ${side} is ${inner.binaryKind}, which is different from ${expr.binaryKind}`,
-                expr.span
+                expr.span,
               );
             }
           }
@@ -801,7 +801,7 @@ function buildCrate(
   packageName: string,
   rootItems: Item<Parsed>[],
   crateId: number,
-  rootFile: LoadedFile
+  rootFile: LoadedFile,
 ): Crate<Built> {
   const itemId = new Ids();
   itemId.next(); // crate root ID

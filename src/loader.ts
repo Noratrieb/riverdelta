@@ -11,7 +11,7 @@ import { typeck } from "./typeck";
 export function loadModuleFile(
   relativeTo: string,
   moduleName: string,
-  span: Span
+  span: Span,
 ): LoadedFile {
   let searchDir: string;
   if (relativeTo.endsWith(".mod.nil")) {
@@ -20,7 +20,7 @@ export function loadModuleFile(
   } else if (relativeTo.endsWith(".nil")) {
     throw new CompilerError(
       `.nil files cannot have submodules. use .mod.nil in a subdirectory`,
-      span
+      span,
     );
   } else {
     searchDir = relativeTo;
@@ -43,7 +43,7 @@ export function loadModuleFile(
   if (content === undefined || filePath === undefined) {
     throw new CompilerError(
       `failed to load ${moduleName}, could not find ${options.join(" or ")}`,
-      span
+      span,
     );
   }
 
@@ -53,13 +53,13 @@ export function loadModuleFile(
 export const loadCrate: CrateLoader = (
   gcx: GlobalContext,
   name: string,
-  span: Span
+  span: Span,
 ): DepCrate => {
   // We really, really want a good algorithm for finding crates.
   // But right now we just look for files in the CWD.
 
   const existing = gcx.finalizedCrates.find(
-    (crate) => crate.packageName === name
+    (crate) => crate.packageName === name,
   );
   if (existing) {
     return existing;
@@ -75,7 +75,6 @@ export const loadCrate: CrateLoader = (
       const parseState: ParseState = { tokens, file };
       const ast = parse(name, parseState, crateId);
       const resolved = resolve(gcx, ast);
-      console.log(resolved);
 
       const typecked = typeck(gcx, resolved);
 
@@ -85,8 +84,8 @@ export const loadCrate: CrateLoader = (
     () => {
       throw new CompilerError(
         `failed to load crate ${name}: crate contains errors`,
-        span
+        span,
       );
-    }
+    },
   );
 };

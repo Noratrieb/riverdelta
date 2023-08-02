@@ -1,6 +1,6 @@
 import { LoadedFile, Span, withErrorPrinter } from "./error";
 import { isValidIdent, tokenize } from "./lexer";
-import { lower as lowerToWasm } from "./lower";
+import { lower as lowerToWasm } from "./codegen";
 import { ParseState, parse } from "./parser";
 import { printAst } from "./printer";
 import { resolve } from "./resolve";
@@ -16,14 +16,19 @@ const INPUT = `
 type A = { a: Int };
 
 function main() = (
-  let a = A { a: 100 };
-  printA(a);
+  uwu();
 );
 
-function printA(a: A) = (
-  print("ABCDEFGH\\n");
-  print("ABCDEFGH\\n");
+function uwu() = (
+  let a = A { a: 100 };
+  eat(a /*+1*/);
+
+  A { a: 100 };
+
+  /*-1*/
 );
+
+function eat(a: A) = ;
 `;
 
 function main() {
@@ -32,7 +37,7 @@ function main() {
 
   if (!isValidIdent(packageName)) {
     console.error(
-      `error: package name \`${packageName}\` is not a valid identifer`
+      `error: package name \`${packageName}\` is not a valid identifer`,
     );
     process.exit(1);
   }
@@ -123,7 +128,7 @@ function main() {
         });
       }
     },
-    () => process.exit(1)
+    () => process.exit(1),
   );
 }
 

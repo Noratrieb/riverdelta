@@ -44,3 +44,33 @@ it("should compute struct layout correctly", () => {
     }
   `);
 });
+
+it("should compute single field struct layout correctly", () => {
+  const ty: TyStruct = {
+    kind: "struct",
+    name: "",
+    fields: [["owo", TY_INT]],
+  };
+
+  const layout = layoutOfStruct(ty);
+
+  expect(layout).toMatchInlineSnapshot(`
+    {
+      "align": 8,
+      "fields": [
+        {
+          "ty": {
+            "kind": "int",
+          },
+          "types": [
+            {
+              "offset": 4,
+              "type": "i64",
+            },
+          ],
+        },
+      ],
+      "size": 8,
+    }
+  `);
+});

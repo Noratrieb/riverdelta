@@ -56,7 +56,7 @@ class FmtCtx {
     this.indentation--;
     if (this.indentation < 0) {
       throw new Error(
-        "Cannot dedent from 0 indents, there are more dedents than indents"
+        "Cannot dedent from 0 indents, there are more dedents than indents",
       );
     }
     this.linebreak();
@@ -92,7 +92,7 @@ class FmtCtx {
 
   word(
     word: string | number | bigint,
-    color: (s: string) => string = identity
+    color: (s: string) => string = identity,
   ) {
     const last = this.wordsInSexpr.length - 1;
     if (this.wordsInSexpr[last] > 0 && !this.freshLinebreak) {

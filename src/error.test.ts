@@ -5,7 +5,7 @@ it("should extract lines correctly", () => {
 
   const lineSpans = lines({ content: input });
   const lineContents = lineSpans.map(({ start, end }) =>
-    input.slice(start, end)
+    input.slice(start, end),
   );
 
   expect(lineContents).toStrictEqual(["AAA", "meow", ":3", "", ""]);

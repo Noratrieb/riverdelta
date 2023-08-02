@@ -29,6 +29,7 @@ import {
   TyStruct,
   Item,
   StructLiteralField,
+  superFoldExpr,
 } from "./ast";
 import { GlobalContext } from "./context";
 import { CompilerError, Span } from "./error";
@@ -96,7 +97,7 @@ function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
 function lowerAstTyBase(
   type: Type<Resolved>,
   lowerIdentTy: (ident: IdentWithRes<Resolved>) => Ty,
-  typeOfItem: (itemId: ItemId, cause: Span) => Ty
+  typeOfItem: (itemId: ItemId, cause: Span) => Ty,
 ): Ty {
   switch (type.kind) {
     case "ident": {
@@ -112,7 +113,7 @@ function lowerAstTyBase(
       return {
         kind: "tuple",
         elems: type.elems.map((type) =>
-          lowerAstTyBase(type, lowerIdentTy, typeOfItem)
+          lowerAstTyBase(type, lowerIdentTy, typeOfItem),
         ),
       };
     }
@@ -124,7 +125,7 @@ function lowerAstTyBase(
 
 export function typeck(
   gcx: GlobalContext,
-  ast: Crate<Resolved>
+  ast: Crate<Resolved>,
 ): Crate<Typecked> {
   const itemTys = new ComplexMap<ItemId, Ty | null>();
 
@@ -141,13 +142,13 @@ export function typeck(
         case "mod": {
           throw new CompilerError(
             `module ${item.node.name} cannot be used as a type or value`,
-            cause
+            cause,
           );
         }
         case "extern": {
           throw new CompilerError(
             `extern declaration ${item.node.name} cannot be used as a type or value`,
-            cause
+            cause,
           );
         }
       }
@@ -161,7 +162,7 @@ export function typeck(
     if (ty === null) {
       throw new CompilerError(
         `cycle computing type of #G${itemId.toString()}`,
-        item.span
+        item.span,
       );
     }
     itemTys.set(itemId, null);
@@ -199,13 +200,13 @@ export function typeck(
       case "mod": {
         throw new CompilerError(
           `module ${item.node.name} cannot be used as a type or value`,
-          cause
+          cause,
         );
       }
       case "extern": {
         throw new CompilerError(
           `extern declaration ${item.node.name} cannot be used as a type or value`,
-          cause
+          cause,
         );
       }
       case "global": {
@@ -233,7 +234,7 @@ export function typeck(
           }
         }
       },
-      typeOfItem
+      typeOfItem,
     );
   }
 
@@ -274,7 +275,7 @@ export function typeck(
               default: {
                 throw new CompilerError(
                   `import parameters must be I32 or Int`,
-                  item.node.params[i].span
+                  item.node.params[i].span,
                 );
               }
             }
@@ -288,7 +289,7 @@ export function typeck(
               default: {
                 throw new CompilerError(
                   `import return must be I32 or Int`,
-                  item.node.returnType!.span
+                  item.node.returnType!.span,
                 );
               }
             }
@@ -321,7 +322,7 @@ export function typeck(
             if (fieldNames.has(name)) {
               throw new CompilerError(
                 `type ${item.node.name} has a duplicate field: ${name.name}`,
-                name.span
+                name.span,
               );
             }
             fieldNames.add(name);
@@ -366,7 +367,7 @@ export function typeck(
           if (init.kind !== "literal" || init.value.kind !== "int") {
             throw new CompilerError(
               "globals must be initialized with an integer literal",
-              init.span
+              init.span,
             );
           }
 
@@ -406,7 +407,7 @@ export function typeck(
         if (ty.kind !== "tuple" || ty.elems.length !== 0) {
           throw new CompilerError(
             `\`main\` has an invalid signature. main takes no arguments and returns nothing`,
-            item.span
+            item.span,
           );
         }
       }
@@ -421,7 +422,7 @@ export function typeck(
     if (!main) {
       throw new CompilerError(
         `\`main\` function not found`,
-        Span.startOfFile(ast.rootFile)
+        Span.startOfFile(ast.rootFile),
       );
     }
 
@@ -586,7 +587,7 @@ export class InferContext {
 
     throw new CompilerError(
       `cannot assign ${printTy(rhs)} to ${printTy(lhs)}`,
-      span
+      span,
     );
   }
 }
@@ -596,7 +597,7 @@ export function checkBody(
   ast: Crate<Resolved>,
   body: Expr<Resolved>,
   fnTy: TyFn,
-  typeOfItem: (itemId: ItemId, cause: Span) => Ty
+  typeOfItem: (itemId: ItemId, cause: Span) => Ty,
 ): Expr<Typecked> {
   const localTys = [...fnTy.params];
   const loopState: { hasBreak: boolean; loopId: LoopId }[] = [];
@@ -634,13 +635,13 @@ export function checkBody(
             return builtinAsTy(res.name, ident.span);
         }
       },
-      typeOfItem
+      typeOfItem,
     );
   }
 
   const checker: Folder<Resolved, Typecked> = {
     ...mkDefaultFolder(),
-    expr(expr) {
+    expr(expr): Expr<Typecked> {
       switch (expr.kind) {
         case "empty": {
           return { ...expr, ty: TY_UNIT };
@@ -695,7 +696,7 @@ export function checkBody(
                 case "builtin":
                   throw new CompilerError(
                     "cannot assign to builtins",
-                    expr.span
+                    expr.span,
                   );
               }
               break;
@@ -703,7 +704,7 @@ export function checkBody(
             default: {
               throw new CompilerError(
                 "invalid left-hand side of assignment",
-                lhs.span
+                lhs.span,
               );
             }
           }
@@ -777,13 +778,30 @@ export function checkBody(
           return checkUnary(expr, rhs);
         }
         case "call": {
+          if (
+            expr.lhs.kind === "ident" &&
+            expr.lhs.value.res.kind === "builtin" &&
+            expr.lhs.value.res.name === "___transmute"
+          ) {
+            const ty = infcx.newVar();
+            const args = expr.args.map((arg) => this.expr(arg));
+            const ret: Expr<Typecked> = {
+              ...expr,
+              lhs: { ...expr.lhs, ty: TY_UNIT },
+              args,
+              ty,
+            };
+
+            return ret;
+          }
+
           const lhs = this.expr(expr.lhs);
           lhs.ty = infcx.resolveIfPossible(lhs.ty);
           const lhsTy = lhs.ty;
           if (lhsTy.kind !== "fn") {
             throw new CompilerError(
               `expression of type ${printTy(lhsTy)} is not callable`,
-              lhs.span
+              lhs.span,
             );
           }
 
@@ -793,7 +811,7 @@ export function checkBody(
             if (args.length <= i) {
               throw new CompilerError(
                 `missing argument of type ${printTy(param)}`,
-                expr.span
+                expr.span,
               );
             }
             const arg = checker.expr(args[i]);
@@ -804,7 +822,7 @@ export function checkBody(
           if (args.length > lhsTy.params.length) {
             throw new CompilerError(
               `too many arguments passed, expected ${lhsTy.params.length}, found ${args.length}`,
-              expr.span
+              expr.span,
             );
           }
 
@@ -827,13 +845,13 @@ export function checkBody(
                 } else {
                   throw new CompilerError(
                     `tuple with ${elems.length} elements cannot be indexed with ${field.value}`,
-                    field.span
+                    field.span,
                   );
                 }
               } else {
                 throw new CompilerError(
                   "tuple fields must be accessed with numbers",
-                  field.span
+                  field.span,
                 );
               }
               break;
@@ -841,14 +859,14 @@ export function checkBody(
             case "struct": {
               if (typeof field.value === "string") {
                 const idx = lhs.ty.fields.findIndex(
-                  ([name]) => name === field.value
+                  ([name]) => name === field.value,
                 );
                 if (idx === -1) {
                   throw new CompilerError(
                     `field \`${field.value}\` does not exist on ${printTy(
-                      lhs.ty
+                      lhs.ty,
                     )}`,
-                    field.span
+                    field.span,
                   );
                 }
 
@@ -857,7 +875,7 @@ export function checkBody(
               } else {
                 throw new CompilerError(
                   "struct fields must be accessed with their name",
-                  field.span
+                  field.span,
                 );
               }
               break;
@@ -865,9 +883,9 @@ export function checkBody(
             default: {
               throw new CompilerError(
                 `cannot access field \`${field.value}\` on type \`${printTy(
-                  lhs.ty
+                  lhs.ty,
                 )}\``,
-                expr.span
+                expr.span,
               );
             }
           }
@@ -933,7 +951,7 @@ export function checkBody(
         }
         case "structLiteral": {
           const fields = expr.fields.map<StructLiteralField<Typecked>>(
-            ({ name, expr }) => ({ name, expr: this.expr(expr) })
+            ({ name, expr }) => ({ name, expr: this.expr(expr) }),
           );
 
           const structTy = typeOf(expr.name.res, expr.name.span);
@@ -941,7 +959,7 @@ export function checkBody(
           if (structTy.kind !== "struct") {
             throw new CompilerError(
               `struct literal is only allowed for struct types`,
-              expr.span
+              expr.span,
             );
           }
 
@@ -949,12 +967,12 @@ export function checkBody(
 
           fields.forEach(({ name, expr: field }, i) => {
             const fieldIdx = structTy.fields.findIndex(
-              (def) => def[0] === name.name
+              (def) => def[0] === name.name,
             );
             if (fieldIdx == -1) {
               throw new CompilerError(
                 `field ${name.name} doesn't exist on type ${expr.name.name}`,
-                name.span
+                name.span,
               );
             }
             const fieldTy = structTy.fields[fieldIdx];
@@ -972,7 +990,7 @@ export function checkBody(
           if (missing.length > 0) {
             throw new CompilerError(
               `missing fields in literal: ${missing.join(", ")}`,
-              expr.span
+              expr.span,
             );
           }
 
@@ -1025,7 +1043,9 @@ export function checkBody(
         });
       }
 
-      return { ...expr, ty };
+      const innerExpr = superFoldExpr(expr, this);
+
+      return { ...innerExpr, ty };
     },
     type(type) {
       return type;
@@ -1043,7 +1063,7 @@ export function checkBody(
 function checkBinary(
   expr: Expr<Resolved> & ExprBinary<Resolved>,
   lhs: Expr<Typecked>,
-  rhs: Expr<Typecked>
+  rhs: Expr<Typecked>,
 ): Expr<Typecked> {
   const lhsTy = lhs.ty;
   const rhsTy = rhs.ty;
@@ -1085,13 +1105,13 @@ function checkBinary(
     `invalid types for binary operation: ${printTy(lhs.ty)} ${
       expr.binaryKind
     } ${printTy(rhs.ty)}`,
-    expr.span
+    expr.span,
   );
 }
 
 function checkUnary(
   expr: Expr<Resolved> & ExprUnary<Resolved>,
-  rhs: Expr<Typecked>
+  rhs: Expr<Typecked>,
 ): Expr<Typecked> {
   const rhsTy = rhs.ty;
 
@@ -1108,6 +1128,6 @@ function checkUnary(
 
   throw new CompilerError(
     `invalid types for unary operation: ${expr.unaryKind} ${printTy(rhs.ty)}`,
-    expr.span
+    expr.span,
   );
 }

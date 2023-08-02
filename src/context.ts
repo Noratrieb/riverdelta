@@ -7,7 +7,7 @@ import path from "path";
 export type CrateLoader = (
   gcx: GlobalContext,
   name: string,
-  span: Span
+  span: Span,
 ) => DepCrate;
 
 /**
@@ -27,12 +27,12 @@ export class GlobalContext {
 
   public findItem<P extends Phase>(
     id: ItemId,
-    localCrate?: Crate<P>
+    localCrate?: Crate<P>,
   ): Item<P | Final> {
     const crate = unwrap(
       [...(localCrate ? [localCrate] : []), ...this.finalizedCrates].find(
-        (crate) => crate.id === id.crateId
-      )
+        (crate) => crate.id === id.crateId,
+      ),
     );
 
     if (id.itemIdx === 0) {
@@ -73,7 +73,7 @@ export function parseArgs(hardcodedInput: string): Options {
       console.error(process.argv);
 
       console.error(
-        `error: filename must have \`.nil\` extension: \`${filename}\``
+        `error: filename must have \`.nil\` extension: \`${filename}\``,
       );
       process.exit(1);
     }
@@ -99,7 +99,6 @@ export function parseArgs(hardcodedInput: string): Options {
       "parsed",
       "resolved",
       "typecked",
-      "wat",
       "wasm-validate",
     ]);
   }

@@ -35,7 +35,7 @@ function loadCrate(cx: Context, name: string, span: Span): Map<string, ItemId> {
   const loadedCrate = cx.gcx.crateLoader(cx.gcx, name, span);
 
   const contents = new Map(
-    loadedCrate.rootItems.map((item) => [item.node.name, item.id])
+    loadedCrate.rootItems.map((item) => [item.node.name, item.id]),
   );
 
   return contents;
@@ -45,7 +45,7 @@ function resolveModItem(
   cx: Context,
   mod: ModItem<Built> | ExternItem,
   item: Item<Built>,
-  name: string
+  name: string,
 ): ItemId | undefined {
   const cachedContents = cx.modContentsCache.get(item.id);
   if (cachedContents) {
@@ -66,7 +66,7 @@ function resolveModItem(
 
 export function resolve(
   gcx: GlobalContext,
-  ast: Crate<Built>
+  ast: Crate<Built>,
 ): Crate<Resolved> {
   const cx: Context = {
     ast,
@@ -88,7 +88,7 @@ export function resolve(
 function resolveModule(
   cx: Context,
   modName: string[],
-  contents: Item<Built>[]
+  contents: Item<Built>[],
 ): Item<Resolved>[] {
   const items = new Map<string, ItemId>();
 
@@ -97,7 +97,7 @@ function resolveModule(
     if (existing !== undefined) {
       throw new CompilerError(
         `item \`${item.node.name}\` has already been declared`,
-        item.span
+        item.span,
       );
     }
     items.set(item.node.name, item.id);
@@ -109,7 +109,7 @@ function resolveModule(
     const popped = scopes.pop();
     if (popped !== expected) {
       throw new Error(
-        `Scopes corrupted, wanted to pop ${expected} but popped ${popped}`
+        `Scopes corrupted, wanted to pop ${expected} but popped ${popped}`,
       );
     }
   };
@@ -224,7 +224,7 @@ function resolveModule(
           blockLocals.push([]);
 
           const exprs = expr.exprs.map<Expr<Resolved>>((inner) =>
-            this.expr(inner)
+            this.expr(inner),
           );
 
           scopes.length = prevScopeLength;
@@ -271,7 +271,7 @@ function resolveModule(
                 if (typeof expr.field.value === "number") {
                   throw new CompilerError(
                     "module contents cannot be indexed with a number",
-                    expr.field.span
+                    expr.field.span,
                   );
                 }
 
@@ -279,12 +279,12 @@ function resolveModule(
                   cx,
                   module.node,
                   module,
-                  expr.field.value
+                  expr.field.value,
                 );
                 if (pathResItem === undefined) {
                   throw new CompilerError(
                     `module ${module.node.name} has no item ${expr.field.value}`,
-                    expr.field.span
+                    expr.field.span,
                   );
                 }
 

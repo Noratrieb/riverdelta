@@ -7,7 +7,7 @@ export class Span {
   constructor(
     public start: number,
     public end: number,
-    public file: LoadedFile
+    public file: LoadedFile,
   ) {}
 
   public merge(b: Span): Span {
@@ -18,7 +18,7 @@ export class Span {
     return new Span(
       Math.min(this.start, b.start),
       Math.max(this.end, b.end),
-      this.file
+      this.file,
     );
   }
 
@@ -46,7 +46,7 @@ export class CompilerError extends Error {
 
 export function withErrorPrinter<R>(
   f: () => R,
-  afterError: (e: CompilerError) => R
+  afterError: (e: CompilerError) => R,
 ): R {
   try {
     return f();
@@ -69,7 +69,7 @@ function renderError(e: CompilerError) {
     span.start === Number.MAX_SAFE_INTEGER
       ? lineSpans[lineSpans.length - 1]
       : lineSpans.find(
-          (line) => line.start <= span.start && line.end >= span.start
+          (line) => line.start <= span.start && line.end >= span.start,
         );
   if (!line) {
     throw Error(`Span out of bounds: ${span.start}..${span.end}`);
@@ -90,8 +90,8 @@ function renderError(e: CompilerError) {
 
   console.error(
     `${" ".repeat(String(lineNo).length)}   ${" ".repeat(
-      startRelLine
-    )}${"^".repeat(spanLength)}`
+      startRelLine,
+    )}${"^".repeat(spanLength)}`,
   );
 }
 

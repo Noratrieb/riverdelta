@@ -34,5 +34,11 @@ function allocateItem(objSize: I32, align: I32): I32 = (
         );
     );
 
+    HEAD_PTR = newHeadPtr;
+
     actualObjPtr
+);
+
+function deallocateItem(ptr: I32, objSize: I32) = (
+    std.println("uwu deawwocate :3");
 );

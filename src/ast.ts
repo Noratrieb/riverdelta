@@ -448,6 +448,7 @@ export const BUILTINS = [
   "__memory_size",
   "__memory_grow",
   "__i32_extend_to_i64_u",
+  "___transmute",
 ] as const;
 
 export type BuiltinName = (typeof BUILTINS)[number];
@@ -565,7 +566,7 @@ const ITEM_DEFAULT = Symbol("item must not be overriden");
 
 export function mkDefaultFolder<
   From extends Phase,
-  To extends Phase
+  To extends Phase,
 >(): ItemFolder<From, To> {
   const folder: ItemFolder<From, To> = {
     newItemsById: new ComplexMap(),
@@ -585,7 +586,7 @@ export function mkDefaultFolder<
 
 export function foldAst<From extends Phase, To extends Phase>(
   ast: Crate<From>,
-  folder: Folder<From, To>
+  folder: Folder<From, To>,
 ): Crate<To> {
   if ((folder.item as any)[ITEM_DEFAULT] !== ITEM_DEFAULT) {
     throw new Error("must not override `item` on folders");
@@ -603,7 +604,7 @@ export function foldAst<From extends Phase, To extends Phase>(
 
 export function superFoldItem<From extends Phase, To extends Phase>(
   item: Item<From>,
-  folder: Folder<From, To>
+  folder: Folder<From, To>,
 ): Item<To> {
   switch (item.kind) {
     case "function": {
@@ -683,7 +684,7 @@ export function superFoldItem<From extends Phase, To extends Phase>(
 
 export function superFoldExpr<From extends Phase, To extends Phase>(
   expr: Expr<From>,
-  folder: Folder<From, To>
+  folder: Folder<From, To>,
 ): Expr<To> {
   const span = expr.span;
   switch (expr.kind) {
@@ -800,7 +801,7 @@ export function superFoldExpr<From extends Phase, To extends Phase>(
 
 export function superFoldType<From extends Phase, To extends Phase>(
   type: Type<From>,
-  folder: Folder<From, To>
+  folder: Folder<From, To>,
 ): Type<To> {
   const span = type.span;
   switch (type.kind) {
