@@ -1,0 +1,25 @@
+{
+  "name": "riverdelta",
+  "displayName": "riverdelta",
+  "description": "riverdelta language support",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "riverdelta",
+      "aliases": ["riverdelta", "riverdelta"],
+      "extensions": [".nil"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "riverdelta",
+      "scopeName": "source.nil",
+      "path": "./syntaxes/riverdelta.tmLanguage.json"
+    }]
+  }
+}
