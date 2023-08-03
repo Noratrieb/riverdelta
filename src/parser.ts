@@ -11,14 +11,10 @@ import {
   FieldDef,
   Folder,
   FunctionArg,
-  ItemFunction,
   Ident,
-  ItemImport,
   Item,
   LOGICAL_KINDS,
-  ItemMod,
   Type,
-  ItemType,
   UNARY_KINDS,
   UnaryKind,
   binaryExprPrecedenceClass,
@@ -27,7 +23,6 @@ import {
   superFoldItem,
   Built,
   Parsed,
-  ItemExtern,
   ItemId,
   ItemGlobal,
   StructLiteralField,
@@ -79,7 +74,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
   let tok;
   [t, tok] = next(t);
   if (tok.kind === "function") {
-    let sig;
+    let sig: FunctionSig;
     [t, sig] = parseFunctionSig(t);
 
     [t] = expectNext(t, "=");
@@ -89,16 +84,12 @@ function parseItem(t: State): [State, Item<Parsed>] {
 
     [t] = expectNext(t, ";");
 
-    const def: ItemFunction<Parsed> = {
-      ...sig,
-      body,
-    };
-
     return [
       t,
       {
         kind: "function",
-        node: def,
+        ...sig,
+        body,
         span: tok.span,
         // Assigned later.
         id: ItemId.dummy(),
@@ -145,14 +136,15 @@ function parseItem(t: State): [State, Item<Parsed>] {
 
     [t] = expectNext(t, ";");
 
-    const def: ItemType<Parsed> = {
-      name: name.ident,
-      type,
-    };
-
     return [
       t,
-      { kind: "type", node: def, span: name.span, id: ItemId.dummy() },
+      {
+        kind: "type",
+        name: name.ident,
+        type,
+        span: name.span,
+        id: ItemId.dummy(),
+      },
     ];
   } else if (tok.kind === "import") {
     [t] = expectNext(t, "(");
@@ -167,28 +159,28 @@ function parseItem(t: State): [State, Item<Parsed>] {
 
     [t] = expectNext(t, ";");
 
-    const def: ItemImport<Parsed> = {
-      module: { kind: "str", value: module.value, span: module.span },
-      func: { kind: "str", value: func.value, span: func.span },
-      ...sig,
-    };
-
     return [
       t,
-      { kind: "import", node: def, span: tok.span, id: ItemId.dummy() },
+      {
+        kind: "import",
+        ...sig,
+        module: { kind: "str", value: module.value, span: module.span },
+        func: { kind: "str", value: func.value, span: func.span },
+        span: tok.span,
+        id: ItemId.dummy(),
+      },
     ];
   } else if (tok.kind === "extern") {
     [t] = expectNext(t, "mod");
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
 
-    const node: ItemExtern = {
-      name: name.ident,
-    };
-
     [t] = expectNext(t, ";");
 
-    return [t, { kind: "extern", node, span: name.span, id: ItemId.dummy() }];
+    return [
+      t,
+      { kind: "extern", name: name.ident, span: name.span, id: ItemId.dummy() },
+    ];
   } else if (tok.kind === "mod") {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
@@ -221,12 +213,16 @@ function parseItem(t: State): [State, Item<Parsed>] {
 
     [t] = expectNext(t, ";");
 
-    const node: ItemMod<Parsed> = {
-      name: name.ident,
-      contents,
-    };
-
-    return [t, { kind: "mod", node, span: name.span, id: ItemId.dummy() }];
+    return [
+      t,
+      {
+        kind: "mod",
+        name: name.ident,
+        contents,
+        span: name.span,
+        id: ItemId.dummy(),
+      },
+    ];
   } else if (tok.kind === "global") {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
@@ -238,13 +234,15 @@ function parseItem(t: State): [State, Item<Parsed>] {
     [t, init] = parseExpr(t);
     [t] = expectNext(t, ";");
 
-    const node: ItemGlobal<Parsed> = {
+    const global: ItemGlobal<Parsed> & Item<Parsed> = {
+      kind: "global",
       name: name.ident,
       type,
       init,
+      span: name.span,
+      id: ItemId.dummy(),
     };
-
-    return [t, { kind: "global", node, span: name.span, id: ItemId.dummy() }];
+    return [t, global];
   } else {
     unexpectedToken(tok, "item");
   }
@@ -757,7 +755,7 @@ function validateAst(ast: Crate<Built>) {
     itemInner(item: Item<Built>): Item<Built> {
       if (seenItemIds.has(item.id)) {
         throw new Error(
-          `duplicate item id: ${item.id.toString()} for ${item.node.name}`,
+          `duplicate item id: ${item.id.toString()} for ${item.name}`,
         );
       }
       seenItemIds.add(item.id);

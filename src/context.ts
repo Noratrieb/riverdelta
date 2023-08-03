@@ -28,27 +28,36 @@ export class GlobalContext {
   public findItem<P extends Phase>(
     id: ItemId,
     localCrate?: Crate<P>,
-  ): Item<P | Final> {
-    const crate = unwrap(
-      [...(localCrate ? [localCrate] : []), ...this.finalizedCrates].find(
-        (crate) => crate.id === id.crateId,
-      ),
+  ): Item<P> | Item<Final> {
+    const allCrates: (Crate<P> | Crate<Final>)[] = [
+      ...(localCrate ? [localCrate] : []),
+      ...this.finalizedCrates,
+    ];
+
+    const crate: Crate<P> | Crate<Final> = unwrap(
+      allCrates.find((crate) => crate.id === id.crateId),
     );
 
     if (id.itemIdx === 0) {
+      const contents: Item<P>[] | Item<Final>[] = crate.rootItems;
+      // Typescript does not seem to be able to understand this here.
+      // The type of this is supposed to be (Item<P> | Item<Final>)["contents"] which is
+      // "too complex to represent".
+      const erasedContents: any = contents;
+
       // Return a synthetic module representing the crate root.
-      return {
+      const mod: Item<P> | Item<Final> = {
         kind: "mod",
-        node: {
-          contents: crate.rootItems,
-          name: crate.packageName,
-        },
+        name: crate.packageName,
+        contents: erasedContents,
         span: Span.startOfFile(crate.rootFile),
         id,
       };
+      return mod;
     }
 
-    return unwrap(crate.itemsById.get(id));
+    const mod = unwrap(crate.itemsById.get(id));
+    return mod;
   }
 }
 

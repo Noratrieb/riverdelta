@@ -35,7 +35,7 @@ function loadCrate(cx: Context, name: string, span: Span): Map<string, ItemId> {
   const loadedCrate = cx.gcx.crateLoader(cx.gcx, name, span);
 
   const contents = new Map(
-    loadedCrate.rootItems.map((item) => [item.node.name, item.id]),
+    loadedCrate.rootItems.map((item) => [item.name, item.id]),
   );
 
   return contents;
@@ -43,11 +43,10 @@ function loadCrate(cx: Context, name: string, span: Span): Map<string, ItemId> {
 
 function resolveModItem(
   cx: Context,
-  mod: ItemMod<Built> | ItemExtern,
-  item: Item<Built>,
+  mod: (ItemMod<Built> | ItemExtern) & Item<Built>,
   name: string,
 ): ItemId | undefined {
-  const cachedContents = cx.modContentsCache.get(item.id);
+  const cachedContents = cx.modContentsCache.get(mod.id);
   if (cachedContents) {
     return cachedContents.get(name);
   }
@@ -55,12 +54,12 @@ function resolveModItem(
   let contents: Map<string, ItemId>;
 
   if ("contents" in mod) {
-    contents = new Map(mod.contents.map((item) => [item.node.name, item.id]));
+    contents = new Map(mod.contents.map((item) => [item.name, item.id]));
   } else {
-    contents = loadCrate(cx, item.node.name, item.span);
+    contents = loadCrate(cx, mod.name, mod.span);
   }
 
-  cx.modContentsCache.set(item.id, contents);
+  cx.modContentsCache.set(mod.id, contents);
   return contents.get(name);
 }
 
@@ -93,14 +92,14 @@ function resolveModule(
   const items = new Map<string, ItemId>();
 
   contents.forEach((item) => {
-    const existing = items.get(item.node.name);
+    const existing = items.get(item.name);
     if (existing !== undefined) {
       throw new CompilerError(
-        `item \`${item.node.name}\` has already been declared`,
+        `item \`${item.name}\` has already been declared`,
         item.span,
       );
     }
-    items.set(item.node.name, item.id);
+    items.set(item.name, item.id);
   });
 
   const scopes: string[] = [];
@@ -157,43 +156,41 @@ function resolveModule(
   const resolver: Folder<Built, Resolved> = {
     ...mkDefaultFolder(),
     itemInner(item): Item<Resolved> {
-      const defPath = [...modName, item.node.name];
+      const defPath = [...modName, item.name];
 
       switch (item.kind) {
         case "function": {
-          const params = item.node.params.map(({ name, span, type }) => ({
+          const params = item.params.map(({ name, span, type }) => ({
             name,
             span,
             type: this.type(type),
           }));
-          const returnType =
-            item.node.returnType && this.type(item.node.returnType);
+          const returnType = item.returnType && this.type(item.returnType);
 
-          item.node.params.forEach(({ name }) => scopes.push(name));
-          const body = this.expr(item.node.body);
-          const revParams = item.node.params.slice();
+          item.params.forEach(({ name }) => scopes.push(name));
+          const body = this.expr(item.body);
+          const revParams = item.params.slice();
           revParams.reverse();
           revParams.forEach(({ name }) => popScope(name));
 
           return {
             kind: "function",
             span: item.span,
-            node: {
-              name: item.node.name,
-              params,
-              returnType,
-              body,
-            },
+            name: item.name,
+            params,
+            returnType,
+            body,
+
             id: item.id,
             defPath,
           };
         }
         case "mod": {
-          const contents = resolveModule(cx, defPath, item.node.contents);
+          const contents = resolveModule(cx, defPath, item.contents);
           return {
             ...item,
             kind: "mod",
-            node: { ...item.node, contents },
+            contents,
             defPath,
           };
         }
@@ -201,15 +198,10 @@ function resolveModule(
           // Eagerly resolve the crate.
           // Note that because you can reference extern crates before the item,
           // we still need the loadCrate in the field access code above.
+          loadCrate(cx, item.name, item.span);
 
-          loadCrate(cx, item.node.name, item.span);
-
-          const node: ItemExtern = {
-            ...item.node,
-          };
           return {
             ...item,
-            node,
             defPath,
           };
         }
@@ -277,13 +269,12 @@ function resolveModule(
 
                 const pathResItem = resolveModItem(
                   cx,
-                  module.node,
                   module,
                   expr.field.value,
                 );
                 if (pathResItem === undefined) {
                   throw new CompilerError(
-                    `module ${module.node.name} has no item ${expr.field.value}`,
+                    `module ${module.name} has no item ${expr.field.value}`,
                     expr.field.span,
                   );
                 }

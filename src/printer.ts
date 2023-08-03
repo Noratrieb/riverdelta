@@ -28,25 +28,25 @@ function printItem(item: Item<AnyPhase>): string {
 
   switch (item.kind) {
     case "function": {
-      return id + printFunction(item.node);
+      return id + printFunction(item);
     }
     case "type": {
-      return id + printTypeDef(item.node);
+      return id + printTypeDef(item);
     }
     case "import": {
-      return id + printImportDef(item.node);
+      return id + printImportDef(item);
     }
     case "mod": {
-      return id + printMod(item.node);
+      return id + printMod(item);
     }
     case "extern": {
-      return id + `extern mod ${item.node.name};`;
+      return id + `extern mod ${item.name};`;
     }
     case "global": {
       return (
         id +
-        `global ${item.node.name}: ${printType(item.node.type)} = ${printExpr(
-          item.node.init,
+        `global ${item.name}: ${printType(item.type)} = ${printExpr(
+          item.init,
           0,
         )};`
       );
@@ -54,7 +54,7 @@ function printItem(item: Item<AnyPhase>): string {
   }
 }
 
-function printFunction(func: ItemFunction<AnyPhase>): string {
+function printFunction(func: ItemFunction<AnyPhase> & Item<AnyPhase>): string {
   const args = func.params
     .map(({ name, type }) => `${name}: ${printType(type)}`)
     .join(", ");
@@ -62,7 +62,7 @@ function printFunction(func: ItemFunction<AnyPhase>): string {
   return `function ${func.name}(${args})${ret} = ${printExpr(func.body, 0)};`;
 }
 
-function printTypeDef(type: ItemType<AnyPhase>): string {
+function printTypeDef(type: ItemType<AnyPhase> & Item<AnyPhase>): string {
   switch (type.type.kind) {
     case "struct": {
       const { fields } = type.type;
@@ -92,7 +92,7 @@ function printImportDef(def: ItemImport<AnyPhase>): string {
   )}(${args})${ret};`;
 }
 
-function printMod(mod: ItemMod<AnyPhase>): string {
+function printMod(mod: ItemMod<AnyPhase> & Item<AnyPhase>): string {
   return `mod ${mod.name} (\n${mod.contents.map(printItem).join("\n  ")});`;
 }
 

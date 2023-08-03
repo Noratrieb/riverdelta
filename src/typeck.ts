@@ -134,16 +134,16 @@ export function typeck(
         case "import":
         case "type":
         case "global":
-          return item.node.ty!;
+          return item.ty!;
         case "mod": {
           throw new CompilerError(
-            `module ${item.node.name} cannot be used as a type or value`,
+            `module ${item.name} cannot be used as a type or value`,
             cause,
           );
         }
         case "extern": {
           throw new CompilerError(
-            `extern declaration ${item.node.name} cannot be used as a type or value`,
+            `extern declaration ${item.name} cannot be used as a type or value`,
             cause,
           );
         }
@@ -165,9 +165,9 @@ export function typeck(
     switch (item.kind) {
       case "function":
       case "import": {
-        const args = item.node.params.map((arg) => lowerAstTy(arg.type));
-        const returnTy: Ty = item.node.returnType
-          ? lowerAstTy(item.node.returnType)
+        const args = item.params.map((arg) => lowerAstTy(arg.type));
+        const returnTy: Ty = item.returnType
+          ? lowerAstTy(item.returnType)
           : TY_UNIT;
 
         const ty: Ty = { kind: "fn", params: args, returnTy };
@@ -175,11 +175,11 @@ export function typeck(
         return ty;
       }
       case "type": {
-        switch (item.node.type.kind) {
+        switch (item.type.kind) {
           case "struct": {
             const ty: Ty = {
               kind: "struct",
-              name: item.node.name,
+              name: item.name,
               fields: [
                 /*dummy*/
               ],
@@ -187,7 +187,7 @@ export function typeck(
 
             itemTys.set(item.id, ty);
 
-            const fields = item.node.type.fields.map<[string, Ty]>(
+            const fields = item.type.fields.map<[string, Ty]>(
               ({ name, type }) => [name.name, lowerAstTy(type)],
             );
 
@@ -195,24 +195,24 @@ export function typeck(
             return ty;
           }
           case "alias": {
-            return lowerAstTy(item.node.type.type);
+            return lowerAstTy(item.type.type);
           }
         }
       }
       case "mod": {
         throw new CompilerError(
-          `module ${item.node.name} cannot be used as a type or value`,
+          `module ${item.name} cannot be used as a type or value`,
           cause,
         );
       }
       case "extern": {
         throw new CompilerError(
-          `extern declaration ${item.node.name} cannot be used as a type or value`,
+          `extern declaration ${item.name} cannot be used as a type or value`,
           cause,
         );
       }
       case "global": {
-        const ty = lowerAstTy(item.node.type);
+        const ty = lowerAstTy(item.type);
         itemTys.set(item.id, ty);
         return ty;
       }
@@ -246,24 +246,22 @@ export function typeck(
       switch (item.kind) {
         case "function": {
           const fnTy = typeOfItem(item.id, item.span) as TyFn;
-          const body = checkBody(gcx, ast, item.node.body, fnTy, typeOfItem);
+          const body = checkBody(gcx, ast, item.body, fnTy, typeOfItem);
 
-          const returnType = item.node.returnType && {
-            ...item.node.returnType,
+          const returnType = item.returnType && {
+            ...item.returnType,
             ty: fnTy.returnTy,
           };
           return {
             ...item,
-            node: {
-              name: item.node.name,
-              params: item.node.params.map((arg, i) => ({
-                ...arg,
-                type: { ...arg.type, ty: fnTy.params[i] },
-              })),
-              body,
-              returnType,
-              ty: fnTy,
-            },
+            name: item.name,
+            params: item.params.map((arg, i) => ({
+              ...arg,
+              type: { ...arg.type, ty: fnTy.params[i] },
+            })),
+            body,
+            returnType,
+            ty: fnTy,
           };
         }
         case "import": {
@@ -277,7 +275,7 @@ export function typeck(
               default: {
                 throw new CompilerError(
                   `import parameters must be I32 or Int`,
-                  item.node.params[i].span,
+                  item.params[i].span,
                 );
               }
             }
@@ -291,41 +289,39 @@ export function typeck(
               default: {
                 throw new CompilerError(
                   `import return must be I32 or Int`,
-                  item.node.returnType!.span,
+                  item.returnType!.span,
                 );
               }
             }
           }
 
-          const returnType = item.node.returnType && {
-            ...item.node.returnType,
+          const returnType = item.returnType && {
+            ...item.returnType,
             ty: fnTy.returnTy,
           };
 
           return {
             ...item,
             kind: "import",
-            node: {
-              module: item.node.module,
-              func: item.node.func,
-              name: item.node.name,
-              params: item.node.params.map((arg, i) => ({
-                ...arg,
-                type: { ...arg.type, ty: fnTy.params[i] },
-              })),
-              returnType,
-              ty: fnTy,
-            },
+            module: item.module,
+            func: item.func,
+            name: item.name,
+            params: item.params.map((arg, i) => ({
+              ...arg,
+              type: { ...arg.type, ty: fnTy.params[i] },
+            })),
+            returnType,
+            ty: fnTy,
           };
         }
         case "type": {
-          switch (item.node.type.kind) {
+          switch (item.type.kind) {
             case "struct": {
               const fieldNames = new Set();
-              item.node.type.fields.forEach(({ name }) => {
+              item.type.fields.forEach(({ name }) => {
                 if (fieldNames.has(name)) {
                   throw new CompilerError(
-                    `type ${item.node.name} has a duplicate field: ${name.name}`,
+                    `type ${item.name} has a duplicate field: ${name.name}`,
                     name.span,
                   );
                 }
@@ -336,30 +332,26 @@ export function typeck(
 
               return {
                 ...item,
-                node: {
-                  name: item.node.name,
-                  type: {
-                    kind: "struct",
-                    fields: item.node.type.fields.map((field, i) => ({
-                      name: field.name,
-                      type: {
-                        ...field.type,
-                        ty: ty.fields[i][1],
-                      },
-                    })),
-                  },
+                name: item.name,
+                type: {
+                  kind: "struct",
+                  fields: item.type.fields.map((field, i) => ({
+                    name: field.name,
+                    type: {
+                      ...field.type,
+                      ty: ty.fields[i][1],
+                    },
+                  })),
                 },
               };
             }
             case "alias": {
               return {
                 ...item,
-                node: {
-                  name: item.node.name,
-                  type: {
-                    kind: "alias",
-                    type: item.node.type.type,
-                  },
+                name: item.name,
+                type: {
+                  kind: "alias",
+                  type: item.type.type,
                 },
               };
             }
@@ -368,22 +360,16 @@ export function typeck(
         case "mod": {
           return {
             ...item,
-            node: {
-              ...item.node,
-              contents: item.node.contents.map((item) => this.item(item)),
-            },
+            contents: item.contents.map((item) => this.item(item)),
           };
         }
         case "extern": {
           // Nothing to check.
-          return {
-            ...item,
-            node: { ...item.node },
-          };
+          return item;
         }
         case "global": {
           const ty = typeOfItem(item.id, item.span);
-          const { init } = item.node;
+          const { init } = item;
 
           if (init.kind !== "literal" || init.value.kind !== "int") {
             throw new CompilerError(
@@ -398,11 +384,8 @@ export function typeck(
 
           return {
             ...item,
-            node: {
-              ...item.node,
-              ty,
-              init: { ...init, ty },
-            },
+            ty,
+            init: { ...init, ty },
           };
         }
       }
@@ -421,10 +404,9 @@ export function typeck(
   const typecked = foldAst(ast, checker);
 
   const main = typecked.rootItems.find((item) => {
-    if (item.kind === "function" && item.node.name === "main") {
-      const func = item.node;
-      if (func.returnType !== undefined) {
-        const ty = func.body.ty;
+    if (item.kind === "function" && item.name === "main") {
+      if (item.returnType !== undefined) {
+        const ty = item.body.ty;
         if (ty.kind !== "tuple" || ty.elems.length !== 0) {
           throw new CompilerError(
             `\`main\` has an invalid signature. main takes no arguments and returns nothing`,

@@ -98,38 +98,21 @@ export class ItemId {
 }
 
 export type ItemKind<P extends Phase> =
-  | {
-      kind: "function";
-      node: ItemFunction<P>;
-    }
-  | {
-      kind: "type";
-      node: ItemType<P>;
-    }
-  | {
-      kind: "import";
-      node: ItemImport<P>;
-    }
-  | {
-      kind: "mod";
-      node: ItemMod<P>;
-    }
-  | {
-      kind: "extern";
-      node: ItemExtern;
-    }
-  | {
-      kind: "global";
-      node: ItemGlobal<P>;
-    };
+  | ItemFunction<P>
+  | ItemType<P>
+  | ItemImport<P>
+  | ItemMod<P>
+  | ItemExtern
+  | ItemGlobal<P>;
 
 export type Item<P extends Phase> = ItemKind<P> & {
   span: Span;
   id: ItemId;
+  name: string;
 } & P["defPath"];
 
 export type ItemFunction<P extends Phase> = {
-  name: string;
+  kind: "function";
   params: FunctionArg<P>[];
   body: Expr<P>;
   returnType?: Type<P>;
@@ -143,7 +126,7 @@ export type FunctionArg<P extends Phase> = {
 };
 
 export type ItemType<P extends Phase> = {
-  name: string;
+  kind: "type";
   type: TypeDefKind<P>;
   ty?: TyStruct;
 };
@@ -164,23 +147,23 @@ export type FieldDef<P extends Phase> = {
 };
 
 export type ItemImport<P extends Phase> = {
+  kind: "import";
   module: StringLiteral;
   func: StringLiteral;
-  name: string;
   params: FunctionArg<P>[];
   returnType?: Type<P>;
   ty?: TyFn;
 };
 
 export type ItemMod<P extends Phase> = {
-  name: string;
+  kind: "mod";
   contents: Item<P>[];
 };
 
-export type ItemExtern = { name: string };
+export type ItemExtern = { kind: "extern" };
 
 export type ItemGlobal<P extends Phase> = {
-  name: string;
+  kind: "global";
   type: Type<P>;
   init: Expr<P>;
   ty?: Ty;
@@ -616,7 +599,7 @@ export function superFoldItem<From extends Phase, To extends Phase>(
 ): Item<To> {
   switch (item.kind) {
     case "function": {
-      const args = item.node.params.map(({ name, type, span }) => ({
+      const args = item.params.map(({ name, type, span }) => ({
         name,
         type: folder.type(type),
         span,
@@ -625,16 +608,14 @@ export function superFoldItem<From extends Phase, To extends Phase>(
       return {
         ...item,
         kind: "function",
-        node: {
-          name: item.node.name,
-          params: args,
-          body: folder.expr(item.node.body),
-          returnType: item.node.returnType && folder.type(item.node.returnType),
-        },
+        name: item.name,
+        params: args,
+        body: folder.expr(item.body),
+        returnType: item.returnType && folder.type(item.returnType),
       };
     }
     case "type": {
-      const typeKind = item.node.type;
+      const typeKind = item.type;
       let type: TypeDefKind<To>;
       switch (typeKind.kind) {
         case "struct": {
@@ -656,11 +637,12 @@ export function superFoldItem<From extends Phase, To extends Phase>(
       return {
         ...item,
         kind: "type",
-        node: { name: item.node.name, type },
+        name: item.name,
+        type,
       };
     }
     case "import": {
-      const args = item.node.params.map(({ name, type, span }) => ({
+      const args = item.params.map(({ name, type, span }) => ({
         name,
         type: folder.type(type),
         span,
@@ -668,23 +650,19 @@ export function superFoldItem<From extends Phase, To extends Phase>(
       return {
         ...item,
         kind: "import",
-        node: {
-          module: item.node.module,
-          func: item.node.func,
-          name: item.node.name,
-          params: args,
-          returnType: item.node.returnType && folder.type(item.node.returnType),
-        },
+        module: item.module,
+        func: item.func,
+        name: item.name,
+        params: args,
+        returnType: item.returnType && folder.type(item.returnType),
       };
     }
     case "mod": {
       return {
         ...item,
         kind: "mod",
-        node: {
-          name: item.node.name,
-          contents: item.node.contents.map((item) => folder.item(item)),
-        },
+        name: item.name,
+        contents: item.contents.map((item) => folder.item(item)),
       };
     }
     case "extern": {
@@ -694,11 +672,9 @@ export function superFoldItem<From extends Phase, To extends Phase>(
       return {
         ...item,
         kind: "global",
-        node: {
-          name: item.node.name,
-          type: folder.type(item.node.type),
-          init: folder.expr(item.node.init),
-        },
+        name: item.name,
+        type: folder.type(item.type),
+        init: folder.expr(item.init),
       };
     }
   }

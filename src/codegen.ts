@@ -190,19 +190,19 @@ export function lower(gcx: GlobalContext): wasm.Module {
     items.forEach((item) => {
       switch (item.kind) {
         case "function": {
-          lowerFunc(cx, item, item.node);
+          lowerFunc(cx, item);
           break;
         }
         case "import": {
-          lowerImport(cx, item, item.node);
+          lowerImport(cx, item);
           break;
         }
         case "mod": {
-          lowerMod(item.node.contents);
+          lowerMod(item.contents);
           break;
         }
         case "global": {
-          lowerGlobal(cx, item, item.node);
+          lowerGlobal(cx, item);
           break;
         }
         case "extern":
@@ -258,11 +258,7 @@ export function lower(gcx: GlobalContext): wasm.Module {
   return mod;
 }
 
-function lowerImport(
-  cx: Context,
-  item: Item<Typecked>,
-  def: ItemImport<Typecked>,
-) {
+function lowerImport(cx: Context, def: ItemImport<Typecked> & Item<Typecked>) {
   const existing = cx.mod.imports.findIndex(
     (imp) => imp.module === def.module.value && imp.name === def.func.value,
   );
@@ -286,14 +282,10 @@ function lowerImport(
     });
   }
 
-  cx.funcIndices.set({ kind: "item", id: item.id }, { kind: "import", idx });
+  cx.funcIndices.set({ kind: "item", id: def.id }, { kind: "import", idx });
 }
 
-function lowerGlobal(
-  cx: Context,
-  item: Item<Typecked>,
-  def: ItemGlobal<Typecked>,
-) {
+function lowerGlobal(cx: Context, def: ItemGlobal<Typecked> & Item<Typecked>) {
   const globalIdx = cx.mod.globals.length;
 
   let valtype: "i32" | "i64";
@@ -318,18 +310,17 @@ function lowerGlobal(
   };
 
   cx.mod.globals.push({
-    _name: mangleDefPath(item.defPath),
+    _name: mangleDefPath(def.defPath),
     type: { type: valtype, mut: "var" },
     init: [init],
   });
 
-  cx.globalIndices.set({ kind: "item", id: item.id }, globalIdx);
+  cx.globalIndices.set({ kind: "item", id: def.id }, globalIdx);
 }
 
 type FuncContext = {
   cx: Context;
-  item: Item<Typecked>;
-  func: ItemFunction<Typecked>;
+  func: Item<Typecked> & ItemFunction<Typecked>;
   wasmType: wasm.FuncType;
   wasm: wasm.Func;
   varLocations: VarLocation[];
@@ -355,17 +346,13 @@ type StructLayout = {
   fields: StructFieldLayout[];
 };
 
-function lowerFunc(
-  cx: Context,
-  item: Item<Typecked>,
-  func: ItemFunction<Typecked>,
-) {
+function lowerFunc(cx: Context, func: Item<Typecked> & ItemFunction<Typecked>) {
   const abi = computeAbi(func.ty!);
   const { type: wasmType, paramLocations } = wasmTypeForAbi(abi, func.ty!);
   const type = internFuncType(cx, wasmType);
 
   const wasmFunc: wasm.Func = {
-    _name: mangleDefPath(item.defPath),
+    _name: mangleDefPath(func.defPath),
     type,
     locals: [],
     body: [],
@@ -373,7 +360,6 @@ function lowerFunc(
 
   const fcx: FuncContext = {
     cx,
-    item,
     func,
     wasmType,
     wasm: wasmFunc,
@@ -398,7 +384,7 @@ function lowerFunc(
   fcx.cx.mod.funcs.push(wasmFunc);
 
   fcx.cx.funcIndices.set(
-    { kind: "item", id: fcx.item.id },
+    { kind: "item", id: fcx.func.id },
     { kind: "func", idx },
   );
 }
