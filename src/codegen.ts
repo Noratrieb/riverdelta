@@ -258,7 +258,7 @@ export function lower(gcx: GlobalContext): wasm.Module {
   return mod;
 }
 
-function lowerImport(cx: Context, def: ItemImport<Typecked> & Item<Typecked>) {
+function lowerImport(cx: Context, def: ItemImport<Typecked>) {
   const existing = cx.mod.imports.findIndex(
     (imp) => imp.module === def.module.value && imp.name === def.func.value,
   );
@@ -285,7 +285,7 @@ function lowerImport(cx: Context, def: ItemImport<Typecked> & Item<Typecked>) {
   cx.funcIndices.set({ kind: "item", id: def.id }, { kind: "import", idx });
 }
 
-function lowerGlobal(cx: Context, def: ItemGlobal<Typecked> & Item<Typecked>) {
+function lowerGlobal(cx: Context, def: ItemGlobal<Typecked>) {
   const globalIdx = cx.mod.globals.length;
 
   let valtype: "i32" | "i64";
@@ -320,7 +320,7 @@ function lowerGlobal(cx: Context, def: ItemGlobal<Typecked> & Item<Typecked>) {
 
 type FuncContext = {
   cx: Context;
-  func: Item<Typecked> & ItemFunction<Typecked>;
+  func: ItemFunction<Typecked>;
   wasmType: wasm.FuncType;
   wasm: wasm.Func;
   varLocations: VarLocation[];
@@ -346,7 +346,7 @@ type StructLayout = {
   fields: StructFieldLayout[];
 };
 
-function lowerFunc(cx: Context, func: Item<Typecked> & ItemFunction<Typecked>) {
+function lowerFunc(cx: Context, func: ItemFunction<Typecked>) {
   const abi = computeAbi(func.ty!);
   const { type: wasmType, paramLocations } = wasmTypeForAbi(abi, func.ty!);
   const type = internFuncType(cx, wasmType);

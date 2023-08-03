@@ -54,7 +54,7 @@ function printItem(item: Item<AnyPhase>): string {
   }
 }
 
-function printFunction(func: ItemFunction<AnyPhase> & Item<AnyPhase>): string {
+function printFunction(func: ItemFunction<AnyPhase>): string {
   const args = func.params
     .map(({ name, type }) => `${name}: ${printType(type)}`)
     .join(", ");
@@ -62,7 +62,7 @@ function printFunction(func: ItemFunction<AnyPhase> & Item<AnyPhase>): string {
   return `function ${func.name}(${args})${ret} = ${printExpr(func.body, 0)};`;
 }
 
-function printTypeDef(type: ItemType<AnyPhase> & Item<AnyPhase>): string {
+function printTypeDef(type: ItemType<AnyPhase>): string {
   switch (type.type.kind) {
     case "struct": {
       const { fields } = type.type;
@@ -92,7 +92,7 @@ function printImportDef(def: ItemImport<AnyPhase>): string {
   )}(${args})${ret};`;
 }
 
-function printMod(mod: ItemMod<AnyPhase> & Item<AnyPhase>): string {
+function printMod(mod: ItemMod<AnyPhase>): string {
   return `mod ${mod.name} (\n${mod.contents.map(printItem).join("\n  ")});`;
 }
 

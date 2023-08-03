@@ -11,16 +11,25 @@
     "Programming Languages"
   ],
   "contributes": {
-    "languages": [{
-      "id": "riverdelta",
-      "aliases": ["riverdelta", "riverdelta"],
-      "extensions": [".nil"],
-      "configuration": "./language-configuration.json"
-    }],
-    "grammars": [{
-      "language": "riverdelta",
-      "scopeName": "source.nil",
-      "path": "./syntaxes/riverdelta.tmLanguage.json"
-    }]
+    "languages": [
+      {
+        "id": "riverdelta",
+        "aliases": [
+          "riverdelta",
+          "riverdelta"
+        ],
+        "extensions": [
+          ".nil"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "riverdelta",
+        "scopeName": "source.nil",
+        "path": "./syntaxes/riverdelta.tmLanguage.json"
+      }
+    ]
   }
 }

@@ -98,12 +98,21 @@ export class ItemId {
 }
 
 export type ItemKind<P extends Phase> =
-  | ItemFunction<P>
-  | ItemType<P>
-  | ItemImport<P>
-  | ItemMod<P>
-  | ItemExtern
-  | ItemGlobal<P>;
+  | ItemKindFunction<P>
+  | ItemKindType<P>
+  | ItemKindImport<P>
+  | ItemKindMod<P>
+  | ItemKindExtern
+  | ItemKindGlobal<P>;
+
+type ItemVariant<Variant, P extends Phase> = Variant & Item<P>;
+
+export type ItemFunction<P extends Phase> = ItemVariant<ItemKindFunction<P>, P>;
+export type ItemType<P extends Phase> = ItemVariant<ItemKindType<P>, P>;
+export type ItemImport<P extends Phase> = ItemVariant<ItemKindImport<P>, P>;
+export type ItemMod<P extends Phase> = ItemVariant<ItemKindMod<P>, P>;
+export type ItemExtern<P extends Phase> = ItemVariant<ItemKindExtern, P>;
+export type ItemGlobal<P extends Phase> = ItemVariant<ItemKindGlobal<P>, P>;
 
 export type Item<P extends Phase> = ItemKind<P> & {
   span: Span;
@@ -111,7 +120,7 @@ export type Item<P extends Phase> = ItemKind<P> & {
   name: string;
 } & P["defPath"];
 
-export type ItemFunction<P extends Phase> = {
+export type ItemKindFunction<P extends Phase> = {
   kind: "function";
   params: FunctionArg<P>[];
   body: Expr<P>;
@@ -125,7 +134,7 @@ export type FunctionArg<P extends Phase> = {
   span: Span;
 };
 
-export type ItemType<P extends Phase> = {
+export type ItemKindType<P extends Phase> = {
   kind: "type";
   type: TypeDefKind<P>;
   ty?: TyStruct;
@@ -146,7 +155,7 @@ export type FieldDef<P extends Phase> = {
   type: Type<P>;
 };
 
-export type ItemImport<P extends Phase> = {
+export type ItemKindImport<P extends Phase> = {
   kind: "import";
   module: StringLiteral;
   func: StringLiteral;
@@ -155,14 +164,14 @@ export type ItemImport<P extends Phase> = {
   ty?: TyFn;
 };
 
-export type ItemMod<P extends Phase> = {
+export type ItemKindMod<P extends Phase> = {
   kind: "mod";
   contents: Item<P>[];
 };
 
-export type ItemExtern = { kind: "extern" };
+export type ItemKindExtern = { kind: "extern" };
 
-export type ItemGlobal<P extends Phase> = {
+export type ItemKindGlobal<P extends Phase> = {
   kind: "global";
   type: Type<P>;
   init: Expr<P>;

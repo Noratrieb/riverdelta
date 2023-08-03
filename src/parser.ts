@@ -234,7 +234,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
     [t, init] = parseExpr(t);
     [t] = expectNext(t, ";");
 
-    const global: ItemGlobal<Parsed> & Item<Parsed> = {
+    const global: ItemGlobal<Parsed> = {
       kind: "global",
       name: name.ident,
       type,

@@ -43,7 +43,7 @@ function loadCrate(cx: Context, name: string, span: Span): Map<string, ItemId> {
 
 function resolveModItem(
   cx: Context,
-  mod: (ItemMod<Built> | ItemExtern) & Item<Built>,
+  mod: ItemMod<Built> | ItemExtern<Built>,
   name: string,
 ): ItemId | undefined {
   const cachedContents = cx.modContentsCache.get(mod.id);
