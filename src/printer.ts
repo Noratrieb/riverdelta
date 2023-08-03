@@ -2,16 +2,16 @@ import {
   AnyPhase,
   Crate,
   Expr,
-  FunctionDef,
+  ItemFunction,
   IdentWithRes,
-  ImportDef,
+  ItemImport,
   Item,
-  ModItem,
+  ItemMod,
   Resolution,
   StringLiteral,
   Ty,
   Type,
-  TypeDef,
+  ItemType,
   tyIsUnit,
 } from "./ast";
 
@@ -54,7 +54,7 @@ function printItem(item: Item<AnyPhase>): string {
   }
 }
 
-function printFunction(func: FunctionDef<AnyPhase>): string {
+function printFunction(func: ItemFunction<AnyPhase>): string {
   const args = func.params
     .map(({ name, type }) => `${name}: ${printType(type)}`)
     .join(", ");
@@ -62,7 +62,7 @@ function printFunction(func: FunctionDef<AnyPhase>): string {
   return `function ${func.name}(${args})${ret} = ${printExpr(func.body, 0)};`;
 }
 
-function printTypeDef(type: TypeDef<AnyPhase>): string {
+function printTypeDef(type: ItemType<AnyPhase>): string {
   switch (type.type.kind) {
     case "struct": {
       const { fields } = type.type;
@@ -81,7 +81,7 @@ function printTypeDef(type: TypeDef<AnyPhase>): string {
   }
 }
 
-function printImportDef(def: ImportDef<AnyPhase>): string {
+function printImportDef(def: ItemImport<AnyPhase>): string {
   const args = def.params
     .map(({ name, type }) => `${name}: ${printType(type)}`)
     .join(", ");
@@ -92,7 +92,7 @@ function printImportDef(def: ImportDef<AnyPhase>): string {
   )}(${args})${ret};`;
 }
 
-function printMod(mod: ModItem<AnyPhase>): string {
+function printMod(mod: ItemMod<AnyPhase>): string {
   return `mod ${mod.name} (\n${mod.contents.map(printItem).join("\n  ")});`;
 }
 

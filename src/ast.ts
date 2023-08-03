@@ -100,27 +100,27 @@ export class ItemId {
 export type ItemKind<P extends Phase> =
   | {
       kind: "function";
-      node: FunctionDef<P>;
+      node: ItemFunction<P>;
     }
   | {
       kind: "type";
-      node: TypeDef<P>;
+      node: ItemType<P>;
     }
   | {
       kind: "import";
-      node: ImportDef<P>;
+      node: ItemImport<P>;
     }
   | {
       kind: "mod";
-      node: ModItem<P>;
+      node: ItemMod<P>;
     }
   | {
       kind: "extern";
-      node: ExternItem;
+      node: ItemExtern;
     }
   | {
       kind: "global";
-      node: GlobalItem<P>;
+      node: ItemGlobal<P>;
     };
 
 export type Item<P extends Phase> = ItemKind<P> & {
@@ -128,7 +128,7 @@ export type Item<P extends Phase> = ItemKind<P> & {
   id: ItemId;
 } & P["defPath"];
 
-export type FunctionDef<P extends Phase> = {
+export type ItemFunction<P extends Phase> = {
   name: string;
   params: FunctionArg<P>[];
   body: Expr<P>;
@@ -142,7 +142,7 @@ export type FunctionArg<P extends Phase> = {
   span: Span;
 };
 
-export type TypeDef<P extends Phase> = {
+export type ItemType<P extends Phase> = {
   name: string;
   type: TypeDefKind<P>;
   ty?: TyStruct;
@@ -163,7 +163,7 @@ export type FieldDef<P extends Phase> = {
   type: Type<P>;
 };
 
-export type ImportDef<P extends Phase> = {
+export type ItemImport<P extends Phase> = {
   module: StringLiteral;
   func: StringLiteral;
   name: string;
@@ -172,14 +172,14 @@ export type ImportDef<P extends Phase> = {
   ty?: TyFn;
 };
 
-export type ModItem<P extends Phase> = {
+export type ItemMod<P extends Phase> = {
   name: string;
   contents: Item<P>[];
 };
 
-export type ExternItem = { name: string };
+export type ItemExtern = { name: string };
 
-export type GlobalItem<P extends Phase> = {
+export type ItemGlobal<P extends Phase> = {
   name: string;
   type: Type<P>;
   init: Expr<P>;

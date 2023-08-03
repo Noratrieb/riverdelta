@@ -3,9 +3,9 @@ import {
   Expr,
   ExprBlock,
   Folder,
-  FunctionDef,
-  GlobalItem,
-  ImportDef,
+  ItemFunction,
+  ItemGlobal,
+  ItemImport,
   Item,
   ItemId,
   LoopId,
@@ -261,7 +261,7 @@ export function lower(gcx: GlobalContext): wasm.Module {
 function lowerImport(
   cx: Context,
   item: Item<Typecked>,
-  def: ImportDef<Typecked>,
+  def: ItemImport<Typecked>,
 ) {
   const existing = cx.mod.imports.findIndex(
     (imp) => imp.module === def.module.value && imp.name === def.func.value,
@@ -292,7 +292,7 @@ function lowerImport(
 function lowerGlobal(
   cx: Context,
   item: Item<Typecked>,
-  def: GlobalItem<Typecked>,
+  def: ItemGlobal<Typecked>,
 ) {
   const globalIdx = cx.mod.globals.length;
 
@@ -329,7 +329,7 @@ function lowerGlobal(
 type FuncContext = {
   cx: Context;
   item: Item<Typecked>;
-  func: FunctionDef<Typecked>;
+  func: ItemFunction<Typecked>;
   wasmType: wasm.FuncType;
   wasm: wasm.Func;
   varLocations: VarLocation[];
@@ -358,7 +358,7 @@ type StructLayout = {
 function lowerFunc(
   cx: Context,
   item: Item<Typecked>,
-  func: FunctionDef<Typecked>,
+  func: ItemFunction<Typecked>,
 ) {
   const abi = computeAbi(func.ty!);
   const { type: wasmType, paramLocations } = wasmTypeForAbi(abi, func.ty!);

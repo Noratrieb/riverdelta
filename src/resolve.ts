@@ -9,14 +9,14 @@ import {
   Item,
   ItemId,
   LocalInfo,
-  ModItem,
+  ItemMod,
   Resolution,
   Resolved,
   mkDefaultFolder,
   superFoldExpr,
   superFoldItem,
   superFoldType,
-  ExternItem,
+  ItemExtern,
 } from "./ast";
 import { GlobalContext } from "./context";
 import { CompilerError, Span } from "./error";
@@ -43,7 +43,7 @@ function loadCrate(cx: Context, name: string, span: Span): Map<string, ItemId> {
 
 function resolveModItem(
   cx: Context,
-  mod: ModItem<Built> | ExternItem,
+  mod: ItemMod<Built> | ItemExtern,
   item: Item<Built>,
   name: string,
 ): ItemId | undefined {
@@ -204,7 +204,7 @@ function resolveModule(
 
           loadCrate(cx, item.node.name, item.span);
 
-          const node: ExternItem = {
+          const node: ItemExtern = {
             ...item.node,
           };
           return {

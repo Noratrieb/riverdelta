@@ -11,14 +11,14 @@ import {
   FieldDef,
   Folder,
   FunctionArg,
-  FunctionDef,
+  ItemFunction,
   Ident,
-  ImportDef,
+  ItemImport,
   Item,
   LOGICAL_KINDS,
-  ModItem,
+  ItemMod,
   Type,
-  TypeDef,
+  ItemType,
   UNARY_KINDS,
   UnaryKind,
   binaryExprPrecedenceClass,
@@ -27,9 +27,9 @@ import {
   superFoldItem,
   Built,
   Parsed,
-  ExternItem,
+  ItemExtern,
   ItemId,
-  GlobalItem,
+  ItemGlobal,
   StructLiteralField,
   TypeDefKind,
 } from "./ast";
@@ -89,7 +89,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
 
     [t] = expectNext(t, ";");
 
-    const def: FunctionDef<Parsed> = {
+    const def: ItemFunction<Parsed> = {
       ...sig,
       body,
     };
@@ -145,7 +145,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
 
     [t] = expectNext(t, ";");
 
-    const def: TypeDef<Parsed> = {
+    const def: ItemType<Parsed> = {
       name: name.ident,
       type,
     };
@@ -167,7 +167,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
 
     [t] = expectNext(t, ";");
 
-    const def: ImportDef<Parsed> = {
+    const def: ItemImport<Parsed> = {
       module: { kind: "str", value: module.value, span: module.span },
       func: { kind: "str", value: func.value, span: func.span },
       ...sig,
@@ -182,7 +182,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
 
-    const node: ExternItem = {
+    const node: ItemExtern = {
       name: name.ident,
     };
 
@@ -221,7 +221,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
 
     [t] = expectNext(t, ";");
 
-    const node: ModItem<Parsed> = {
+    const node: ItemMod<Parsed> = {
       name: name.ident,
       contents,
     };
@@ -238,7 +238,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
     [t, init] = parseExpr(t);
     [t] = expectNext(t, ";");
 
-    const node: GlobalItem<Parsed> = {
+    const node: ItemGlobal<Parsed> = {
       name: name.ident,
       type,
       init,
