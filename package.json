@@ -7,8 +7,9 @@
     "dev": "node-dev --respawn src/index.ts",
     "build": "tsc",
     "fmt": "prettier -w .",
-    "test": "jest",
+    "ts-test": "jest",
     "ui-test": "npm run build && cargo run --manifest-path ui-harness/Cargo.toml --bin ui-tests",
+    "test": "npm run ts-test && npm run ui-test",
     "lint": "eslint ."
   },
   "author": "",
