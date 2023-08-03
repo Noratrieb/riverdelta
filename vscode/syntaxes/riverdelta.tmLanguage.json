@@ -1,32 +1,45 @@
 {
-	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-	"name": "riverdelta",
-	"patterns": [
-		{
-			"include": "#keywords"
-		},
-		{
-			"include": "#strings"
-		}
-	],
-	"repository": {
-		"keywords": {
-			"patterns": [{
-				"name": "keyword.control.riverdelta",
-				"match": "\\b(function|let|if|then|else|type|loop|break|import|extern|mod|global)\\b"
-			}]
-		},
-		"strings": {
-			"name": "string.quoted.double.riverdelta",
-			"begin": "\"",
-			"end": "\"",
-			"patterns": [
-				{
-					"name": "constant.character.escape.riverdelta",
-					"match": "\\\\."
-				}
-			]
-		}
-	},
-	"scopeName": "source.nil"
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "riverdelta",
+  "patterns": [
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#lineComment"
+    }
+  ],
+  "repository": {
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.riverdelta",
+          "match": "\\b(function|let|if|then|else|type|loop|break|import|extern|mod|global)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.riverdelta",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.riverdelta",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "lineComment": {
+      "patterns": [
+        {
+          "name": "comment.riverdelta",
+          "match": "//.*"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.nil"
 }
