@@ -119,3 +119,9 @@ export function lines(file: LoadedFile): Span[] {
 function min(a: number, b: number): number {
   return a < b ? a : b;
 }
+
+export function unreachable(msg?: string): never {
+  throw new Error(
+    `entered unreachable code${msg !== undefined ? `: ${msg}` : ""}`,
+  );
+}

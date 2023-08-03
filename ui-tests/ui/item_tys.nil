@@ -1,0 +1,25 @@
+//@check-pass
+
+type A = struct {
+    b: B,
+    c: C,
+};
+
+type B = struct {};
+
+type C = struct {
+    b: B,
+};
+
+function test(a: A): A = a;
+
+function main() = (
+    let a = A {
+        b: B {},
+        c: C {
+            b: B {},
+        }
+    };
+
+    test(a);
+);

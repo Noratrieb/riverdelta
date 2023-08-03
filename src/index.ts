@@ -15,12 +15,9 @@ import { loadCrate } from "./loader";
 const INPUT = `
 type A = struct { a: Int };
 
-type What = What;
-
 type Uwu = (Int, Int);
 
 function main() = (
-  let a: What = 0;
   uwu();
 );
 
@@ -40,6 +37,10 @@ type B = struct {
 function test(b: B) = (
   b.a;
 ); 
+
+mod aa (
+  global UWU: Int = 0;
+);
 
 function eat(a: A) =;
 `;

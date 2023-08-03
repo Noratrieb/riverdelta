@@ -264,7 +264,7 @@ export function printTy(ty: Ty): string {
       return `?${ty.index}`;
     }
     case "struct": {
-      return ty.name;
+      return ty._name;
     }
     case "never": {
       return "!";

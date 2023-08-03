@@ -1,10 +1,11 @@
-import { TY_I32, TY_INT, TyStruct } from "./ast";
+import { ItemId, TY_I32, TY_INT, TyStruct } from "./ast";
 import { layoutOfStruct } from "./codegen";
 
 it("should compute struct layout correctly", () => {
   const ty: TyStruct = {
     kind: "struct",
-    name: "",
+    itemId: ItemId.dummy(),
+    _name: "",
     fields: [
       ["uwu", TY_I32],
       ["owo", TY_INT],
@@ -48,7 +49,8 @@ it("should compute struct layout correctly", () => {
 it("should compute single field struct layout correctly", () => {
   const ty: TyStruct = {
     kind: "struct",
-    name: "",
+    itemId: ItemId.dummy(),
+    _name: "",
     fields: [["owo", TY_INT]],
   };
 

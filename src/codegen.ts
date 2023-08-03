@@ -426,8 +426,9 @@ function lowerExpr(
       lowerExpr(fcx, instrs, expr.rhs);
       const { lhs } = expr;
       switch (lhs.kind) {
-        case "ident": {
-          const res = lhs.value.res;
+        case "ident":
+        case "path": {
+          const res = lhs.kind === "path" ? lhs.res : lhs.value.res;
 
           switch (res.kind) {
             case "local": {

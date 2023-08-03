@@ -505,7 +505,8 @@ export type TyVar = {
 
 export type TyStruct = {
   kind: "struct";
-  name: string;
+  itemId: ItemId,
+  _name: string;
   fields: [string, Ty][];
 };
 

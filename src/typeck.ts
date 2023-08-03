@@ -9,7 +9,6 @@ import {
   ExprUnary,
   foldAst,
   Folder,
-  IdentWithRes,
   ItemId,
   LOGICAL_KINDS,
   LoopId,
@@ -30,11 +29,24 @@ import {
   Item,
   StructLiteralField,
   superFoldExpr,
+  ExprCall,
 } from "./ast";
 import { GlobalContext } from "./context";
-import { CompilerError, Span } from "./error";
+import { CompilerError, Span, unreachable } from "./error";
 import { printTy } from "./printer";
 import { ComplexMap } from "./utils";
+
+type TypeckCtx = {
+  gcx: GlobalContext;
+  /**
+   * A cache of all item types.
+   * Starts off as undefined, then gets set to null
+   * while computing the type (for cycle detection) and
+   * afterwards, we get the ty.
+   */
+  itemTys: ComplexMap<ItemId, Ty | null>;
+  ast: Crate<Resolved>;
+};
 
 function mkTyFn(params: Ty[], returnTy: Ty): Ty {
   return { kind: "fn", params, returnTy };
@@ -90,27 +102,33 @@ function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
 }
 
 // TODO: Cleanup, maybe get the ident switch into this function because typeOfItem is unused.
-function lowerAstTyBase(
-  type: Type<Resolved>,
-  lowerIdentTy: (ident: IdentWithRes<Resolved>) => Ty,
-  typeOfItem: (itemId: ItemId, cause: Span) => Ty,
-): Ty {
+function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
   switch (type.kind) {
     case "ident": {
-      return lowerIdentTy(type.value);
+      const ident = type.value;
+      const res = ident.res;
+      switch (res.kind) {
+        case "local": {
+          throw new Error("Item type cannot refer to local variable");
+        }
+        case "item": {
+          return typeOfItem(cx, res.id, type.span);
+        }
+        case "builtin": {
+          return builtinAsTy(res.name, ident.span);
+        }
+      }
     }
     case "list": {
       return {
         kind: "list",
-        elem: lowerAstTyBase(type.elem, lowerIdentTy, typeOfItem),
+        elem: lowerAstTy(cx, type.elem),
       };
     }
     case "tuple": {
       return {
         kind: "tuple",
-        elems: type.elems.map((type) =>
-          lowerAstTyBase(type, lowerIdentTy, typeOfItem),
-        ),
+        elems: type.elems.map((type) => lowerAstTy(cx, type)),
       };
     }
     case "never": {
@@ -119,86 +137,18 @@ function lowerAstTyBase(
   }
 }
 
-export function typeck(
-  gcx: GlobalContext,
-  ast: Crate<Resolved>,
-): Crate<Typecked> {
-  const itemTys = new ComplexMap<ItemId, Ty | null>();
+function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
+  if (itemId.crateId !== cx.ast.id) {
+    // Look up foreign items in the foreign crates, we don't need to lower those
+    // ourselves.
+    const item = cx.gcx.findItem(itemId);
 
-  function typeOfItem(itemId: ItemId, cause: Span): Ty {
-    if (itemId.crateId !== ast.id) {
-      const item = gcx.findItem(itemId, ast);
-
-      switch (item.kind) {
-        case "function":
-        case "import":
-        case "type":
-        case "global":
-          return item.ty!;
-        case "mod": {
-          throw new CompilerError(
-            `module ${item.name} cannot be used as a type or value`,
-            cause,
-          );
-        }
-        case "extern": {
-          throw new CompilerError(
-            `extern declaration ${item.name} cannot be used as a type or value`,
-            cause,
-          );
-        }
-      }
-    }
-
-    const item = gcx.findItem(itemId, ast);
-    const ty = itemTys.get(itemId);
-    if (ty) {
-      return ty;
-    }
-    if (ty === null) {
-      throw new CompilerError(
-        `cycle computing type of #G${itemId.toString()}`,
-        item.span,
-      );
-    }
-    itemTys.set(itemId, null);
     switch (item.kind) {
       case "function":
-      case "import": {
-        const args = item.params.map((arg) => lowerAstTy(arg.type));
-        const returnTy: Ty = item.returnType
-          ? lowerAstTy(item.returnType)
-          : TY_UNIT;
-
-        const ty: Ty = { kind: "fn", params: args, returnTy };
-        itemTys.set(item.id, ty);
-        return ty;
-      }
-      case "type": {
-        switch (item.type.kind) {
-          case "struct": {
-            const ty: Ty = {
-              kind: "struct",
-              name: item.name,
-              fields: [
-                /*dummy*/
-              ],
-            };
-
-            itemTys.set(item.id, ty);
-
-            const fields = item.type.fields.map<[string, Ty]>(
-              ({ name, type }) => [name.name, lowerAstTy(type)],
-            );
-
-            ty.fields = fields;
-            return ty;
-          }
-          case "alias": {
-            return lowerAstTy(item.type.type);
-          }
-        }
-      }
+      case "import":
+      case "type":
+      case "global":
+        return item.ty!;
       case "mod": {
         throw new CompilerError(
           `module ${item.name} cannot be used as a type or value`,
@@ -211,61 +161,113 @@ export function typeck(
           cause,
         );
       }
-      case "global": {
-        const ty = lowerAstTy(item.type);
-        itemTys.set(item.id, ty);
-        return ty;
-      }
     }
   }
 
-  function lowerAstTy(type: Type<Resolved>): Ty {
-    return lowerAstTyBase(
-      type,
-      (ident) => {
-        const res = ident.res;
-        switch (res.kind) {
-          case "local": {
-            throw new Error("Item type cannot refer to local variable");
-          }
-          case "item": {
-            return typeOfItem(res.id, type.span);
-          }
-          case "builtin": {
-            return builtinAsTy(res.name, ident.span);
-          }
-        }
-      },
-      typeOfItem,
+  const item = cx.gcx.findItem(itemId, cx.ast);
+  const cachedTy = cx.itemTys.get(itemId);
+  if (cachedTy) {
+    return cachedTy;
+  }
+  if (cachedTy === null) {
+    throw new CompilerError(
+      `cycle computing type of #G${itemId.toString()}`,
+      item.span,
     );
   }
+  cx.itemTys.set(itemId, null);
+
+  let ty: Ty;
+
+  switch (item.kind) {
+    case "function":
+    case "import": {
+      const args = item.params.map((arg) => lowerAstTy(cx, arg.type));
+      const returnTy: Ty = item.returnType
+        ? lowerAstTy(cx, item.returnType)
+        : TY_UNIT;
+
+      ty = { kind: "fn", params: args, returnTy };
+      break;
+    }
+    case "type": {
+      switch (item.type.kind) {
+        case "struct": {
+          ty = {
+            kind: "struct",
+            itemId: item.id,
+            _name: item.name,
+            fields: [
+              /*dummy*/
+            ],
+          };
+          // Set it here already to allow for recursive types.
+          cx.itemTys.set(item.id, ty);
+
+          const fields = item.type.fields.map<[string, Ty]>(
+            ({ name, type }) => [name.name, lowerAstTy(cx, type)],
+          );
+
+          ty.fields = fields;
+          break;
+        }
+        case "alias": {
+          ty = lowerAstTy(cx, item.type.type);
+          break;
+        }
+      }
+      break;
+    }
+    case "mod": {
+      throw new CompilerError(
+        `module ${item.name} cannot be used as a type or value`,
+        cause,
+      );
+    }
+    case "extern": {
+      throw new CompilerError(
+        `extern declaration ${item.name} cannot be used as a type or value`,
+        cause,
+      );
+    }
+    case "global": {
+      ty = lowerAstTy(cx, item.type);
+      break;
+    }
+  }
+
+  cx.itemTys.set(item.id, ty);
+  return ty;
+}
+
+export function typeck(
+  gcx: GlobalContext,
+  ast: Crate<Resolved>,
+): Crate<Typecked> {
+  const cx = {
+    gcx,
+    itemTys: new ComplexMap<ItemId, Ty | null>(),
+    ast,
+  };
 
   const checker: Folder<Resolved, Typecked> = {
     ...mkDefaultFolder(),
     itemInner(item: Item<Resolved>): Item<Typecked> {
       switch (item.kind) {
         case "function": {
-          const fnTy = typeOfItem(item.id, item.span) as TyFn;
-          const body = checkBody(gcx, ast, item.body, fnTy, typeOfItem);
+          const fnTy = typeOfItem(cx, item.id, item.span) as TyFn;
+          const body = checkBody(cx, ast, item.body, fnTy);
 
-          const returnType = item.returnType && {
-            ...item.returnType,
-            ty: fnTy.returnTy,
-          };
           return {
             ...item,
             name: item.name,
-            params: item.params.map((arg, i) => ({
-              ...arg,
-              type: { ...arg.type, ty: fnTy.params[i] },
-            })),
+            params: item.params.map((arg) => ({ ...arg })),
             body,
-            returnType,
             ty: fnTy,
           };
         }
         case "import": {
-          const fnTy = typeOfItem(item.id, item.span) as TyFn;
+          const fnTy = typeOfItem(cx, item.id, item.span) as TyFn;
 
           fnTy.params.forEach((param, i) => {
             switch (param.kind) {
@@ -288,33 +290,23 @@ export function typeck(
                 break;
               default: {
                 throw new CompilerError(
-                  `import return must be I32 or Int`,
+                  `import return must be I32, Int or ()`,
                   item.returnType!.span,
                 );
               }
             }
           }
 
-          const returnType = item.returnType && {
-            ...item.returnType,
-            ty: fnTy.returnTy,
-          };
-
           return {
             ...item,
             kind: "import",
-            module: item.module,
-            func: item.func,
-            name: item.name,
-            params: item.params.map((arg, i) => ({
-              ...arg,
-              type: { ...arg.type, ty: fnTy.params[i] },
-            })),
-            returnType,
+            params: item.params.map((arg) => ({ ...arg })),
             ty: fnTy,
           };
         }
         case "type": {
+          const ty = typeOfItem(cx, item.id, item.span) as TyStruct;
+
           switch (item.type.kind) {
             case "struct": {
               const fieldNames = new Set();
@@ -328,31 +320,20 @@ export function typeck(
                 fieldNames.add(name);
               });
 
-              const ty = typeOfItem(item.id, item.span) as TyStruct;
-
               return {
                 ...item,
-                name: item.name,
                 type: {
                   kind: "struct",
-                  fields: item.type.fields.map((field, i) => ({
-                    name: field.name,
-                    type: {
-                      ...field.type,
-                      ty: ty.fields[i][1],
-                    },
-                  })),
+                  fields: item.type.fields.map((field) => ({ ...field })),
                 },
+                ty,
               };
             }
             case "alias": {
               return {
                 ...item,
-                name: item.name,
-                type: {
-                  kind: "alias",
-                  type: item.type.type,
-                },
+                type: { ...item.type },
+                ty,
               };
             }
           }
@@ -368,7 +349,7 @@ export function typeck(
           return item;
         }
         case "global": {
-          const ty = typeOfItem(item.id, item.span);
+          const ty = typeOfItem(cx, item.id, item.span);
           const { init } = item;
 
           if (init.kind !== "literal" || init.value.kind !== "int") {
@@ -405,14 +386,11 @@ export function typeck(
 
   const main = typecked.rootItems.find((item) => {
     if (item.kind === "function" && item.name === "main") {
-      if (item.returnType !== undefined) {
-        const ty = item.body.ty;
-        if (ty.kind !== "tuple" || ty.elems.length !== 0) {
-          throw new CompilerError(
-            `\`main\` has an invalid signature. main takes no arguments and returns nothing`,
-            item.span,
-          );
-        }
+      if (!tyIsUnit(item.ty!.returnTy)) {
+        throw new CompilerError(
+          `\`main\` has an invalid signature. main takes no arguments and returns nothing`,
+          item.span,
+        );
       }
 
       return true;
@@ -514,7 +492,7 @@ export class InferContext {
   public resolveIfPossible(ty: Ty): Ty {
     // TODO: dont be shallow resolve
     // note that fixing this will cause cycles. fix those cycles instead using
-    // he fancy occurs check as errs called it.
+    // the fancy occurs check as errs called it.
     if (ty.kind === "var") {
       return this.tryResolveVar(ty.index) ?? ty;
     } else {
@@ -582,7 +560,7 @@ export class InferContext {
         break;
       }
       case "struct": {
-        if (rhs.kind === "struct" && lhs.name === rhs.name) {
+        if (rhs.kind === "struct" && lhs.itemId === rhs.itemId) {
           return;
         }
       }
@@ -595,52 +573,45 @@ export class InferContext {
   }
 }
 
+type FuncCtx = {
+  cx: TypeckCtx;
+  infcx: InferContext;
+  localTys: Ty[];
+  loopState: LoopState[];
+  checkExpr: (expr: Expr<Resolved>) => Expr<Typecked>;
+};
+
+type LoopState = { hasBreak: boolean; loopId: LoopId };
+
+function typeOfValue(fcx: FuncCtx, res: Resolution, span: Span): Ty {
+  switch (res.kind) {
+    case "local": {
+      const idx = fcx.localTys.length - 1 - res.index;
+      return fcx.localTys[idx];
+    }
+    case "item": {
+      return typeOfItem(fcx.cx, res.id, span);
+    }
+    case "builtin":
+      return typeOfBuiltinValue(res.name, span);
+  }
+}
+
 export function checkBody(
-  gcx: GlobalContext,
+  cx: TypeckCtx,
   ast: Crate<Resolved>,
   body: Expr<Resolved>,
   fnTy: TyFn,
-  typeOfItem: (itemId: ItemId, cause: Span) => Ty,
 ): Expr<Typecked> {
-  const localTys = [...fnTy.params];
-  const loopState: { hasBreak: boolean; loopId: LoopId }[] = [];
-
   const infcx = new InferContext();
 
-  function typeOf(res: Resolution, span: Span): Ty {
-    switch (res.kind) {
-      case "local": {
-        const idx = localTys.length - 1 - res.index;
-        return localTys[idx];
-      }
-      case "item": {
-        return typeOfItem(res.id, span);
-      }
-      case "builtin":
-        return typeOfBuiltinValue(res.name, span);
-    }
-  }
-
-  function lowerAstTy(type: Type<Resolved>): Ty {
-    return lowerAstTyBase(
-      type,
-      (ident) => {
-        const res = ident.res;
-        switch (res.kind) {
-          case "local": {
-            const idx = localTys.length - 1 - res.index;
-            return localTys[idx];
-          }
-          case "item": {
-            return typeOfItem(res.id, type.span);
-          }
-          case "builtin":
-            return builtinAsTy(res.name, ident.span);
-        }
-      },
-      typeOfItem,
-    );
-  }
+  const fcx: FuncCtx = {
+    cx,
+    infcx,
+    localTys: [...fnTy.params],
+    loopState: [],
+    checkExpr: () => unreachable(),
+  };
 
   const checker: Folder<Resolved, Typecked> = {
     ...mkDefaultFolder(),
@@ -650,7 +621,7 @@ export function checkBody(
           return { ...expr, ty: TY_UNIT };
         }
         case "let": {
-          const loweredBindingTy = expr.type && lowerAstTy(expr.type);
+          const loweredBindingTy = expr.type && lowerAstTy(cx, expr.type);
           const bindingTy = loweredBindingTy
             ? loweredBindingTy
             : infcx.newVar();
@@ -660,7 +631,7 @@ export function checkBody(
 
           // AST validation ensures that lets can only be in blocks, where
           // the types will be popped.
-          localTys.push(bindingTy);
+          fcx.localTys.push(bindingTy);
 
           expr.local!.ty = bindingTy;
 
@@ -684,13 +655,14 @@ export function checkBody(
           infcx.assign(lhs.ty, rhs.ty, expr.span);
 
           switch (lhs.kind) {
-            case "ident": {
-              const { res } = lhs.value;
+            case "ident":
+            case "path": {
+              const { res } = lhs.kind === "path" ? lhs : lhs.value;
               switch (res.kind) {
                 case "local":
                   break;
                 case "item": {
-                  const item = gcx.findItem(res.id, ast);
+                  const item = cx.gcx.findItem(res.id, ast);
                   if (item.kind !== "global") {
                     throw new CompilerError("cannot assign to item", expr.span);
                   }
@@ -721,13 +693,13 @@ export function checkBody(
           };
         }
         case "block": {
-          const prevLocalTysLen = localTys.length;
+          const prevLocalTysLen = fcx.localTys.length;
 
           const exprs = expr.exprs.map((expr) => this.expr(expr));
 
           const ty = exprs.length > 0 ? exprs[exprs.length - 1].ty : TY_UNIT;
 
-          localTys.length = prevLocalTysLen;
+          fcx.localTys.length = prevLocalTysLen;
 
           return {
             ...expr,
@@ -758,22 +730,16 @@ export function checkBody(
           return { ...expr, ty };
         }
         case "ident": {
-          const ty = typeOf(expr.value.res, expr.value.span);
+          const ty = typeOfValue(fcx, expr.value.res, expr.value.span);
 
           return { ...expr, ty };
         }
         case "path": {
-          const ty = typeOf(expr.res, expr.span);
+          const ty = typeOfValue(fcx, expr.res, expr.span);
           return { ...expr, ty };
         }
         case "binary": {
-          const lhs = this.expr(expr.lhs);
-          const rhs = this.expr(expr.rhs);
-
-          lhs.ty = infcx.resolveIfPossible(lhs.ty);
-          rhs.ty = infcx.resolveIfPossible(rhs.ty);
-
-          return checkBinary(expr, lhs, rhs);
+          return checkBinary(fcx, expr);
         }
         case "unary": {
           const rhs = this.expr(expr.rhs);
@@ -781,55 +747,7 @@ export function checkBody(
           return checkUnary(expr, rhs);
         }
         case "call": {
-          if (
-            expr.lhs.kind === "ident" &&
-            expr.lhs.value.res.kind === "builtin" &&
-            expr.lhs.value.res.name === "___transmute"
-          ) {
-            const ty = infcx.newVar();
-            const args = expr.args.map((arg) => this.expr(arg));
-            const ret: Expr<Typecked> = {
-              ...expr,
-              lhs: { ...expr.lhs, ty: TY_UNIT },
-              args,
-              ty,
-            };
-
-            return ret;
-          }
-
-          const lhs = this.expr(expr.lhs);
-          lhs.ty = infcx.resolveIfPossible(lhs.ty);
-          const lhsTy = lhs.ty;
-          if (lhsTy.kind !== "fn") {
-            throw new CompilerError(
-              `expression of type ${printTy(lhsTy)} is not callable`,
-              lhs.span,
-            );
-          }
-
-          const args = expr.args.map((arg) => this.expr(arg));
-
-          lhsTy.params.forEach((param, i) => {
-            if (args.length <= i) {
-              throw new CompilerError(
-                `missing argument of type ${printTy(param)}`,
-                expr.span,
-              );
-            }
-            const arg = checker.expr(args[i]);
-
-            infcx.assign(param, arg.ty, args[i].span);
-          });
-
-          if (args.length > lhsTy.params.length) {
-            throw new CompilerError(
-              `too many arguments passed, expected ${lhsTy.params.length}, found ${args.length}`,
-              expr.span,
-            );
-          }
-
-          return { ...expr, lhs, args, ty: lhsTy.returnTy };
+          return checkCall(fcx, expr);
         }
         case "fieldAccess": {
           const lhs = this.expr(expr.lhs);
@@ -922,7 +840,7 @@ export function checkBody(
           return { ...expr, cond, then, else: elsePart, ty };
         }
         case "loop": {
-          loopState.push({
+          fcx.loopState.push({
             hasBreak: false,
             loopId: expr.loopId,
           });
@@ -930,7 +848,7 @@ export function checkBody(
           const body = this.expr(expr.body);
           infcx.assign(TY_UNIT, body.ty, body.span);
 
-          const hadBreak = loopState.pop();
+          const hadBreak = fcx.loopState.pop();
           const ty = hadBreak ? TY_UNIT : TY_NEVER;
 
           return {
@@ -940,11 +858,12 @@ export function checkBody(
           };
         }
         case "break": {
-          if (loopState.length === 0) {
+          const loopStateLength = fcx.loopState.length;
+          if (loopStateLength === 0) {
             throw new CompilerError("break outside loop", expr.span);
           }
-          const target = loopState[loopState.length - 1].loopId;
-          loopState[loopState.length - 1].hasBreak = true;
+          const target = fcx.loopState[loopStateLength - 1].loopId;
+          fcx.loopState[loopStateLength - 1].hasBreak = true;
 
           return {
             ...expr,
@@ -957,7 +876,7 @@ export function checkBody(
             ({ name, expr }) => ({ name, expr: this.expr(expr) }),
           );
 
-          const structTy = typeOf(expr.name.res, expr.name.span);
+          const structTy = typeOfValue(fcx, expr.name.res, expr.name.span);
 
           if (structTy.kind !== "struct") {
             throw new CompilerError(
@@ -1022,52 +941,27 @@ export function checkBody(
     },
   };
 
+  fcx.checkExpr = checker.expr.bind(checker);
+
   const checked = checker.expr(body);
 
   infcx.assign(fnTy.returnTy, checked.ty, body.span);
 
-  const resolveTy = (ty: Ty, span: Span) => {
-    const resTy = infcx.resolveIfPossible(ty);
-    // TODO: When doing deep resolution, we need to check for _any_ vars.
-    if (resTy.kind === "var") {
-      throw new CompilerError("cannot infer type", span);
-    }
-    return resTy;
-  };
-
-  const resolver: Folder<Typecked, Typecked> = {
-    ...mkDefaultFolder(),
-    expr(expr) {
-      const ty = resolveTy(expr.ty, expr.span);
-
-      if (expr.kind === "block") {
-        expr.locals!.forEach((local) => {
-          local.ty = resolveTy(local.ty!, local.span);
-        });
-      }
-
-      const innerExpr = superFoldExpr(expr, this);
-
-      return { ...innerExpr, ty };
-    },
-    type(type) {
-      return type;
-    },
-    ident(ident) {
-      return ident;
-    },
-  };
-
-  const resolved = resolver.expr(checked);
+  const resolved = resolveBody(infcx, checked);
 
   return resolved;
 }
 
 function checkBinary(
+  fcx: FuncCtx,
   expr: Expr<Resolved> & ExprBinary<Resolved>,
-  lhs: Expr<Typecked>,
-  rhs: Expr<Typecked>,
 ): Expr<Typecked> {
+  const lhs = fcx.checkExpr(expr.lhs);
+  const rhs = fcx.checkExpr(expr.rhs);
+
+  lhs.ty = fcx.infcx.resolveIfPossible(lhs.ty);
+  rhs.ty = fcx.infcx.resolveIfPossible(rhs.ty);
+
   const lhsTy = lhs.ty;
   const rhsTy = rhs.ty;
 
@@ -1133,4 +1027,99 @@ function checkUnary(
     `invalid types for unary operation: ${expr.unaryKind} ${printTy(rhs.ty)}`,
     expr.span,
   );
+}
+
+function checkCall(
+  fcx: FuncCtx,
+  expr: ExprCall<Resolved> & Expr<Resolved>,
+): Expr<Typecked> {
+  if (
+    expr.lhs.kind === "ident" &&
+    expr.lhs.value.res.kind === "builtin" &&
+    expr.lhs.value.res.name === "___transmute"
+  ) {
+    const ty = fcx.infcx.newVar();
+    const args = expr.args.map((arg) => fcx.checkExpr(arg));
+    const ret: Expr<Typecked> = {
+      ...expr,
+      lhs: { ...expr.lhs, ty: TY_UNIT },
+      args,
+      ty,
+    };
+
+    return ret;
+  }
+
+  const lhs = fcx.checkExpr(expr.lhs);
+  lhs.ty = fcx.infcx.resolveIfPossible(lhs.ty);
+  const lhsTy = lhs.ty;
+  if (lhsTy.kind !== "fn") {
+    throw new CompilerError(
+      `expression of type ${printTy(lhsTy)} is not callable`,
+      lhs.span,
+    );
+  }
+
+  const args = expr.args.map((arg) => fcx.checkExpr(arg));
+
+  lhsTy.params.forEach((param, i) => {
+    if (args.length <= i) {
+      throw new CompilerError(
+        `missing argument of type ${printTy(param)}`,
+        expr.span,
+      );
+    }
+
+    fcx.infcx.assign(param, args[i].ty, args[i].span);
+  });
+
+  if (args.length > lhsTy.params.length) {
+    throw new CompilerError(
+      `too many arguments passed, expected ${lhsTy.params.length}, found ${args.length}`,
+      expr.span,
+    );
+  }
+
+  return { ...expr, lhs, args, ty: lhsTy.returnTy };
+}
+
+function resolveBody(
+  infcx: InferContext,
+  checked: Expr<Typecked>,
+): Expr<Typecked> {
+  const resolveTy = (ty: Ty, span: Span) => {
+    const resTy = infcx.resolveIfPossible(ty);
+    // TODO: When doing deep resolution, we need to check for _any_ vars.
+    if (resTy.kind === "var") {
+      throw new CompilerError("cannot infer type", span);
+    }
+    return resTy;
+  };
+
+  const resolver: Folder<Typecked, Typecked> = {
+    ...mkDefaultFolder(),
+    expr(expr) {
+      const ty = resolveTy(expr.ty, expr.span);
+
+      if (expr.kind === "block") {
+        expr.locals!.forEach((local) => {
+          local.ty = resolveTy(local.ty!, local.span);
+        });
+      }
+
+      const innerExpr = superFoldExpr(expr, this);
+
+      return { ...innerExpr, ty };
+    },
+    type(type) {
+      return type;
+    },
+    ident(ident) {
+      return ident;
+    },
+  };
+
+  const resolved = resolver.expr(checked);
+
+  return resolved;
 }
