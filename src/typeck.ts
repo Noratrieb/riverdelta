@@ -657,7 +657,7 @@ export function checkBody(
           switch (lhs.kind) {
             case "ident":
             case "path": {
-              const { res } = lhs.kind === "path" ? lhs : lhs.value;
+              const { res } = lhs.value;
               switch (res.kind) {
                 case "local":
                   break;
@@ -729,13 +729,10 @@ export function checkBody(
 
           return { ...expr, ty };
         }
-        case "ident": {
+        case "ident":
+        case "path": {
           const ty = typeOfValue(fcx, expr.value.res, expr.value.span);
 
-          return { ...expr, ty };
-        }
-        case "path": {
-          const ty = typeOfValue(fcx, expr.res, expr.span);
           return { ...expr, ty };
         }
         case "binary": {

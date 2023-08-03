@@ -225,8 +225,12 @@ export type ExprPath = {
   segments: string[];
   /**
    * Since this only exists after resolve, we always have a res.
+   * The nested field is for symmetry with Ident.
    */
-  res: Resolution;
+  value: {
+    res: Resolution;
+    span: Span;
+  };
 };
 
 export type ExprBinary<P extends Phase> = {
@@ -505,7 +509,7 @@ export type TyVar = {
 
 export type TyStruct = {
   kind: "struct";
-  itemId: ItemId,
+  itemId: ItemId;
   _name: string;
   fields: [string, Ty][];
 };

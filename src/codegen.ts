@@ -428,7 +428,7 @@ function lowerExpr(
       switch (lhs.kind) {
         case "ident":
         case "path": {
-          const res = lhs.kind === "path" ? lhs.res : lhs.value.res;
+          const { res } = lhs.value;
 
           switch (res.kind) {
             case "local": {
@@ -510,7 +510,7 @@ function lowerExpr(
     }
     case "path":
     case "ident": {
-      const res = expr.kind === "ident" ? expr.value.res : expr.res;
+      const { res } = expr.value;
 
       switch (res.kind) {
         case "local": {
@@ -690,7 +690,7 @@ function lowerExpr(
         todo("non constant calls");
       }
 
-      const res = expr.lhs.kind === "ident" ? expr.lhs.value.res : expr.lhs.res;
+      const { res } = expr.lhs.value;
       if (res.kind === "builtin") {
         const assertArgs = (n: number) => {
           if (expr.args.length !== n) throw new Error("nope");

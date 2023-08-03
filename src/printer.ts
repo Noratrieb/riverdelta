@@ -149,7 +149,7 @@ function printExpr(expr: Expr<AnyPhase>, indent: number): string {
       return printIdent(expr.value);
     }
     case "path": {
-      return `<${expr.segments.join(".")}>${printRes(expr.res)}`;
+      return `<${expr.segments.join(".")}>${printRes(expr.value.res)}`;
     }
     case "binary": {
       return `${printExpr(expr.lhs, indent)} ${expr.binaryKind} ${printExpr(

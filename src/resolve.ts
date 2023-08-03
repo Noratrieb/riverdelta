@@ -209,7 +209,7 @@ function resolveModule(
 
       return { ...superFoldItem(item, this), defPath };
     },
-    expr(expr) {
+    expr(expr): Expr<Resolved> {
       switch (expr.kind) {
         case "block": {
           const prevScopeLength = scopes.length;
@@ -252,7 +252,7 @@ function resolveModule(
 
           if (lhs.kind === "ident" || lhs.kind === "path") {
             const res =
-              lhs.kind === "ident" ? resolveIdent(lhs.value) : lhs.res;
+              lhs.kind === "ident" ? resolveIdent(lhs.value) : lhs.value.res;
             const segments =
               lhs.kind === "ident" ? [lhs.value.name] : lhs.segments;
 
@@ -280,12 +280,12 @@ function resolveModule(
                 }
 
                 const pathRes: Resolution = { kind: "item", id: pathResItem };
-
+                const span = lhs.span.merge(expr.field.span);
                 return {
                   kind: "path",
                   segments: [...segments, expr.field.value],
-                  res: pathRes,
-                  span: lhs.span.merge(expr.field.span),
+                  value: { res: pathRes, span },
+                  span,
                 };
               }
             }
