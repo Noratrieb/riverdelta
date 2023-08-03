@@ -1,6 +1,6 @@
 //@check-pass
 
-type CustomType = {};
+type CustomType = struct {};
 
 function main() = ();
 

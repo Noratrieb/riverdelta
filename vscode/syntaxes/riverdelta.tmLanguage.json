@@ -17,7 +17,7 @@
       "patterns": [
         {
           "name": "keyword.control.riverdelta",
-          "match": "\\b(function|let|if|then|else|type|loop|break|import|extern|mod|global)\\b"
+          "match": "\\b(function|let|if|then|else|type|loop|break|import|extern|mod|global|struct)\\b"
         }
       ]
     },

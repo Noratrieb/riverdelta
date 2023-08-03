@@ -63,14 +63,22 @@ function printFunction(func: FunctionDef<AnyPhase>): string {
 }
 
 function printTypeDef(type: TypeDef<AnyPhase>): string {
-  const fields = type.fields.map(
-    ({ name, type }) => `${ind(1)}${name.name}: ${printType(type)},`,
-  );
+  switch (type.type.kind) {
+    case "struct": {
+      const { fields } = type.type;
 
-  const fieldPart =
-    type.fields.length === 0 ? "{}" : `{\n${fields.join("\n")}\n}`;
+      const fieldStr = fields.map(
+        ({ name, type }) => `${ind(1)}${name.name}: ${printType(type)},`,
+      );
+      const fieldPart =
+        fields.length === 0 ? "{}" : `{\n${fieldStr.join("\n")}\n}`;
 
-  return `type ${type.name} = ${fieldPart};`;
+      return `type ${type.name} = ${fieldPart};`;
+    }
+    case "alias": {
+      return `type ${type.name} = ${printType(type.type.type)}`;
+    }
+  }
 }
 
 function printImportDef(def: ImportDef<AnyPhase>): string {

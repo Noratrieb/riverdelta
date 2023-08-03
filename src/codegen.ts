@@ -36,8 +36,8 @@ const WASM_PAGE = 65536;
 
 const DUMMY_IDX = 9999999;
 
-const ALLOCATE_ITEM: string[] = ["std", "rt", "allocateItem"];
-const DEALLOCATE_ITEM: string[] = ["std", "rt", "deallocateItem"];
+const ALLOCATE_ITEM: string[] = ["std", "rt", "alloc", "allocateItem"];
+const DEALLOCATE_ITEM: string[] = ["std", "rt", "alloc", "deallocateItem"];
 
 type RelocationKind =
   | {

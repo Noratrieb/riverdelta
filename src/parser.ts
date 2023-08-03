@@ -31,6 +31,7 @@ import {
   ItemId,
   GlobalItem,
   StructLiteralField,
+  TypeDefKind,
 } from "./ast";
 import { CompilerError, LoadedFile, Span } from "./error";
 import {
@@ -107,32 +108,46 @@ function parseItem(t: State): [State, Item<Parsed>] {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
     [t] = expectNext(t, "=");
-    [t] = expectNext(t, "{");
 
-    let fields;
-    [t, fields] = parseCommaSeparatedList<FieldDef<Parsed>>(t, "}", (t) => {
-      let name;
-      [t, name] = expectNext<TokenIdent>(t, "identifier");
-      [t] = expectNext(t, ":");
-      let type;
-      [t, type] = parseType(t);
-      return [
-        t,
-        {
-          name: {
-            name: name.ident,
-            span: name.span,
+    let type: TypeDefKind<Parsed>;
+
+    let struct;
+    [t, struct] = eat(t, "struct");
+    if (struct) {
+      [t] = expectNext(t, "{");
+
+      let fields;
+      [t, fields] = parseCommaSeparatedList<FieldDef<Parsed>>(t, "}", (t) => {
+        let name;
+        [t, name] = expectNext<TokenIdent>(t, "identifier");
+        [t] = expectNext(t, ":");
+        let type;
+        [t, type] = parseType(t);
+        return [
+          t,
+          {
+            name: {
+              name: name.ident,
+              span: name.span,
+            },
+            type,
           },
-          type,
-        },
-      ];
-    });
+        ];
+      });
+
+      type = { kind: "struct", fields };
+    } else {
+      let aliased: Type<Parsed>;
+      [t, aliased] = parseType(t);
+
+      type = { kind: "alias", type: aliased };
+    }
 
     [t] = expectNext(t, ";");
 
     const def: TypeDef<Parsed> = {
       name: name.ident,
-      fields,
+      type,
     };
 
     return [

@@ -144,9 +144,19 @@ export type FunctionArg<P extends Phase> = {
 
 export type TypeDef<P extends Phase> = {
   name: string;
-  fields: FieldDef<P>[];
+  type: TypeDefKind<P>;
   ty?: TyStruct;
 };
+
+export type TypeDefKind<P extends Phase> =
+  | {
+      kind: "struct";
+      fields: FieldDef<P>[];
+    }
+  | {
+      kind: "alias";
+      type: Type<P>;
+    };
 
 export type FieldDef<P extends Phase> = {
   name: Ident;
@@ -624,15 +634,29 @@ export function superFoldItem<From extends Phase, To extends Phase>(
       };
     }
     case "type": {
-      const fields = item.node.fields.map(({ name, type }) => ({
-        name,
-        type: folder.type(type),
-      }));
+      const typeKind = item.node.type;
+      let type: TypeDefKind<To>;
+      switch (typeKind.kind) {
+        case "struct": {
+          const fields = typeKind.fields.map(({ name, type }) => ({
+            name,
+            type: folder.type(type),
+          }));
+          type = { kind: "struct", fields };
+          break;
+        }
+        case "alias": {
+          type = {
+            kind: "alias",
+            type: folder.type(typeKind.type),
+          };
+        }
+      }
 
       return {
         ...item,
         kind: "type",
-        node: { name: item.node.name, fields },
+        node: { name: item.node.name, type },
       };
     }
     case "import": {

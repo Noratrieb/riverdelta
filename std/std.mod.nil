@@ -79,5 +79,5 @@ function abort(message: String) = (
 );
 
 function main() = (
-    std.rt.allocateItem(100000000_I32, 8_I32);
+    std.rt.alloc.test();
 );

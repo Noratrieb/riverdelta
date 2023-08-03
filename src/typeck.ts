@@ -175,23 +175,29 @@ export function typeck(
         return ty;
       }
       case "type": {
-        const ty: Ty = {
-          kind: "struct",
-          name: item.node.name,
-          fields: [
-            /*dummy*/
-          ],
-        };
+        switch (item.node.type.kind) {
+          case "struct": {
+            const ty: Ty = {
+              kind: "struct",
+              name: item.node.name,
+              fields: [
+                /*dummy*/
+              ],
+            };
 
-        itemTys.set(item.id, ty);
+            itemTys.set(item.id, ty);
 
-        const fields = item.node.fields.map<[string, Ty]>(({ name, type }) => [
-          name.name,
-          lowerAstTy(type),
-        ]);
+            const fields = item.node.type.fields.map<[string, Ty]>(
+              ({ name, type }) => [name.name, lowerAstTy(type)],
+            );
 
-        ty.fields = fields;
-        return ty;
+            ty.fields = fields;
+            return ty;
+          }
+          case "alias": {
+            return lowerAstTy(item.node.type.type);
+          }
+        }
       }
       case "mod": {
         throw new CompilerError(
@@ -313,32 +319,51 @@ export function typeck(
           };
         }
         case "type": {
-          const fieldNames = new Set();
-          item.node.fields.forEach(({ name }) => {
-            if (fieldNames.has(name)) {
-              throw new CompilerError(
-                `type ${item.node.name} has a duplicate field: ${name.name}`,
-                name.span,
-              );
-            }
-            fieldNames.add(name);
-          });
+          switch (item.node.type.kind) {
+            case "struct": {
+              const fieldNames = new Set();
+              item.node.type.fields.forEach(({ name }) => {
+                if (fieldNames.has(name)) {
+                  throw new CompilerError(
+                    `type ${item.node.name} has a duplicate field: ${name.name}`,
+                    name.span,
+                  );
+                }
+                fieldNames.add(name);
+              });
 
-          const ty = typeOfItem(item.id, item.span) as TyStruct;
+              const ty = typeOfItem(item.id, item.span) as TyStruct;
 
-          return {
-            ...item,
-            node: {
-              name: item.node.name,
-              fields: item.node.fields.map((field, i) => ({
-                name: field.name,
-                type: {
-                  ...field.type,
-                  ty: ty.fields[i][1],
+              return {
+                ...item,
+                node: {
+                  name: item.node.name,
+                  type: {
+                    kind: "struct",
+                    fields: item.node.type.fields.map((field, i) => ({
+                      name: field.name,
+                      type: {
+                        ...field.type,
+                        ty: ty.fields[i][1],
+                      },
+                    })),
+                  },
                 },
-              })),
-            },
-          };
+              };
+            }
+            case "alias": {
+              return {
+                ...item,
+                node: {
+                  name: item.node.name,
+                  type: {
+                    kind: "alias",
+                    type: item.node.type.type,
+                  },
+                },
+              };
+            }
+          }
         }
         case "mod": {
           return {

@@ -13,9 +13,14 @@ import { GlobalContext, parseArgs } from "./context";
 import { loadCrate } from "./loader";
 
 const INPUT = `
-type A = { a: Int };
+type A = struct { a: Int };
+
+type What = What;
+
+type Uwu = (Int, Int);
 
 function main() = (
+  let a: What = 0;
   uwu();
 );
 
@@ -28,7 +33,7 @@ function uwu() = (
   /*-1*/
 );
 
-type B = {
+type B = struct {
   a: (Int, Int, Int, Int, Int),
 };
 
@@ -59,7 +64,9 @@ function main() {
     () => {
       const start = Date.now();
 
-      gcx.crateLoader(gcx, "std", Span.startOfFile(file));
+      if (packageName !== "std") {
+        gcx.crateLoader(gcx, "std", Span.startOfFile(file));
+      }
 
       const tokens = tokenize(file);
       if (debug.has("tokens")) {

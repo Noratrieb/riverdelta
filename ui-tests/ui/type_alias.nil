@@ -1,0 +1,7 @@
+//@check-pass
+
+type A = (Int, Int);
+
+function main() = (
+    let a: A = (0, 0);
+);

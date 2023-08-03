@@ -51,6 +51,7 @@ module.exports = {
     // This lint is horrible with noisy false positives every time there are typescript errors.
     "@typescript-eslint/no-unsafe-return": "off",
     "@typescript-eslint/no-unsafe-assignment": "off",
+    "eslint@typescript-eslint/no-unsafe-argument": "off",
 
     // Useful extra lints that are not on by default:
     "@typescript-eslint/explicit-module-boundary-types": "warn",

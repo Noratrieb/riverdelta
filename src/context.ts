@@ -79,7 +79,11 @@ export function parseArgs(hardcodedInput: string): Options {
     }
 
     input = fs.readFileSync(filename, { encoding: "utf-8" });
-    packageName = path.basename(filename, ".nil");
+    if (filename.endsWith(".mod.nil")) {
+      packageName = path.basename(filename, ".mod.nil");
+    } else {
+      packageName = path.basename(filename, ".nil");
+    }
 
     const debugArg = process.argv.find((arg) => arg.startsWith("--debug="));
     if (debugArg !== undefined) {
