@@ -403,6 +403,10 @@ export type TypeKind<P extends Phase> =
       kind: "tuple";
       elems: Type<P>[];
     }
+  | {
+      kind: "rawptr";
+      inner: Type<P>;
+    }
   | { kind: "never" };
 
 export type Type<P extends Phase> = TypeKind<P> & {
@@ -514,6 +518,11 @@ export type TyStruct = {
   fields: [string, Ty][];
 };
 
+export type TyRawPtr = {
+  kind: "rawptr";
+  inner: TyStruct;
+};
+
 export type TyNever = {
   kind: "never";
 };
@@ -528,6 +537,7 @@ export type Ty =
   | TyFn
   | TyVar
   | TyStruct
+  | TyRawPtr
   | TyNever;
 
 export function tyIsUnit(ty: Ty): ty is TyUnit {
@@ -836,6 +846,12 @@ export function superFoldType<From extends Phase, To extends Phase>(
         kind: "tuple",
         elems: type.elems.map((type) => folder.type(type)),
         span,
+      };
+    }
+    case "rawptr": {
+      return {
+        ...type,
+        inner: folder.type(type.inner),
       };
     }
     case "never": {

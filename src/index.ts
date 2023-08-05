@@ -14,28 +14,16 @@ import { loadCrate } from "./loader";
 
 const INPUT = `
 type A = struct { a: Int };
-type Complex = struct {
-  a: Int,
-  b: (Int, A),
-};
 
 function main() = (
   let a = A { a: 0 };
-  // let b = 0;
-  let c = Complex { a: 0, b: (0, a) };
-
-  write(a);
-  std.printlnInt(a.a);
-
-  // ptr = c + offset(b) + offset(1)
-  // a = load(ptr)
-  // store(a + offset(a), 1)
-  // c.b.1.a = 1;
+  rawr(___transmute(a));
+  std.printInt(a.a);
 );
 
-function write(a: A) = a.a = 1;
-
-function ret(): A = A { a: 0 };
+function rawr(a: *A) = (
+  a.a = 1;
+);
 `;
 
 function main() {

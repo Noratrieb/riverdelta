@@ -214,6 +214,8 @@ function printType(type: Type<AnyPhase>): string {
       return `[${printType(type.elem)}]`;
     case "tuple":
       return `(${type.elems.map(printType).join(", ")})`;
+    case "rawptr":
+      return `*${printType(type.inner)}`;
     case "never":
       return "!";
   }
@@ -265,6 +267,9 @@ export function printTy(ty: Ty): string {
     }
     case "struct": {
       return ty._name;
+    }
+    case "rawptr": {
+      return `*${printTy(ty.inner)}`;
     }
     case "never": {
       return "!";

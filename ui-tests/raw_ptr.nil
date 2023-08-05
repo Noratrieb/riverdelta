@@ -1,0 +1,13 @@
+//@check-pass
+
+type A = struct { a: Int };
+
+function main() = (
+  let a = A { a: 0 };
+  rawr(___transmute(a));
+  std.printInt(a.a);
+);
+
+function rawr(a: *A) = (
+  a.a = 1;
+);

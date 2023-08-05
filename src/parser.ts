@@ -650,6 +650,12 @@ function parseType(t: State): [State, Type<Parsed>] {
 
       return [t, { kind: "tuple", elems: [head, ...tail], span }];
     }
+    case "*": {
+      let inner;
+      [t, inner] = parseType(t);
+
+      return [t, { kind: "rawptr", inner, span }];
+    }
     default: {
       throw new CompilerError(
         `unexpected token: \`${tok.kind}\`, expected type`,

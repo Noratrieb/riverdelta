@@ -19,6 +19,7 @@ import {
   superFoldExpr,
   superFoldItem,
   varUnreachable,
+  TyRawPtr,
 } from "./ast";
 import { GlobalContext } from "./context";
 import { unreachable } from "./error";
@@ -443,8 +444,10 @@ function tryLowerLValue(
   instrs: wasm.Instr[],
   expr: Expr<Typecked>,
 ): LValue | undefined {
-  const fieldParts = (ty: TyStruct, fieldIdx: number): MemoryLayoutPart[] =>
-    unwrap(layoutOfStruct(ty).fields[fieldIdx]).types;
+  const fieldParts = (
+    ty: TyStruct | TyRawPtr,
+    fieldIdx: number,
+  ): MemoryLayoutPart[] => unwrap(layoutOfStruct(ty).fields[fieldIdx]).types;
 
   switch (expr.kind) {
     case "ident":
@@ -489,7 +492,8 @@ function tryLowerLValue(
           // _potentially_ a localTupleField
           todo("tuple access");
         }
-        case "struct": {
+        case "struct":
+        case "rawptr": {
           // Codegen the base, this leaves us with the base pointer on the stack.
           // Do not increment the refcount for an lvalue base.
           lowerExpr(fcx, instrs, expr.lhs, true);
@@ -908,7 +912,8 @@ function lowerExpr(
 
           break;
         }
-        case "struct": {
+        case "struct":
+        case "rawptr": {
           const ty = expr.lhs.ty;
           const layout = layoutOfStruct(ty);
           const field = layout.fields[expr.field.fieldIdx!];
@@ -1027,7 +1032,7 @@ function lowerExpr(
     }
     case "structLiteral": {
       if (expr.ty.kind !== "struct") {
-        throw new Error("struct literal must have struct type");
+        unreachable("struct literal must have struct type");
       }
       const layout = layoutOfStruct(expr.ty);
 
@@ -1236,6 +1241,7 @@ function argRetAbi(param: Ty): ArgRetAbi {
     case "tuple":
       return param.elems.flatMap(argRetAbi);
     case "struct":
+    case "rawptr":
       return ["i32"];
     case "never":
       return [];
@@ -1290,6 +1296,7 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
     case "fn":
       todo("fn types");
     case "struct":
+    case "rawptr":
       return ["i32"];
     case "never":
       return [];
@@ -1313,7 +1320,8 @@ function sizeOfValtype(type: wasm.ValType): number {
   }
 }
 
-export function layoutOfStruct(ty: TyStruct): StructLayout {
+export function layoutOfStruct(ty_: TyStruct | TyRawPtr): StructLayout {
+  const ty = ty_.kind === "struct" ? ty_ : ty_.inner;
   const fieldWasmTys = ty.fields.map(([, field]) => wasmTypeForBody(field));
 
   // TODO: Use the max alignment instead.

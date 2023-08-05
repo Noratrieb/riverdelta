@@ -1,0 +1,21 @@
+//@check-pass
+
+type A = struct { a: Int };
+type Complex = struct {
+  a: Int,
+  b: (Int, A),
+};
+
+function main() = (
+  let a = A { a: 0 };
+  // let b = 0;
+  // let c = Complex { a: 0, b: (0, a) };
+
+  write(a);
+
+  // c.b.1.a = 1; TODO
+);
+
+function write(a: A) = a.a = 1;
+
+function ret(): A = A { a: 0 };

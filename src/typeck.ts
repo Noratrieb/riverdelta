@@ -131,6 +131,17 @@ function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
         elems: type.elems.map((type) => lowerAstTy(cx, type)),
       };
     }
+    case "rawptr": {
+      const inner = lowerAstTy(cx, type.inner);
+      if (inner.kind !== "struct") {
+        throw new CompilerError(
+          "raw pointers must point to structs",
+          type.span,
+        );
+      }
+
+      return { kind: "rawptr", inner };
+    }
     case "never": {
       return TY_NEVER;
     }
@@ -778,11 +789,12 @@ export function checkBody(
               }
               break;
             }
-            case "struct": {
+            case "struct":
+            case "rawptr": {
+              const fields =
+                lhs.ty.kind === "struct" ? lhs.ty.fields : lhs.ty.inner.fields;
               if (typeof field.value === "string") {
-                const idx = lhs.ty.fields.findIndex(
-                  ([name]) => name === field.value,
-                );
+                const idx = fields.findIndex(([name]) => name === field.value);
                 if (idx === -1) {
                   throw new CompilerError(
                     `field \`${field.value}\` does not exist on ${printTy(
@@ -792,7 +804,7 @@ export function checkBody(
                   );
                 }
 
-                ty = lhs.ty.fields[idx][1];
+                ty = fields[idx][1];
                 fieldIdx = idx;
               } else {
                 throw new CompilerError(
@@ -962,7 +974,10 @@ function checkLValue(expr: Expr<Typecked>) {
       checkLValue(expr.lhs);
       break;
     default:
-      throw new CompilerError("invalid left-hand side of assignment", expr.span);
+      throw new CompilerError(
+        "invalid left-hand side of assignment",
+        expr.span,
+      );
   }
 }
 
