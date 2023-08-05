@@ -72,24 +72,20 @@ global HEAP_START: HeapPtr = 2048_I32;
 //                 4+  4+    4*        9 = 8+36=42 (round to 64)
 global HEAP_REGION_START: I32 = 2112_I32;
 
-// typedef struct node_t {
-//     uint hole;
-//     uint size;
-//     struct node_t* next;
-//     struct node_t* prev;
-// } node_t;
-global NODE_HOLE: I32 = 0_I32;
-global NODE_SIZE: I32 = 4_I32;
-global NODE_NEXT: I32 = 8_I32;
-global NODE_PREV: I32 = 12_I32;
+type NodeS = struct {
+    hole: I32,
+    size: I32,
+    next: *NodeS,
+    prev: *NodeS,
+};
 
-// typedef struct { 
-//     node_t *header;
-// } footer_t;
+type FootS = struct {
+    header: *NodeS,
+};
 
-// typedef struct {
-//     node_t* head;
-// } bin_t;
+type BinS = struct {
+    head: *NodeS,
+};
 
 global SIZEOF_NODE: I32 = 16_I32;
 global SIZEOF_FOOTER: I32 = 4_I32;
@@ -102,69 +98,70 @@ type BinPtr = I32;
 function initHeap() = (
     let heap_init_size = 65536_I32 - HEAP_REGION_START;
 
-    __i32_store(HEAP_REGION_START + NODE_HOLE, 1_I32); //  START.hole =
-    __i32_store(HEAP_REGION_START + NODE_SIZE, heap_init_size - SIZEOF_NODE - SIZEOF_FOOTER); // START.size =
+    let init_region: *NodeS = ___transmute(HEAP_REGION_START);
+    init_region.hole = 1_I32;
+    init_region.size = heap_init_size - SIZEOF_NODE - SIZEOF_FOOTER;
 
-    createFoot(HEAP_REGION_START);
+    createFoot(init_region);
 );
 
-function createFoot(head_node: NodePtr) = (
-    let foot = getFoot(head_node);
-    __i32_store(foot, head_node); // foot.header = head_node
+function createFoot(head: *NodeS) = (
+    let foot = getFoot(head);
+    foot.header = head;
 );
 
-function getFoot(node: NodePtr): FootPtr = (
-    let node_size = __i32_load(node + NODE_SIZE);
-    node + SIZEOF_NODE + node_size
+function getFoot(node: *NodeS): *FootS = (
+    let node_addr: I32 = ___transmute(node);
+    ___transmute(node_addr + SIZEOF_NODE + node.size)
 );
 
 function getWilderness() =;
 
 // llist.c
 
-function addNode(bin: BinPtr, node: NodePtr) = (
-    __i32_store(node + NODE_NEXT, 0_I32); // node.next =
-    __i32_store(node + NODE_PREV, 0_I32); // node.prev =
+function addNode(bin: *BinS, node: *NodeS) = (
+    node.next = ___transmute(0_I32);
+    node.prev = ___transmute(0_I32);
 
-    let bin_head: NodePtr = __i32_load(bin); // bin.head
+    let bin_head_addr: I32 = ___transmute(bin.head); // bin.head
 
-    if (bin_head == 0_I32) then
-        __i32_store(bin, node) // bin.head =
-    else (
-        let current: NodePtr = bin_head;
-        let previous: NodePtr = 0_I32;
+    if (bin_head_addr == 0_I32) then (
+        bin.head = node;
+    ) else (
+        let current: *NodeS = bin.head;
+        let previous: *NodeS = ___transmute(0_I32);
 
         loop (
-            if (current != 0_I32)
-                & (__i32_load(current + NODE_SIZE) // current.size
-                    <= __i32_load(node + NODE_SIZE)) // node.size 
-            then break;
+            let currentAddr: I32 = ___transmute(current);
+            if (currentAddr != 0_I32) & (current.size <= node.size) then break;
 
             previous = current;
-            current = __i32_load(current + NODE_NEXT); // current.next
+            current = current.next;
         );
 
-        if (current == 0_I32) then (
-            __i32_store(previous + NODE_NEXT, node); // previous.next
-            __i32_store(node + NODE_PREV, previous); // node.prev
+        let currentAddr: I32 = ___transmute(current);
+        if (currentAddr == 0_I32) then (
+            previous.next = node;
+            node.prev = previous;
         ) else (
-            if (previous != 0_I32) then (
-                __i32_store(node + NODE_NEXT, current); // node.next
-                __i32_store(previous + NODE_NEXT, node); // previous.next
+            let previous_addr: I32 = ___transmute(previous);
+            if (previous_addr != 0_I32) then (
+                node.next = current;
+                previous.next = node;
 
-                __i32_store(node + NODE_PREV, previous); // node.prev
-                __i32_store(current + NODE_PREV, node); // current.prev
+                node.prev = previous;
+                current.prev = node;
             ) else (
-                __i32_store(node + NODE_NEXT, __i32_load(bin)); // node.next = bin.head
-                __i32_store(__i32_load(bin) + NODE_PREV, node); // bin.head.prev = node;
-                __i32_store(bin, node); // bin.head
+                node.next = bin.head;
+                bin.head.prev = node;
+                bin.head = node;
             );
         );
     )
 );
 
 function removeNode(bin: BinPtr, node: NodePtr) = (
-    
+
 );
 
 function test() =;

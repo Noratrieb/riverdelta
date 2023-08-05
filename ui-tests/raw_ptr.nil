@@ -9,5 +9,6 @@ function main() = (
 );
 
 function rawr(a: *A) = (
+  let a: *A = a;
   a.a = 1;
 );

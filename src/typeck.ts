@@ -574,6 +574,14 @@ export class InferContext {
         if (rhs.kind === "struct" && lhs.itemId === rhs.itemId) {
           return;
         }
+        break;
+      }
+      case "rawptr": {
+        if (rhs.kind === "rawptr") {
+          this.assign(lhs.inner, rhs.inner, span);
+          return;
+        }
+        break;
       }
     }
 
