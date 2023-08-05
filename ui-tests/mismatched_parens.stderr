@@ -1,0 +1,4 @@
+error: unexpected end of file
+ --> $DIR/mismatched_parens.nil:2
+2 | 
+    ^
