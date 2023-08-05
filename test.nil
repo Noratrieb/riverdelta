@@ -1,5 +1,6 @@
-extern mod std;
+type A = struct { a: Int };
 
 function main() = (
-  std.printInt(10);
+  let a = A { a: 0 };
+  a.a = 1;
 );

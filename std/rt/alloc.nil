@@ -67,7 +67,7 @@ function deallocateItem(ptr: I32, objSize: I32) = (
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-global HEAP_START: I32 = 2048_I32;
+global HEAP_START: HeapPtr = 2048_I32;
 // heap size = start+end+bin_t*BIN_COUNT
 //                 4+  4+    4*        9 = 8+36=42 (round to 64)
 global HEAP_REGION_START: I32 = 2112_I32;
@@ -78,6 +78,10 @@ global HEAP_REGION_START: I32 = 2112_I32;
 //     struct node_t* next;
 //     struct node_t* prev;
 // } node_t;
+global NODE_HOLE: I32 = 0_I32;
+global NODE_SIZE: I32 = 4_I32;
+global NODE_NEXT: I32 = 8_I32;
+global NODE_PREV: I32 = 12_I32;
 
 // typedef struct { 
 //     node_t *header;
@@ -90,23 +94,77 @@ global HEAP_REGION_START: I32 = 2112_I32;
 global SIZEOF_NODE: I32 = 16_I32;
 global SIZEOF_FOOTER: I32 = 4_I32;
 
+type HeapPtr = I32;
+type NodePtr = I32;
+type FootPtr = I32;
+type BinPtr = I32;
+
 function initHeap() = (
     let heap_init_size = 65536_I32 - HEAP_REGION_START;
 
-    __i32_store(HEAP_REGION_START, 1_I32); //  START.hole =
-    __i32_store(HEAP_REGION_START + 4_I32, heap_init_size - SIZEOF_NODE - SIZEOF_FOOTER); // START.size =
+    __i32_store(HEAP_REGION_START + NODE_HOLE, 1_I32); //  START.hole =
+    __i32_store(HEAP_REGION_START + NODE_SIZE, heap_init_size - SIZEOF_NODE - SIZEOF_FOOTER); // START.size =
+
+    createFoot(HEAP_REGION_START);
 );
 
-function createFoot(head_node: I32) = (
+function createFoot(head_node: NodePtr) = (
     let foot = getFoot(head_node);
     __i32_store(foot, head_node); // foot.header = head_node
 );
 
-function getFoot(node: I32): I32 = (
-    let node_size = __i32_load(node + 4_I32); // node.size
+function getFoot(node: NodePtr): FootPtr = (
+    let node_size = __i32_load(node + NODE_SIZE);
     node + SIZEOF_NODE + node_size
 );
 
-function addNode(bin: I32, node: I32) = ;
+function getWilderness() =;
+
+// llist.c
+
+function addNode(bin: BinPtr, node: NodePtr) = (
+    __i32_store(node + NODE_NEXT, 0_I32); // node.next =
+    __i32_store(node + NODE_PREV, 0_I32); // node.prev =
+
+    let bin_head: NodePtr = __i32_load(bin); // bin.head
+
+    if (bin_head == 0_I32) then
+        __i32_store(bin, node) // bin.head =
+    else (
+        let current: NodePtr = bin_head;
+        let previous: NodePtr = 0_I32;
+
+        loop (
+            if (current != 0_I32)
+                & (__i32_load(current + NODE_SIZE) // current.size
+                    <= __i32_load(node + NODE_SIZE)) // node.size 
+            then break;
+
+            previous = current;
+            current = __i32_load(current + NODE_NEXT); // current.next
+        );
+
+        if (current == 0_I32) then (
+            __i32_store(previous + NODE_NEXT, node); // previous.next
+            __i32_store(node + NODE_PREV, previous); // node.prev
+        ) else (
+            if (previous != 0_I32) then (
+                __i32_store(node + NODE_NEXT, current); // node.next
+                __i32_store(previous + NODE_NEXT, node); // previous.next
+
+                __i32_store(node + NODE_PREV, previous); // node.prev
+                __i32_store(current + NODE_PREV, node); // current.prev
+            ) else (
+                __i32_store(node + NODE_NEXT, __i32_load(bin)); // node.next = bin.head
+                __i32_store(__i32_load(bin) + NODE_PREV, node); // bin.head.prev = node;
+                __i32_store(bin, node); // bin.head
+            );
+        );
+    )
+);
+
+function removeNode(bin: BinPtr, node: NodePtr) = (
+    
+);
 
 function test() =;

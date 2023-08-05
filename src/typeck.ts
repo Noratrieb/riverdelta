@@ -676,6 +676,10 @@ export function checkBody(
               }
               break;
             }
+            case "fieldAccess": {
+              checkLValue(lhs);
+              break;
+            }
             default: {
               throw new CompilerError(
                 "invalid left-hand side of assignment",
@@ -947,6 +951,19 @@ export function checkBody(
   const resolved = resolveBody(infcx, checked);
 
   return resolved;
+}
+
+function checkLValue(expr: Expr<Typecked>) {
+  switch (expr.kind) {
+    case "ident":
+    case "path":
+      break;
+    case "fieldAccess":
+      checkLValue(expr.lhs);
+      break;
+    default:
+      throw new CompilerError("invalid left-hand side of assignment", expr.span);
+  }
 }
 
 function checkBinary(

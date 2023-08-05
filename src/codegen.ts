@@ -21,6 +21,7 @@ import {
   varUnreachable,
 } from "./ast";
 import { GlobalContext } from "./context";
+import { unreachable } from "./error";
 import { printTy } from "./printer";
 import { ComplexMap, encodeUtf8, unwrap } from "./utils";
 import * as wasm from "./wasm/defs";
@@ -336,8 +337,13 @@ type ArgRetAbi = wasm.ValType[];
 type VarLocation = { localIdx: number; types: wasm.ValType[]; ty: Ty };
 
 type StructFieldLayout = {
-  types: { offset: number; type: wasm.ValType }[];
+  types: MemoryLayoutPart[];
   ty: Ty;
+};
+
+type MemoryLayoutPart = {
+  offset: number;
+  type: wasm.ValType;
 };
 
 type StructLayout = {
@@ -394,10 +400,120 @@ Expression lowering.
 - the result of an expression evaluation is stored on the top of the stack
 */
 
+type LValue =
+  | {
+      // An assignment to a local will be simple local.set.
+      // Example: `a = 0`, `a = (0, 1)`
+      // Nothing will be on the stack, the loc is here.
+      kind: "fullLocal";
+      loc: VarLocation;
+    }
+  | {
+      // An assignment to a global will be global.set.
+      // Example: `AAA = 0`
+      // Nothing will be on the stack, the id is here.
+      kind: "global";
+      res: Resolution;
+    }
+  | {
+      // Writes to a tuple fields of locals will always be local.set.
+      // Example: `a.0 = 1`, `a.1.2.3 = 123`.
+      // Nothing will be on the stack, the loc and offset+size are here.
+      kind: "localTupleField";
+      loc: VarLocation;
+      offset: number;
+      size: number;
+    }
+  | {
+      // Writes to struct or tuple fields in memory will always be memory stores.
+      // Example: `a.a = 0`, `a.0.b = 5`, `a.b.c.0.1 = 14`.
+      // A pointer to the base will be on the stack, the offset is here.
+      kind: "memoryField";
+      parts: MemoryLayoutPart[];
+    };
+
+/**
+ * Tries to lower an expression as an lvalue. If it succeeds, the lvalue value
+ * is left on the stack while the lvalue kind is returned.
+ *
+ * If the expression is not an lvalue, don't do anything and return undefined.
+ */
+function tryLowerLValue(
+  fcx: FuncContext,
+  instrs: wasm.Instr[],
+  expr: Expr<Typecked>,
+): LValue | undefined {
+  const fieldParts = (ty: TyStruct, fieldIdx: number): MemoryLayoutPart[] =>
+    unwrap(layoutOfStruct(ty).fields[fieldIdx]).types;
+
+  switch (expr.kind) {
+    case "ident":
+    case "path": {
+      const { res } = expr.value;
+
+      switch (res.kind) {
+        case "local": {
+          return {
+            kind: "fullLocal",
+            loc: fcx.varLocations[fcx.varLocations.length - 1 - res.index],
+          };
+        }
+        case "item": {
+          const item = fcx.cx.gcx.findItem(res.id);
+          if (item.kind !== "global") {
+            throw new Error("cannot store to non-global item");
+          }
+
+          return {
+            kind: "global",
+            res,
+          };
+        }
+        case "builtin": {
+          throw new Error("cannot store to builtin");
+        }
+      }
+    }
+    case "fieldAccess": {
+      // Field access lvalues (or rather, lvalues in general) are made of two important parts:
+      // the _final place_, and the base.
+      // `a.0.b` -> `.b` is the final place, `a.0` is the base.
+      // `a.0.1` -> `a.0.1` is the final place with no base.
+      // We go from the outside in. Tuple fields are a projection and therefore part of the
+      // final place. A struct field means that everything left of the field access is the base.
+
+      // The base can be codegened like a normal expression (except without reference count changes).
+      // Only the final place needs special handling.
+      switch (expr.lhs.ty.kind) {
+        case "tuple": {
+          // _potentially_ a localTupleField
+          todo("tuple access");
+        }
+        case "struct": {
+          // Codegen the base, this leaves us with the base pointer on the stack.
+          // Do not increment the refcount for an lvalue base.
+          lowerExpr(fcx, instrs, expr.lhs, true);
+          return {
+            kind: "memoryField",
+            parts: fieldParts(expr.lhs.ty, expr.field.fieldIdx!),
+          };
+        }
+        default:
+          unreachable("invalid field access lhs ty");
+      }
+    }
+    default: {
+      return undefined;
+    }
+  }
+}
+
 function lowerExpr(
   fcx: FuncContext,
   instrs: wasm.Instr[],
   expr: Expr<Typecked>,
+  // Note: This is only forwarded through field accesses.
+  noRefcountIfLvalue = false,
 ) {
   const ty = expr.ty;
 
@@ -424,41 +540,29 @@ function lowerExpr(
     }
     case "assign": {
       lowerExpr(fcx, instrs, expr.rhs);
-      const { lhs } = expr;
-      switch (lhs.kind) {
-        case "ident":
-        case "path": {
-          const { res } = lhs.value;
 
-          switch (res.kind) {
-            case "local": {
-              const location =
-                fcx.varLocations[fcx.varLocations.length - 1 - res.index];
-              storeVariable(instrs, location);
-              break;
-            }
-            case "item": {
-              const item = fcx.cx.gcx.findItem(res.id);
-              if (item.kind !== "global") {
-                throw new Error("cannot store to non-global item");
-              }
+      const lvalue = unwrap(
+        tryLowerLValue(fcx, instrs, expr.lhs),
+        "invalid assign lhs",
+      );
 
-              const instr: wasm.Instr = { kind: "global.set", imm: DUMMY_IDX };
-              const rel: Relocation = { kind: "globalref", instr, res };
-
-              fcx.cx.relocations.push(rel);
-              instrs.push(instr);
-
-              break;
-            }
-            case "builtin": {
-              throw new Error("cannot store to builtin");
-            }
-          }
+      switch (lvalue.kind) {
+        case "fullLocal": {
+          storeVariable(instrs, lvalue.loc);
           break;
         }
-        default: {
-          throw new Error("invalid lhs side of assignment");
+        case "global": {
+          const instr: wasm.Instr = { kind: "global.set", imm: DUMMY_IDX };
+          const rel: Relocation = { kind: "globalref", instr, res: lvalue.res };
+
+          fcx.cx.relocations.push(rel);
+          instrs.push(instr);
+          break;
+        }
+        case "localTupleField":
+          todo("local tuple fields");
+        case "memoryField": {
+          storeMemory(fcx, instrs, lvalue.parts);
         }
       }
 
@@ -520,7 +624,7 @@ function lowerExpr(
 
           const refcount = needsRefcount(expr.ty);
 
-          if (refcount !== undefined) {
+          if (!noRefcountIfLvalue && refcount !== undefined) {
             addRefcount(
               fcx,
               instrs,
@@ -766,18 +870,6 @@ function lowerExpr(
       break;
     }
     case "fieldAccess": {
-      // We could just naively always evaluate the LHS normally, but that's kinda
-      // stupid as it would cause way too much code for `let a = (0, 0, 0); a.0`
-      // as that operation would first load the entire tuple onto the stack!
-      // Therefore, we are a little clever be peeking into the LHS and doing
-      // something smarter if it's another field access or ident (in the future,
-      // we should be able to generalize this to all "places"/"lvalues").
-
-      // TODO: Actually do this instead of being naive.
-
-      const _isPlace = (expr: Expr<Typecked>) =>
-        expr.kind === "ident" || expr.kind === "fieldAccess";
-
       lowerExpr(fcx, instrs, expr.lhs);
 
       switch (expr.lhs.ty.kind) {
@@ -963,38 +1055,9 @@ function lowerExpr(
 
       // Now, set all fields.
       expr.fields.forEach((field, i) => {
-        instrs.push({ kind: "local.get", imm: ptrLocal });
         lowerExpr(fcx, instrs, field.expr);
-
-        const fieldLayout = [...layout.fields[i].types];
-        fieldLayout.reverse();
-        fieldLayout.forEach((fieldPart) => {
-          switch (fieldPart.type) {
-            case "i32":
-              instrs.push({
-                kind: "i32.store",
-                imm: {
-                  align: sizeOfValtype(fieldPart.type),
-                  offset: fieldPart.offset,
-                },
-              });
-              break;
-            case "i64":
-              instrs.push({
-                kind: "i64.store",
-                imm: {
-                  align: sizeOfValtype(fieldPart.type),
-                  offset: fieldPart.offset,
-                },
-              });
-              break;
-            default: {
-              throw new Error(
-                `unsupported struct content type: ${fieldPart.type}`,
-              );
-            }
-          }
-        });
+        instrs.push({ kind: "local.get", imm: ptrLocal });
+        storeMemory(fcx, instrs, layout.fields[i].types);
       });
 
       // Last, load the pointer and pass that on.
@@ -1122,6 +1185,37 @@ function storeVariable(instrs: wasm.Instr[], loc: VarLocation) {
   types.reverse();
   types.forEach((i) => {
     instrs.push({ kind: "local.set", imm: loc.localIdx + i });
+  });
+}
+
+/**
+ * Generates TYPE.store instructions for memory parts.
+ * STACK IN: [...types_, i32 (base pointer)]
+ * STACK OUT: []
+ */
+function storeMemory(
+  fcx: FuncContext,
+  instrs: wasm.Instr[],
+  types_: MemoryLayoutPart[],
+) {
+  const ptr = getScratchLocals(fcx, "i32", 1)[0];
+  instrs.push({ kind: "local.set", imm: ptr });
+
+  const types = [...types_];
+  types.reverse();
+  types.forEach(({ type, offset }) => {
+    if (type === "externref" || type === "funcref") {
+      unreachable("non-i32/i64 stores");
+    }
+    const val = getScratchLocals(fcx, type, 1)[0];
+    instrs.push({ kind: "local.set", imm: val });
+    instrs.push({ kind: "local.get", imm: ptr });
+    instrs.push({ kind: "local.get", imm: val });
+    const kind: wasm.SimpleStoreKind = `${type}.store`;
+    instrs.push({
+      kind,
+      imm: { offset, align: sizeOfValtype(type) },
+    });
   });
 }
 

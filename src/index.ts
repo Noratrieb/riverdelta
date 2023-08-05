@@ -14,35 +14,28 @@ import { loadCrate } from "./loader";
 
 const INPUT = `
 type A = struct { a: Int };
-
-type Uwu = (Int, Int);
-
-function main() = (
-  uwu();
-);
-
-function uwu() = (
-  let a = A { a: 100 };
-  eat(a /*+1*/);
-
-  A { a: 100 };
-
-  /*-1*/
-);
-
-type B = struct {
-  a: (Int, Int, Int, Int, Int),
+type Complex = struct {
+  a: Int,
+  b: (Int, A),
 };
 
-function test(b: B) = (
-  b.a;
-); 
+function main() = (
+  let a = A { a: 0 };
+  // let b = 0;
+  let c = Complex { a: 0, b: (0, a) };
 
-mod aa (
-  global UWU: Int = 0;
+  write(a);
+  std.printlnInt(a.a);
+
+  // ptr = c + offset(b) + offset(1)
+  // a = load(ptr)
+  // store(a + offset(a), 1)
+  // c.b.1.a = 1;
 );
 
-function eat(a: A) =;
+function write(a: A) = a.a = 1;
+
+function ret(): A = A { a: 0 };
 `;
 
 function main() {

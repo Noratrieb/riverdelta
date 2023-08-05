@@ -10,9 +10,9 @@ export class Ids {
   }
 }
 
-export function unwrap<T>(value: T | undefined): T {
+export function unwrap<T>(value: T | undefined, msg?: string): T {
   if (value === undefined) {
-    throw new Error("tried to unwrap undefined value");
+    throw new Error(msg ?? "tried to unwrap undefined value");
   }
   return value;
 }

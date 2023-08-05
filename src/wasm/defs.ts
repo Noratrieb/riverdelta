@@ -194,9 +194,13 @@ export type MemArg = {
   align?: u32;
 };
 
+export type SimpleStoreKind = `${`${"i" | "f"}${BitWidth}` | "v128"}.${
+  | "load"
+  | "store"}`;
+
 export type MemoryInstr =
   | {
-      kind: `${`${"i" | "f"}${BitWidth}` | "v128"}.${"load" | "store"}`;
+      kind: SimpleStoreKind;
       imm: MemArg;
     }
   | {
