@@ -51,6 +51,8 @@ function printItem(item: Item<AnyPhase>): string {
         )};`
       );
     }
+    case "error":
+      return "<ERROR>";
   }
 }
 
@@ -203,6 +205,8 @@ function printExpr(expr: Expr<AnyPhase>, indent: number): string {
         .map((expr) => printExpr(expr, indent))
         .join(", ")})`;
     }
+    case "error":
+      return "<ERROR>";
   }
 }
 
@@ -218,6 +222,8 @@ function printType(type: Type<AnyPhase>): string {
       return `*${printType(type.inner)}`;
     case "never":
       return "!";
+    case "error":
+      return "<ERROR>";
   }
 }
 
@@ -229,6 +235,9 @@ function printRes(res: Resolution): string {
       return `#I${res.id.toString()}`;
     case "builtin": {
       return `#B`;
+    }
+    case "error": {
+      return "#E";
     }
   }
 }
@@ -274,6 +283,8 @@ export function printTy(ty: Ty): string {
     case "never": {
       return "!";
     }
+    case "error":
+      return "<ERROR>";
   }
 }
 

@@ -1,4 +1,4 @@
-import { LoadedFile, Span, withErrorPrinter } from "./error";
+import { LoadedFile, Span } from "./error";
 import { isValidIdent, tokenize } from "./lexer";
 import { lower as lowerToWasm } from "./codegen";
 import { ParseState, parse } from "./parser";
@@ -16,9 +16,9 @@ const INPUT = `
 type A = struct { a: Int };
 
 function main() = (
-  let a = A { a: 0 };
-  rawr(___transmute(a));
-  std.printInt(a.a);
+  let a: Int = "";
+  let b: Int = "";
+  c;
 );
 
 function rawr(a: *A) = (
@@ -42,91 +42,95 @@ function main() {
   const gcx = new GlobalContext(opts, loadCrate);
   const mainCrate = gcx.crateId.next();
 
-  withErrorPrinter(
-    () => {
-      const start = Date.now();
+  const start = Date.now();
 
-      if (packageName !== "std") {
-        gcx.crateLoader(gcx, "std", Span.startOfFile(file));
+  if (packageName !== "std") {
+    gcx.crateLoader(gcx, "std", Span.startOfFile(file));
+  }
+
+  const tokens = tokenize(gcx.error, file);
+  // We treat lexer errors as fatal.
+  if (!tokens.ok) {
+    process.exit(1);
+  }
+  if (debug.has("tokens")) {
+    console.log("-----TOKENS------------");
+    console.log(tokens);
+  }
+
+  const parseState: ParseState = { tokens: tokens.tokens, gcx, file };
+
+  const ast: Crate<Built> = parse(packageName, parseState, mainCrate);
+  if (debug.has("ast")) {
+    console.log("-----AST---------------");
+
+    console.dir(ast.rootItems, { depth: 50 });
+
+    console.log("-----AST pretty--------");
+    const printed = printAst(ast);
+    console.log(printed);
+  }
+
+  if (debug.has("resolved")) {
+    console.log("-----AST resolved------");
+  }
+  const resolved = resolve(gcx, ast);
+  if (debug.has("resolved")) {
+    const resolvedPrinted = printAst(resolved);
+    console.log(resolvedPrinted);
+  }
+
+  if (debug.has("typecked")) {
+    console.log("-----AST typecked------");
+  }
+  const typecked: Crate<Typecked> = typeck(gcx, resolved);
+  if (debug.has("typecked")) {
+    const typeckPrinted = printAst(typecked);
+    console.log(typeckPrinted);
+  }
+
+  if (debug.has("wat")) {
+    console.log("-----wasm--------------");
+  }
+
+  // Codegen should never handle errornous code.
+  if (gcx.error.hasErrors()) {
+    process.exit(1);
+  }
+
+  gcx.finalizedCrates.push(typecked);
+  const wasmModule = lowerToWasm(gcx);
+  const moduleStringColor = writeModuleWatToString(wasmModule, true);
+  const moduleString = writeModuleWatToString(wasmModule);
+
+  if (debug.has("wat")) {
+    console.log(moduleStringColor);
+  }
+
+  if (!opts.noOutput) {
+    fs.writeFileSync("out.wat", moduleString);
+  }
+
+  if (debug.has("wasm-validate")) {
+    console.log("--validate wasm-tools--");
+
+    exec("wasm-tools validate out.wat", (error, stdout, stderr) => {
+      if (error && error.code === 1) {
+        console.log(stderr);
+      } else if (error) {
+        console.error(`failed to spawn wasm-tools: ${error.message}`);
+      } else {
+        if (stderr) {
+          console.log(stderr);
+        }
+        if (stdout) {
+          console.log(stdout);
+        }
       }
 
-      const tokens = tokenize(file);
-      if (debug.has("tokens")) {
-        console.log("-----TOKENS------------");
-        console.log(tokens);
-      }
-
-      const parseState: ParseState = { tokens, file };
-
-      const ast: Crate<Built> = parse(packageName, parseState, mainCrate);
-      if (debug.has("ast")) {
-        console.log("-----AST---------------");
-
-        console.dir(ast.rootItems, { depth: 50 });
-
-        console.log("-----AST pretty--------");
-        const printed = printAst(ast);
-        console.log(printed);
-      }
-
-      if (debug.has("resolved")) {
-        console.log("-----AST resolved------");
-      }
-      const resolved = resolve(gcx, ast);
-      if (debug.has("resolved")) {
-        const resolvedPrinted = printAst(resolved);
-        console.log(resolvedPrinted);
-      }
-
-      if (debug.has("typecked")) {
-        console.log("-----AST typecked------");
-      }
-      const typecked: Crate<Typecked> = typeck(gcx, resolved);
-      if (debug.has("typecked")) {
-        const typeckPrinted = printAst(typecked);
-        console.log(typeckPrinted);
-      }
-
-      if (debug.has("wat")) {
-        console.log("-----wasm--------------");
-      }
-
-      gcx.finalizedCrates.push(typecked);
-      const wasmModule = lowerToWasm(gcx);
-      const moduleStringColor = writeModuleWatToString(wasmModule, true);
-      const moduleString = writeModuleWatToString(wasmModule);
-
-      if (debug.has("wat")) {
-        console.log(moduleStringColor);
-      }
-
-      if (!opts.noOutput) {
-        fs.writeFileSync("out.wat", moduleString);
-      }
-
-      if (debug.has("wasm-validate")) {
-        console.log("--validate wasm-tools--");
-
-        exec("wasm-tools validate out.wat", (error, stdout, stderr) => {
-          if (error && error.code === 1) {
-            console.log(stderr);
-          } else if (error) {
-            console.error(`failed to spawn wasm-tools: ${error.message}`);
-          } else {
-            if (stderr) {
-              console.log(stderr);
-            }
-            if (stdout) {
-              console.log(stdout);
-            }
-          }
-
-          console.log(`finished in ${Date.now() - start}ms`);
-        });
-      }
-    },
-    () => process.exit(1),
-  );
+      console.log(`finished in ${Date.now() - start}ms`);
+    });
+  }
 }
 
 main();

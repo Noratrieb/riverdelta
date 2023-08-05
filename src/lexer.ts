@@ -1,4 +1,10 @@
-import { CompilerError, LoadedFile, Span } from "./error";
+import {
+  CompilerError,
+  ErrorEmitted,
+  ErrorHandler,
+  LoadedFile,
+  Span,
+} from "./error";
 
 export type DatalessToken =
   | "function"
@@ -86,7 +92,40 @@ const SINGLE_PUNCT: string[] = [
   "%",
 ];
 
-export function tokenize(file: LoadedFile): Token[] {
+class LexerError extends Error {
+  constructor(public inner: CompilerError) {
+    super("lexer error");
+  }
+}
+
+export type LexerResult =
+  | {
+      ok: true;
+      tokens: Token[];
+    }
+  | {
+      ok: false;
+
+      err: ErrorEmitted;
+    };
+
+export function tokenize(handler: ErrorHandler, file: LoadedFile): LexerResult {
+  try {
+    return { ok: true, tokens: tokenizeInner(file) };
+  } catch (e) {
+    if (e instanceof LexerError) {
+      const err: ErrorEmitted = handler.emit(e.inner);
+      return { ok: false, err };
+    } else {
+      throw e;
+    }
+  }
+}
+
+function tokenizeInner(file: LoadedFile): Token[] {
+  const err = (msg: string, span: Span) =>
+    new LexerError(new CompilerError(msg, span));
+
   const { content: input } = file;
   const tokens: Token[] = [];
   let i = 0;
@@ -109,7 +148,7 @@ export function tokenize(file: LoadedFile): Token[] {
       while (input[i] !== "*" && input[i + 1] !== "/") {
         i++;
         if (input[i] === undefined) {
-          throw new CompilerError("unterminated block comment", span);
+          throw err("unterminated block comment", span);
         }
       }
       i++;
@@ -205,7 +244,7 @@ export function tokenize(file: LoadedFile): Token[] {
                   result.push("\x19");
                   break;
                 default:
-                  throw new CompilerError(
+                  throw err(
                     `invalid escape character: ${input[i]}`,
                     new Span(span.end - 1, span.end, file),
                   );
@@ -215,7 +254,7 @@ export function tokenize(file: LoadedFile): Token[] {
 
             result.push(next);
             if (next === undefined) {
-              throw new CompilerError(`Unterminated string literal`, span);
+              throw err(`Unterminated string literal`, span);
             }
           }
           const value = result.join("");
@@ -263,7 +302,7 @@ export function tokenize(file: LoadedFile): Token[] {
           } else if (isWhitespace(next)) {
             // ignore
           } else {
-            throw new CompilerError(`invalid character: \`${next}\``, span);
+            throw err(`invalid character: \`${next}\``, span);
           }
         }
       }

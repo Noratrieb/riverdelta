@@ -19,7 +19,7 @@ import {
   ItemExtern,
 } from "./ast";
 import { GlobalContext } from "./context";
-import { CompilerError, Span } from "./error";
+import { CompilerError, ErrorEmitted, Span } from "./error";
 import { ComplexMap } from "./utils";
 
 const BUILTIN_SET = new Set<string>(BUILTINS);
@@ -81,6 +81,7 @@ export function resolve(
     rootItems,
     packageName: ast.packageName,
     rootFile: ast.rootFile,
+    fatalError: ast.fatalError,
   };
 }
 
@@ -94,12 +95,15 @@ function resolveModule(
   contents.forEach((item) => {
     const existing = items.get(item.name);
     if (existing !== undefined) {
-      throw new CompilerError(
-        `item \`${item.name}\` has already been declared`,
-        item.span,
+      cx.gcx.error.emit(
+        new CompilerError(
+          `item \`${item.name}\` has already been declared`,
+          item.span,
+        ),
       );
+    } else {
+      items.set(item.name, item.id);
     }
-    items.set(item.name, item.id);
   });
 
   const scopes: string[] = [];
@@ -148,7 +152,12 @@ function resolveModule(
       return { kind: "builtin", name: ident.name as BuiltinName };
     }
 
-    throw new CompilerError(`cannot find ${ident.name}`, ident.span);
+    return {
+      kind: "error",
+      err: cx.gcx.error.emit(
+        new CompilerError(`cannot find ${ident.name}`, ident.span),
+      ),
+    };
   };
 
   const blockLocals: LocalInfo[][] = [];
@@ -260,30 +269,39 @@ function resolveModule(
               const module = cx.gcx.findItem(res.id, cx.ast);
 
               if (module.kind === "mod" || module.kind === "extern") {
+                let pathRes: Resolution;
+
                 if (typeof expr.field.value === "number") {
-                  throw new CompilerError(
-                    "module contents cannot be indexed with a number",
-                    expr.field.span,
+                  const err: ErrorEmitted = cx.gcx.error.emit(
+                    new CompilerError(
+                      "module contents cannot be indexed with a number",
+                      expr.field.span,
+                    ),
                   );
-                }
-
-                const pathResItem = resolveModItem(
-                  cx,
-                  module,
-                  expr.field.value,
-                );
-                if (pathResItem === undefined) {
-                  throw new CompilerError(
-                    `module ${module.name} has no item ${expr.field.value}`,
-                    expr.field.span,
+                  pathRes = { kind: "error", err };
+                } else {
+                  const pathResItem = resolveModItem(
+                    cx,
+                    module,
+                    expr.field.value,
                   );
-                }
 
-                const pathRes: Resolution = { kind: "item", id: pathResItem };
+                  if (pathResItem === undefined) {
+                    const err: ErrorEmitted = cx.gcx.error.emit(
+                      new CompilerError(
+                        `module ${module.name} has no item ${expr.field.value}`,
+                        expr.field.span,
+                      ),
+                    );
+                    pathRes = { kind: "error", err };
+                  } else {
+                    pathRes = { kind: "item", id: pathResItem };
+                  }
+                }
                 const span = lhs.span.merge(expr.field.span);
                 return {
                   kind: "path",
-                  segments: [...segments, expr.field.value],
+                  segments: [...segments, String(expr.field.value)],
                   value: { res: pathRes, span },
                   span,
                 };

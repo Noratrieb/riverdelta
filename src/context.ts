@@ -1,5 +1,5 @@
 import { Crate, DepCrate, Final, Item, ItemId, Phase } from "./ast";
-import { Span } from "./error";
+import { ErrorHandler, Span } from "./error";
 import { Ids, unwrap } from "./utils";
 import fs from "fs";
 import path from "path";
@@ -20,6 +20,7 @@ export type CrateLoader = (
  * dependencies (which also use the same context) do not care about that.
  */
 export class GlobalContext {
+  public error: ErrorHandler = new ErrorHandler();
   public finalizedCrates: Crate<Final>[] = [];
   public crateId: Ids = new Ids();
 
@@ -37,6 +38,17 @@ export class GlobalContext {
     const crate: Crate<P> | Crate<Final> = unwrap(
       allCrates.find((crate) => crate.id === id.crateId),
     );
+
+    if (crate.fatalError) {
+      return {
+        kind: "error",
+        defPath: [],
+        err: crate.fatalError,
+        id: new ItemId(crate.id, 0),
+        name: "",
+        span: Span.startOfFile(crate.rootFile),
+      };
+    }
 
     if (id.itemIdx === 0) {
       const contents: Item<P>[] | Item<Final>[] = crate.rootItems;

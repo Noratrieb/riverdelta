@@ -1,6 +1,11 @@
 type A = struct { a: Int };
 
 function main() = (
-  let a = A { a: 0 };
+  let a: Int = "";
+  let b: Int = "";
+  c;
+);
+
+function rawr(a: *A) = (
   a.a = 1;
 );

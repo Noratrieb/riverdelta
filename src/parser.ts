@@ -28,7 +28,8 @@ import {
   StructLiteralField,
   TypeDefKind,
 } from "./ast";
-import { CompilerError, LoadedFile, Span } from "./error";
+import { GlobalContext } from "./context";
+import { CompilerError, ErrorEmitted, LoadedFile, Span } from "./error";
 import {
   BaseToken,
   Token,
@@ -39,21 +40,48 @@ import {
 import { loadModuleFile } from "./loader";
 import { ComplexMap, ComplexSet, Ids } from "./utils";
 
-export type ParseState = { tokens: Token[]; file: LoadedFile };
+export type ParseState = {
+  tokens: Token[];
+  file: LoadedFile;
+  gcx: GlobalContext;
+};
 type State = ParseState;
 
 type Parser<T> = (t: State) => [State, T];
+
+class FatalParseError extends Error {
+  constructor(public inner: ErrorEmitted) {
+    super("fatal parser error");
+  }
+}
 
 export function parse(
   packageName: string,
   t: State,
   crateId: number,
 ): Crate<Built> {
-  const [, items] = parseItems(t);
+  let items: Item<Parsed>[];
+  let fatalError: ErrorEmitted | undefined = undefined;
+  try {
+    [, items] = parseItems(t);
+  } catch (e) {
+    if (e instanceof FatalParseError) {
+      items = [];
+      fatalError = e.inner;
+    } else {
+      throw e;
+    }
+  }
 
-  const ast: Crate<Built> = buildCrate(packageName, items, crateId, t.file);
+  const ast: Crate<Built> = buildCrate(
+    packageName,
+    items,
+    crateId,
+    t.file,
+    fatalError,
+  );
 
-  validateAst(ast);
+  validateAst(ast, t.gcx);
 
   return ast;
 }
@@ -200,15 +228,32 @@ function parseItem(t: State): [State, Item<Parsed>] {
       [t] = expectNext(t, ")");
     } else {
       if (name.span.file.path === undefined) {
-        throw new CompilerError(
-          `no known source file for statement, cannot load file relative to it`,
-          name.span,
+        t.gcx.error.emit(
+          new CompilerError(
+            `no known source file for statement, cannot load file relative to it`,
+            name.span,
+          ),
         );
-      }
-      const file = loadModuleFile(name.span.file.path, name.ident, name.span);
 
-      const tokens = tokenize(file);
-      [, contents] = parseItems({ file, tokens });
+        contents = [];
+      } else {
+        const file = loadModuleFile(name.span.file.path, name.ident, name.span);
+
+        if (!file.ok) {
+          t.gcx.error.emit(file.err);
+          contents = [];
+        } else {
+          const tokens = tokenize(t.gcx.error, file.value);
+          if (!tokens.ok) {
+            throw new FatalParseError(tokens.err);
+          }
+          [, contents] = parseItems({
+            file: file.value,
+            tokens: tokens.tokens,
+            gcx: t.gcx,
+          });
+        }
+      }
     }
 
     [t] = expectNext(t, ";");
@@ -244,7 +289,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
     };
     return [t, global];
   } else {
-    unexpectedToken(tok, "item");
+    unexpectedToken(t, tok, "item");
   }
 }
 
@@ -413,7 +458,7 @@ function parseExprCall(t: State): [State, Expr<Parsed>] {
       } else if (access.kind === "lit_int") {
         value = access.value;
       } else {
-        unexpectedToken(access, "identifier or integer");
+        unexpectedToken(t, access, "identifier or integer");
       }
 
       lhs = {
@@ -467,7 +512,7 @@ function parseExprAtom(startT: State): [State, Expr<Parsed>] {
 
       return [t, { kind: "tupleLiteral", span, fields: [expr, ...rest] }];
     }
-    unexpectedToken(peek, "`,`, `;` or `)`");
+    unexpectedToken(t, peek, "`,`, `;` or `)`");
   }
 
   if (tok.kind === "lit_string") {
@@ -657,9 +702,13 @@ function parseType(t: State): [State, Type<Parsed>] {
       return [t, { kind: "rawptr", inner, span }];
     }
     default: {
-      throw new CompilerError(
-        `unexpected token: \`${tok.kind}\`, expected type`,
-        span,
+      throw new FatalParseError(
+        t.gcx.error.emit(
+          new CompilerError(
+            `unexpected token: \`${tok.kind}\`, expected type`,
+            span,
+          ),
+        ),
       );
     }
   }
@@ -688,7 +737,7 @@ function parseCommaSeparatedList<R>(
       // No comma? Fine, you don't like trailing commas.
       // But this better be the end.
       if (peekKind(t) !== terminator) {
-        unexpectedToken(next(t)[1], `, or ${terminator}`);
+        unexpectedToken(t, next(t)[1], `, or ${terminator}`);
       }
       break;
     }
@@ -720,15 +769,23 @@ function expectNext<T extends BaseToken>(
   let tok;
   [t, tok] = maybeNextT(t);
   if (!tok) {
-    throw new CompilerError(
-      `expected \`${kind}\`, found end of file`,
-      Span.eof(t.file),
+    throw new FatalParseError(
+      t.gcx.error.emit(
+        new CompilerError(
+          `expected \`${kind}\`, found end of file`,
+          Span.eof(t.file),
+        ),
+      ),
     );
   }
   if (tok.kind !== kind) {
-    throw new CompilerError(
-      `expected \`${kind}\`, found \`${tok.kind}\``,
-      tok.span,
+    throw new FatalParseError(
+      t.gcx.error.emit(
+        new CompilerError(
+          `expected \`${kind}\`, found \`${tok.kind}\``,
+          tok.span,
+        ),
+      ),
     );
   }
   return [t, tok as unknown as T & Token];
@@ -737,7 +794,11 @@ function expectNext<T extends BaseToken>(
 function next(t: State): [State, Token] {
   const [rest, next] = maybeNextT(t);
   if (!next) {
-    throw new CompilerError("unexpected end of file", Span.eof(t.file));
+    throw new FatalParseError(
+      t.gcx.error.emit(
+        new CompilerError("unexpected end of file", Span.eof(t.file)),
+      ),
+    );
   }
   return [rest, next];
 }
@@ -749,11 +810,15 @@ function maybeNextT(t: State): [State, Token | undefined] {
   return [{ ...t, tokens: rest }, next];
 }
 
-function unexpectedToken(token: Token, expected: string): never {
-  throw new CompilerError(`unexpected token, expected ${expected}`, token.span);
+function unexpectedToken(t: ParseState, token: Token, expected: string): never {
+  throw new FatalParseError(
+    t.gcx.error.emit(
+      new CompilerError(`unexpected token, expected ${expected}`, token.span),
+    ),
+  );
 }
 
-function validateAst(ast: Crate<Built>) {
+function validateAst(ast: Crate<Built>, gcx: GlobalContext) {
   const seenItemIds = new ComplexSet();
 
   const validator: Folder<Built, Built> = {
@@ -781,7 +846,10 @@ function validateAst(ast: Crate<Built>) {
         });
         return expr;
       } else if (expr.kind === "let") {
-        throw new CompilerError("let is only allowed in blocks", expr.span);
+        gcx.error.emit(
+          new CompilerError("let is only allowed in blocks", expr.span),
+        );
+        return superFoldExpr(expr, this);
       } else if (expr.kind === "binary") {
         const checkPrecedence = (inner: Expr<Built>, side: string) => {
           if (inner.kind === "binary") {
@@ -789,9 +857,11 @@ function validateAst(ast: Crate<Built>) {
             const innerClass = binaryExprPrecedenceClass(inner.binaryKind);
 
             if (ourClass !== innerClass) {
-              throw new CompilerError(
-                `mixing operators without parentheses is not allowed. ${side} is ${inner.binaryKind}, which is different from ${expr.binaryKind}`,
-                expr.span,
+              gcx.error.emit(
+                new CompilerError(
+                  `mixing operators without parentheses is not allowed. ${side} is ${inner.binaryKind}, which is different from ${expr.binaryKind}`,
+                  expr.span,
+                ),
               );
             }
           }
@@ -821,6 +891,7 @@ function buildCrate(
   rootItems: Item<Parsed>[],
   crateId: number,
   rootFile: LoadedFile,
+  fatalError: ErrorEmitted | undefined,
 ): Crate<Built> {
   const itemId = new Ids();
   itemId.next(); // crate root ID
@@ -832,6 +903,7 @@ function buildCrate(
     itemsById: new ComplexMap(),
     packageName,
     rootFile,
+    fatalError,
   };
 
   const assigner: Folder<Parsed, Built> = {

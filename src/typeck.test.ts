@@ -1,11 +1,13 @@
 import { TY_INT, TY_STRING, TY_UNIT } from "./ast";
-import { Span } from "./error";
+import { Emitter, ErrorHandler, Span } from "./error";
 import { InferContext } from "./typeck";
 
 const SPAN: Span = Span.startOfFile({ content: "" });
 
+const dummyEmitter: Emitter = () => {};
+
 it("should infer types across assignments", () => {
-  const infcx = new InferContext();
+  const infcx = new InferContext(new ErrorHandler(dummyEmitter));
 
   const a = infcx.newVar();
   const b = infcx.newVar();
@@ -26,7 +28,9 @@ it("should infer types across assignments", () => {
 });
 
 it("should conflict assignments to resolvable type vars", () => {
-  const infcx = new InferContext();
+  let errorLines = 0;
+  const emitter = () => (errorLines += 1);
+  const infcx = new InferContext(new ErrorHandler(emitter));
 
   const a = infcx.newVar();
   const b = infcx.newVar();
@@ -34,11 +38,15 @@ it("should conflict assignments to resolvable type vars", () => {
   infcx.assign(a, b, SPAN);
   infcx.assign(b, TY_INT, SPAN);
 
-  expect(() => infcx.assign(a, TY_STRING, SPAN)).toThrow();
+  expect(errorLines).toEqual(0);
+
+  infcx.assign(a, TY_STRING, SPAN);
+
+  expect(errorLines).toBeGreaterThan(0);
 });
 
 it("should not cycle", () => {
-  const infcx = new InferContext();
+  const infcx = new InferContext(new ErrorHandler(dummyEmitter));
 
   const a = infcx.newVar();
   const b = infcx.newVar();

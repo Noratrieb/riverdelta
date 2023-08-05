@@ -1,3 +1,5 @@
+import chalk from "chalk";
+
 export type LoadedFile = {
   path?: string;
   content: string;
@@ -33,34 +35,44 @@ export class Span {
   public static DUMMY: Span = new Span(0, 0, { content: "" });
 }
 
-export class CompilerError extends Error {
+export type Emitter = (string: string) => void;
+
+export class ErrorHandler {
+  private errors: CompilerError[] = [];
+
+  constructor(
+    private emitter = (msg: string) => globalThis.console.error(msg),
+  ) {}
+
+  public emit(err: CompilerError): ErrorEmitted {
+    renderError(this.emitter, err);
+    this.errors.push(err);
+    return ERROR_EMITTED;
+  }
+
+  public hasErrors(): boolean {
+    return this.errors.length > 0;
+  }
+}
+
+const ERROR_EMITTED = Symbol();
+export type ErrorEmitted = typeof ERROR_EMITTED;
+
+export class CompilerError {
   msg: string;
   span: Span;
 
   constructor(msg: string, span: Span) {
-    super(msg);
     this.msg = msg;
     this.span = span;
   }
 }
 
-export function withErrorPrinter<R>(
-  f: () => R,
-  afterError: (e: CompilerError) => R,
-): R {
-  try {
-    return f();
-  } catch (e) {
-    if (e instanceof CompilerError) {
-      renderError(e);
-      return afterError(e);
-    } else {
-      throw e;
-    }
-  }
-}
+// Shadow console.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const console = {};
 
-function renderError(e: CompilerError) {
+function renderError(emitter: Emitter, e: CompilerError) {
   const { span } = e;
   const { content } = span.file;
 
@@ -76,10 +88,10 @@ function renderError(e: CompilerError) {
   }
   const lineIdx = lineSpans.indexOf(line);
   const lineNo = lineIdx + 1;
-  console.error(`error: ${e.message}`);
-  console.error(` --> ${span.file.path ?? "<unknown>"}:${lineNo}`);
+  emitter(chalk.red(`error: ${e.msg}`));
+  emitter(` --> ${span.file.path ?? "<unknown>"}:${lineNo}`);
 
-  console.error(`${lineNo} | ${spanToSnippet(content, line)}`);
+  emitter(`${lineNo} | ${spanToSnippet(content, line)}`);
   const startRelLine =
     span.start === Number.MAX_SAFE_INTEGER ? 0 : span.start - line.start;
 
@@ -88,7 +100,7 @@ function renderError(e: CompilerError) {
       ? 1
       : min(span.end, line.end) - span.start;
 
-  console.error(
+  emitter(
     `${" ".repeat(String(lineNo).length)}   ${" ".repeat(
       startRelLine,
     )}${"^".repeat(spanLength)}`,

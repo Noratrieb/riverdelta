@@ -1,4 +1,4 @@
-import { LoadedFile, Span } from "./error";
+import { ErrorEmitted, LoadedFile, Span, unreachable } from "./error";
 import { LitIntType } from "./lexer";
 import { ComplexMap } from "./utils";
 
@@ -58,6 +58,7 @@ export type Crate<P extends Phase> = {
   itemsById: ComplexMap<ItemId, Item<P>>;
   packageName: string;
   rootFile: LoadedFile;
+  fatalError: ErrorEmitted | undefined;
 } & P["typeckResults"];
 
 export type DepCrate = Crate<Final>;
@@ -103,7 +104,8 @@ export type ItemKind<P extends Phase> =
   | ItemKindImport<P>
   | ItemKindMod<P>
   | ItemKindExtern
-  | ItemKindGlobal<P>;
+  | ItemKindGlobal<P>
+  | ItemKindError;
 
 type ItemVariant<Variant, P extends Phase> = Variant & Item<P>;
 
@@ -113,6 +115,7 @@ export type ItemImport<P extends Phase> = ItemVariant<ItemKindImport<P>, P>;
 export type ItemMod<P extends Phase> = ItemVariant<ItemKindMod<P>, P>;
 export type ItemExtern<P extends Phase> = ItemVariant<ItemKindExtern, P>;
 export type ItemGlobal<P extends Phase> = ItemVariant<ItemKindGlobal<P>, P>;
+export type ItemError<P extends Phase> = ItemVariant<ItemKindError, P>;
 
 export type Item<P extends Phase> = ItemKind<P> & {
   span: Span;
@@ -176,6 +179,11 @@ export type ItemKindGlobal<P extends Phase> = {
   type: Type<P>;
   init: Expr<P>;
   ty?: Ty;
+};
+
+export type ItemKindError = {
+  kind: "error";
+  err: ErrorEmitted;
 };
 
 export type ExprEmpty = { kind: "empty" };
@@ -294,9 +302,14 @@ export type StructLiteralField<P extends Phase> = {
   fieldIdx?: number;
 };
 
-export type TupleLiteral<P extends Phase> = {
+export type ExprTupleLiteral<P extends Phase> = {
   kind: "tupleLiteral";
   fields: Expr<P>[];
+};
+
+export type ExprError = {
+  kind: "error";
+  err: ErrorEmitted;
 };
 
 export type ExprKind<P extends Phase> =
@@ -315,7 +328,8 @@ export type ExprKind<P extends Phase> =
   | ExprLoop<P>
   | ExprBreak
   | ExprStructLiteral<P>
-  | TupleLiteral<P>;
+  | ExprTupleLiteral<P>
+  | ExprError;
 
 export type Expr<P extends Phase> = ExprKind<P> & {
   span: Span;
@@ -382,7 +396,7 @@ const BINARY_KIND_PREC_CLASS = new Map<BinaryKind, number>([
 export function binaryExprPrecedenceClass(k: BinaryKind): number {
   const cls = BINARY_KIND_PREC_CLASS.get(k);
   if (cls === undefined) {
-    throw new Error(`Invalid binary kind: '${k}'`);
+    unreachable(`Invalid binary kind: '${k}'`);
   }
   return cls;
 }
@@ -407,7 +421,8 @@ export type TypeKind<P extends Phase> =
       kind: "rawptr";
       inner: Type<P>;
     }
-  | { kind: "never" };
+  | { kind: "never" }
+  | { kind: "error"; err: ErrorEmitted };
 
 export type Type<P extends Phase> = TypeKind<P> & {
   span: Span;
@@ -437,7 +452,8 @@ export type Resolution =
   | {
       kind: "builtin";
       name: BuiltinName;
-    };
+    }
+  | { kind: "error"; err: ErrorEmitted };
 
 export const BUILTINS = [
   "print",
@@ -527,6 +543,11 @@ export type TyNever = {
   kind: "never";
 };
 
+export type TyError = {
+  kind: "error";
+  err: ErrorEmitted;
+};
+
 export type Ty =
   | TyString
   | TyInt
@@ -538,7 +559,8 @@ export type Ty =
   | TyVar
   | TyStruct
   | TyRawPtr
-  | TyNever;
+  | TyNever
+  | TyError;
 
 export function tyIsUnit(ty: Ty): ty is TyUnit {
   return ty.kind === "tuple" && ty.elems.length === 0;
@@ -591,7 +613,7 @@ export function mkDefaultFolder<
       return newItem;
     },
     itemInner(_item) {
-      throw new Error("unimplemented");
+      unreachable("unimplemented");
     },
   };
   (folder.item as any)[ITEM_DEFAULT] = ITEM_DEFAULT;
@@ -604,7 +626,7 @@ export function foldAst<From extends Phase, To extends Phase>(
   folder: Folder<From, To>,
 ): Crate<To> {
   if ((folder.item as any)[ITEM_DEFAULT] !== ITEM_DEFAULT) {
-    throw new Error("must not override `item` on folders");
+    unreachable("must not override `item` on folders");
   }
 
   return {
@@ -614,6 +636,7 @@ export function foldAst<From extends Phase, To extends Phase>(
     typeckResults: "typeckResults" in ast ? ast.typeckResults : undefined,
     packageName: ast.packageName,
     rootFile: ast.rootFile,
+    fatalError: ast.fatalError,
   };
 }
 
@@ -700,6 +723,9 @@ export function superFoldItem<From extends Phase, To extends Phase>(
         type: folder.type(item.type),
         init: folder.expr(item.init),
       };
+    }
+    case "error": {
+      return { ...item };
     }
   }
 }
@@ -818,6 +844,9 @@ export function superFoldExpr<From extends Phase, To extends Phase>(
         fields: expr.fields.map(folder.expr.bind(folder)),
       };
     }
+    case "error": {
+      return { ...expr };
+    }
   }
 }
 
@@ -857,9 +886,11 @@ export function superFoldType<From extends Phase, To extends Phase>(
     case "never": {
       return { ...type, kind: "never" };
     }
+    case "error":
+      return { ...type };
   }
 }
 
 export function varUnreachable(): never {
-  throw new Error("Type variables must not occur after type checking");
+  unreachable("Type variables must not occur after type checking");
 }

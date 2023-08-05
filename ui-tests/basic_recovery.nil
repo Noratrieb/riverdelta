@@ -1,0 +1,5 @@
+function main() = (
+  let a: Int = "";
+  let b: Int = "";
+  c;
+);

@@ -210,6 +210,8 @@ export function lower(gcx: GlobalContext): wasm.Module {
         case "extern":
         case "type":
           break;
+        case "error":
+          unreachable("codegen should never see errors");
         default: {
           const _: never = item;
         }
@@ -233,7 +235,7 @@ export function lower(gcx: GlobalContext): wasm.Module {
       case "funccall": {
         const idx = cx.funcIndices.get(rel.res);
         if (idx === undefined) {
-          throw new Error(
+          unreachable(
             `no function found for relocation '${JSON.stringify(rel.res)}'`,
           );
         }
@@ -243,7 +245,7 @@ export function lower(gcx: GlobalContext): wasm.Module {
       case "globalref": {
         const idx = cx.globalIndices.get(rel.res);
         if (idx === undefined) {
-          throw new Error(
+          unreachable(
             `no global found for relocation '${JSON.stringify(rel.res)}'`,
           );
         }
@@ -299,11 +301,11 @@ function lowerGlobal(cx: Context, def: ItemGlobal<Typecked>) {
       valtype = "i64";
       break;
     default:
-      throw new Error(`invalid global ty: ${printTy(def.init.ty)}`);
+      unreachable(`invalid global ty: ${printTy(def.init.ty)}`);
   }
 
   if (def.init.kind !== "literal" || def.init.value.kind !== "int") {
-    throw new Error(`invalid global init: ${JSON.stringify(def)}`);
+    unreachable(`invalid global init: ${JSON.stringify(def)}`);
   }
 
   const init: wasm.Instr = {
@@ -464,7 +466,7 @@ function tryLowerLValue(
         case "item": {
           const item = fcx.cx.gcx.findItem(res.id);
           if (item.kind !== "global") {
-            throw new Error("cannot store to non-global item");
+            unreachable("cannot store to non-global item");
           }
 
           return {
@@ -473,9 +475,11 @@ function tryLowerLValue(
           };
         }
         case "builtin": {
-          throw new Error("cannot store to builtin");
+          unreachable("cannot store to builtin");
         }
       }
+
+      break;
     }
     case "fieldAccess": {
       // Field access lvalues (or rather, lvalues in general) are made of two important parts:
@@ -666,7 +670,7 @@ function lowerExpr(
             case "print":
               todo("print function");
             default: {
-              throw new Error(`${res.name}#B is not a value`);
+              unreachable(`${res.name}#B is not a value`);
             }
           }
       }
@@ -758,7 +762,7 @@ function lowerExpr(
           case "*":
           case "/":
           case "%":
-            throw new Error(`Invalid bool binary expr: ${expr.binaryKind}`);
+            unreachable(`Invalid bool binary expr: ${expr.binaryKind}`);
         }
 
         instrs.push({ kind });
@@ -785,7 +789,7 @@ function lowerExpr(
             instrs.push({ kind: "i32.const", imm: -1n });
             instrs.push({ kind: "i32.xor" });
           } else {
-            throw new Error("invalid type for !");
+            unreachable("invalid type for !");
           }
           break;
         case "-":
@@ -801,7 +805,7 @@ function lowerExpr(
       const { res } = expr.lhs.value;
       if (res.kind === "builtin") {
         const assertArgs = (n: number) => {
-          if (expr.args.length !== n) throw new Error("nope");
+          if (expr.args.length !== n) unreachable("nope");
         };
         switch (res.name) {
           case "trap": {
@@ -951,7 +955,7 @@ function lowerExpr(
                 });
                 break;
               default: {
-                throw new Error(
+                unreachable(
                   `unsupported struct content type: ${fieldPart.type}`,
                 );
               }
@@ -961,7 +965,7 @@ function lowerExpr(
           break;
         }
         default:
-          throw new Error("invalid field access lhs");
+          unreachable("invalid field access lhs");
       }
 
       break;
@@ -1042,7 +1046,7 @@ function lowerExpr(
       const allocate: wasm.Instr = { kind: "call", func: DUMMY_IDX };
       const allocateItemId = fcx.cx.knownDefPaths.get(ALLOCATE_ITEM);
       if (!allocateItemId) {
-        throw new Error("std.rt.allocateItem not found");
+        unreachable("std.rt.allocateItem not found");
       }
       fcx.cx.relocations.push({
         kind: "funccall",
@@ -1074,6 +1078,8 @@ function lowerExpr(
       expr.fields.forEach((field) => lowerExpr(fcx, instrs, field));
       break;
     }
+    case "error":
+      unreachable("codegen should never see errors");
     default: {
       const _: never = expr;
     }
@@ -1247,6 +1253,8 @@ function argRetAbi(param: Ty): ArgRetAbi {
       return [];
     case "var":
       varUnreachable();
+    case "error":
+      unreachable("codegen should not see errors");
   }
 }
 
@@ -1302,6 +1310,8 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
       return [];
     case "var":
       varUnreachable();
+    case "error":
+      unreachable("codegen should not see errors");
   }
 }
 
@@ -1316,7 +1326,7 @@ function sizeOfValtype(type: wasm.ValType): number {
     case "v128":
     case "funcref":
     case "externref":
-      throw new Error("types not emitted");
+      unreachable("types not emitted");
   }
 }
 
@@ -1490,7 +1500,7 @@ function subRefcount(
 ) {
   const deallocateItemId = fcx.cx.knownDefPaths.get(DEALLOCATE_ITEM);
   if (!deallocateItemId) {
-    throw new Error("std.rt.deallocateItem not found");
+    unreachable("std.rt.deallocateItem not found");
   }
 
   const layout: wasm.ValType[] = kind === "string" ? ["i32", "i32"] : ["i32"];
@@ -1556,7 +1566,7 @@ function subRefcount(
 }
 
 function todo(msg: string): never {
-  throw new Error(`TODO: ${msg}`);
+  unreachable(`TODO: ${msg}`);
 }
 
 // Make the program runnable using wasi-preview-1

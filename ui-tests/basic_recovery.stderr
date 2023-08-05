@@ -1,0 +1,12 @@
+error: cannot find c
+ --> $DIR/basic_recovery.nil:4
+4 |   c;
+      ^
+error: cannot assign String to Int
+ --> $DIR/basic_recovery.nil:2
+2 |   let a: Int = "";
+          ^
+error: cannot assign String to Int
+ --> $DIR/basic_recovery.nil:3
+3 |   let b: Int = "";
+          ^

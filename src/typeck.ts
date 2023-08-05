@@ -32,7 +32,13 @@ import {
   ExprCall,
 } from "./ast";
 import { GlobalContext } from "./context";
-import { CompilerError, Span, unreachable } from "./error";
+import {
+  CompilerError,
+  ErrorEmitted,
+  ErrorHandler,
+  Span,
+  unreachable,
+} from "./error";
 import { printTy } from "./printer";
 import { ComplexMap } from "./utils";
 
@@ -52,7 +58,22 @@ function mkTyFn(params: Ty[], returnTy: Ty): Ty {
   return { kind: "fn", params, returnTy };
 }
 
-function builtinAsTy(name: string, span: Span): Ty {
+function tyError(cx: TypeckCtx, err: CompilerError): Ty {
+  return {
+    kind: "error",
+    err: emitError(cx, err),
+  };
+}
+
+function tyErrorFrom(prev: { err: ErrorEmitted }): Ty {
+  return { kind: "error", err: prev.err };
+}
+
+function emitError(cx: TypeckCtx, err: CompilerError): ErrorEmitted {
+  return cx.gcx.error.emit(err);
+}
+
+function builtinAsTy(cx: TypeckCtx, name: string, span: Span): Ty {
   switch (name) {
     case "String": {
       return TY_STRING;
@@ -67,12 +88,12 @@ function builtinAsTy(name: string, span: Span): Ty {
       return TY_BOOL;
     }
     default: {
-      throw new CompilerError(`\`${name}\` is not a type`, span);
+      return tyError(cx, new CompilerError(`\`${name}\` is not a type`, span));
     }
   }
 }
 
-function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
+function typeOfBuiltinValue(cx: TypeckCtx, name: BuiltinName, span: Span): Ty {
   switch (name) {
     case "false":
     case "true":
@@ -96,7 +117,10 @@ function typeOfBuiltinValue(name: BuiltinName, span: Span): Ty {
     case "__i32_extend_to_i64_u":
       return mkTyFn([TY_I32], TY_INT);
     default: {
-      throw new CompilerError(`\`${name}\` cannot be used as a value`, span);
+      return tyError(
+        cx,
+        new CompilerError(`\`${name}\` cannot be used as a value`, span),
+      );
     }
   }
 }
@@ -115,7 +139,10 @@ function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
           return typeOfItem(cx, res.id, type.span);
         }
         case "builtin": {
-          return builtinAsTy(res.name, ident.span);
+          return builtinAsTy(cx, res.name, ident.span);
+        }
+        case "error": {
+          return tyErrorFrom(res);
         }
       }
     }
@@ -134,9 +161,9 @@ function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
     case "rawptr": {
       const inner = lowerAstTy(cx, type.inner);
       if (inner.kind !== "struct") {
-        throw new CompilerError(
-          "raw pointers must point to structs",
-          type.span,
+        return tyError(
+          cx,
+          new CompilerError("raw pointers must point to structs", type.span),
         );
       }
 
@@ -144,6 +171,9 @@ function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
     }
     case "never": {
       return TY_NEVER;
+    }
+    case "error": {
+      return tyErrorFrom(type);
     }
   }
 }
@@ -161,15 +191,21 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
       case "global":
         return item.ty!;
       case "mod": {
-        throw new CompilerError(
-          `module ${item.name} cannot be used as a type or value`,
-          cause,
+        return tyError(
+          cx,
+          new CompilerError(
+            `module ${item.name} cannot be used as a type or value`,
+            cause,
+          ),
         );
       }
       case "extern": {
-        throw new CompilerError(
-          `extern declaration ${item.name} cannot be used as a type or value`,
-          cause,
+        return tyError(
+          cx,
+          new CompilerError(
+            `extern declaration ${item.name} cannot be used as a type or value`,
+            cause,
+          ),
         );
       }
     }
@@ -181,9 +217,12 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
     return cachedTy;
   }
   if (cachedTy === null) {
-    throw new CompilerError(
-      `cycle computing type of #G${itemId.toString()}`,
-      item.span,
+    return tyError(
+      cx,
+      new CompilerError(
+        `cycle computing type of #G${itemId.toString()}`,
+        item.span,
+      ),
     );
   }
   cx.itemTys.set(itemId, null);
@@ -230,20 +269,29 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
       break;
     }
     case "mod": {
-      throw new CompilerError(
-        `module ${item.name} cannot be used as a type or value`,
-        cause,
+      return tyError(
+        cx,
+        new CompilerError(
+          `module ${item.name} cannot be used as a type or value`,
+          cause,
+        ),
       );
     }
     case "extern": {
-      throw new CompilerError(
-        `extern declaration ${item.name} cannot be used as a type or value`,
-        cause,
+      return tyError(
+        cx,
+        new CompilerError(
+          `extern declaration ${item.name} cannot be used as a type or value`,
+          cause,
+        ),
       );
     }
     case "global": {
       ty = lowerAstTy(cx, item.type);
       break;
+    }
+    case "error": {
+      return tyErrorFrom(item);
     }
   }
 
@@ -286,9 +334,12 @@ export function typeck(
               case "i32":
                 break;
               default: {
-                throw new CompilerError(
-                  `import parameters must be I32 or Int`,
-                  item.params[i].span,
+                emitError(
+                  cx,
+                  new CompilerError(
+                    `import parameters must be I32 or Int`,
+                    item.params[i].span,
+                  ),
                 );
               }
             }
@@ -300,9 +351,12 @@ export function typeck(
               case "i32":
                 break;
               default: {
-                throw new CompilerError(
-                  `import return must be I32, Int or ()`,
-                  item.returnType!.span,
+                emitError(
+                  cx,
+                  new CompilerError(
+                    `import return must be I32, Int or ()`,
+                    item.returnType!.span,
+                  ),
                 );
               }
             }
@@ -323,12 +377,16 @@ export function typeck(
               const fieldNames = new Set();
               item.type.fields.forEach(({ name }) => {
                 if (fieldNames.has(name)) {
-                  throw new CompilerError(
-                    `type ${item.name} has a duplicate field: ${name.name}`,
-                    name.span,
+                  emitError(
+                    cx,
+                    new CompilerError(
+                      `type ${item.name} has a duplicate field: ${name.name}`,
+                      name.span,
+                    ),
                   );
+                } else {
+                  fieldNames.add(name);
                 }
-                fieldNames.add(name);
               });
 
               return {
@@ -363,22 +421,31 @@ export function typeck(
           const ty = typeOfItem(cx, item.id, item.span);
           const { init } = item;
 
+          let initChecked: Expr<Typecked>;
           if (init.kind !== "literal" || init.value.kind !== "int") {
-            throw new CompilerError(
-              "globals must be initialized with an integer literal",
-              init.span,
+            const err: ErrorEmitted = emitError(
+              cx,
+              new CompilerError(
+                "globals must be initialized with an integer literal",
+                init.span,
+              ),
             );
+            initChecked = exprError(err, init.span);
+          } else {
+            const initTy = init.value.type === "I32" ? TY_I32 : TY_INT;
+            const infcx = new InferContext(cx.gcx.error);
+            infcx.assign(ty, initTy, init.span);
+            initChecked = { ...init, ty };
           }
-
-          const initTy = init.value.type === "I32" ? TY_I32 : TY_INT;
-          const infcx = new InferContext();
-          infcx.assign(ty, initTy, init.span);
 
           return {
             ...item,
             ty,
-            init: { ...init, ty },
+            init: initChecked,
           };
+        }
+        case "error": {
+          return { ...item };
         }
       }
     },
@@ -398,9 +465,12 @@ export function typeck(
   const main = typecked.rootItems.find((item) => {
     if (item.kind === "function" && item.name === "main") {
       if (!tyIsUnit(item.ty!.returnTy)) {
-        throw new CompilerError(
-          `\`main\` has an invalid signature. main takes no arguments and returns nothing`,
-          item.span,
+        emitError(
+          cx,
+          new CompilerError(
+            `\`main\` has an invalid signature. main takes no arguments and returns nothing`,
+            item.span,
+          ),
         );
       }
 
@@ -412,15 +482,19 @@ export function typeck(
   if (ast.id === 0) {
     // Only the final id=0 crate needs and cares about main.
     if (!main) {
-      throw new CompilerError(
-        `\`main\` function not found`,
-        Span.startOfFile(ast.rootFile),
+      emitError(
+        cx,
+        new CompilerError(
+          `\`main\` function not found`,
+          Span.startOfFile(ast.rootFile),
+        ),
       );
     }
 
-    typecked.typeckResults = {
-      main: { kind: "item", id: main.id },
-    };
+    typecked.typeckResults = { main: undefined };
+    if (main) {
+      typecked.typeckResults.main = { kind: "item", id: main.id };
+    }
   }
 
   return typecked;
@@ -441,6 +515,8 @@ type TyVarRes =
 
 export class InferContext {
   tyVars: TyVarRes[] = [];
+
+  constructor(public error: ErrorHandler) {}
 
   public newVar(): Ty {
     const index = this.tyVars.length;
@@ -524,7 +600,13 @@ export class InferContext {
       return;
     }
 
+    if (lhs.kind === "error" || rhs.kind === "error") {
+      // This Is Fine 🐶🔥.
+      return;
+    }
+
     if (rhs.kind === "never") {
+      // not sure whether this is entirely correct wrt inference.. it will work out, probably.
       return;
     }
 
@@ -585,9 +667,11 @@ export class InferContext {
       }
     }
 
-    throw new CompilerError(
-      `cannot assign ${printTy(rhs)} to ${printTy(lhs)}`,
-      span,
+    this.error.emit(
+      new CompilerError(
+        `cannot assign ${printTy(rhs)} to ${printTy(lhs)}`,
+        span,
+      ),
     );
   }
 }
@@ -612,8 +696,19 @@ function typeOfValue(fcx: FuncCtx, res: Resolution, span: Span): Ty {
       return typeOfItem(fcx.cx, res.id, span);
     }
     case "builtin":
-      return typeOfBuiltinValue(res.name, span);
+      return typeOfBuiltinValue(fcx.cx, res.name, span);
+    case "error":
+      return tyErrorFrom(res);
   }
+}
+
+function exprError(err: ErrorEmitted, span: Span): Expr<Typecked> {
+  return {
+    kind: "error",
+    err,
+    span,
+    ty: tyErrorFrom({ err }),
+  };
 }
 
 export function checkBody(
@@ -622,7 +717,7 @@ export function checkBody(
   body: Expr<Resolved>,
   fnTy: TyFn,
 ): Expr<Typecked> {
-  const infcx = new InferContext();
+  const infcx = new InferContext(cx.gcx.error);
 
   const fcx: FuncCtx = {
     cx,
@@ -683,26 +778,32 @@ export function checkBody(
                 case "item": {
                   const item = cx.gcx.findItem(res.id, ast);
                   if (item.kind !== "global") {
-                    throw new CompilerError("cannot assign to item", expr.span);
+                    emitError(
+                      fcx.cx,
+                      new CompilerError("cannot assign to item", expr.span),
+                    );
                   }
                   break;
                 }
                 case "builtin":
-                  throw new CompilerError(
-                    "cannot assign to builtins",
-                    expr.span,
+                  emitError(
+                    fcx.cx,
+                    new CompilerError("cannot assign to builtins", expr.span),
                   );
               }
               break;
             }
             case "fieldAccess": {
-              checkLValue(lhs);
+              checkLValue(cx, lhs);
               break;
             }
             default: {
-              throw new CompilerError(
-                "invalid left-hand side of assignment",
-                lhs.span,
+              emitError(
+                fcx.cx,
+                new CompilerError(
+                  "invalid left-hand side of assignment",
+                  lhs.span,
+                ),
               );
             }
           }
@@ -764,7 +865,7 @@ export function checkBody(
         case "unary": {
           const rhs = this.expr(expr.rhs);
           rhs.ty = infcx.resolveIfPossible(rhs.ty);
-          return checkUnary(expr, rhs);
+          return checkUnary(fcx, expr, rhs);
         }
         case "call": {
           return checkCall(fcx, expr);
@@ -775,7 +876,7 @@ export function checkBody(
 
           const { field } = expr;
           let ty: Ty;
-          let fieldIdx: number;
+          let fieldIdx: number | undefined;
           switch (lhs.ty.kind) {
             case "tuple": {
               const { elems } = lhs.ty;
@@ -784,15 +885,21 @@ export function checkBody(
                   ty = elems[field.value];
                   fieldIdx = field.value;
                 } else {
-                  throw new CompilerError(
-                    `tuple with ${elems.length} elements cannot be indexed with ${field.value}`,
-                    field.span,
+                  ty = tyError(
+                    fcx.cx,
+                    new CompilerError(
+                      `tuple with ${elems.length} elements cannot be indexed with ${field.value}`,
+                      field.span,
+                    ),
                   );
                 }
               } else {
-                throw new CompilerError(
-                  "tuple fields must be accessed with numbers",
-                  field.span,
+                ty = tyError(
+                  fcx.cx,
+                  new CompilerError(
+                    "tuple fields must be accessed with numbers",
+                    field.span,
+                  ),
                 );
               }
               break;
@@ -804,30 +911,40 @@ export function checkBody(
               if (typeof field.value === "string") {
                 const idx = fields.findIndex(([name]) => name === field.value);
                 if (idx === -1) {
-                  throw new CompilerError(
-                    `field \`${field.value}\` does not exist on ${printTy(
-                      lhs.ty,
-                    )}`,
-                    field.span,
+                  ty = tyError(
+                    fcx.cx,
+                    new CompilerError(
+                      `field \`${field.value}\` does not exist on ${printTy(
+                        lhs.ty,
+                      )}`,
+                      field.span,
+                    ),
                   );
+                  break;
                 }
 
                 ty = fields[idx][1];
                 fieldIdx = idx;
               } else {
-                throw new CompilerError(
-                  "struct fields must be accessed with their name",
-                  field.span,
+                ty = tyError(
+                  fcx.cx,
+                  new CompilerError(
+                    "struct fields must be accessed with their name",
+                    field.span,
+                  ),
                 );
               }
               break;
             }
             default: {
-              throw new CompilerError(
-                `cannot access field \`${field.value}\` on type \`${printTy(
-                  lhs.ty,
-                )}\``,
-                expr.span,
+              ty = tyError(
+                fcx.cx,
+                new CompilerError(
+                  `cannot access field \`${field.value}\` on type \`${printTy(
+                    lhs.ty,
+                  )}\``,
+                  expr.span,
+                ),
               );
             }
           }
@@ -881,7 +998,11 @@ export function checkBody(
         case "break": {
           const loopStateLength = fcx.loopState.length;
           if (loopStateLength === 0) {
-            throw new CompilerError("break outside loop", expr.span);
+            const err: ErrorEmitted = emitError(
+              fcx.cx,
+              new CompilerError("break outside loop", expr.span),
+            );
+            return exprError(err, expr.span);
           }
           const target = fcx.loopState[loopStateLength - 1].loopId;
           fcx.loopState[loopStateLength - 1].hasBreak = true;
@@ -900,10 +1021,14 @@ export function checkBody(
           const structTy = typeOfValue(fcx, expr.name.res, expr.name.span);
 
           if (structTy.kind !== "struct") {
-            throw new CompilerError(
-              `struct literal is only allowed for struct types`,
-              expr.span,
+            const err: ErrorEmitted = emitError(
+              fcx.cx,
+              new CompilerError(
+                `struct literal is only allowed for struct types`,
+                expr.span,
+              ),
             );
+            return exprError(err, expr.span);
           }
 
           const assignedFields = new Set();
@@ -913,9 +1038,12 @@ export function checkBody(
               (def) => def[0] === name.name,
             );
             if (fieldIdx == -1) {
-              throw new CompilerError(
-                `field ${name.name} doesn't exist on type ${expr.name.name}`,
-                name.span,
+              emitError(
+                fcx.cx,
+                new CompilerError(
+                  `field ${name.name} doesn't exist on type ${expr.name.name}`,
+                  name.span,
+                ),
               );
             }
             const fieldTy = structTy.fields[fieldIdx];
@@ -931,9 +1059,12 @@ export function checkBody(
             }
           });
           if (missing.length > 0) {
-            throw new CompilerError(
-              `missing fields in literal: ${missing.join(", ")}`,
-              expr.span,
+            emitError(
+              fcx.cx,
+              new CompilerError(
+                `missing fields in literal: ${missing.join(", ")}`,
+                expr.span,
+              ),
             );
           }
 
@@ -948,6 +1079,9 @@ export function checkBody(
           };
 
           return { ...expr, fields, ty };
+        }
+        case "error": {
+          return { ...expr, ty: tyErrorFrom(expr) };
         }
       }
     },
@@ -968,23 +1102,23 @@ export function checkBody(
 
   infcx.assign(fnTy.returnTy, checked.ty, body.span);
 
-  const resolved = resolveBody(infcx, checked);
+  const resolved = resolveBody(fcx, checked);
 
   return resolved;
 }
 
-function checkLValue(expr: Expr<Typecked>) {
+function checkLValue(cx: TypeckCtx, expr: Expr<Typecked>) {
   switch (expr.kind) {
     case "ident":
     case "path":
       break;
     case "fieldAccess":
-      checkLValue(expr.lhs);
+      checkLValue(cx, expr.lhs);
       break;
     default:
-      throw new CompilerError(
-        "invalid left-hand side of assignment",
-        expr.span,
+      emitError(
+        cx,
+        new CompilerError("invalid left-hand side of assignment", expr.span),
       );
   }
 }
@@ -1035,15 +1169,20 @@ function checkBinary(
     }
   }
 
-  throw new CompilerError(
-    `invalid types for binary operation: ${printTy(lhs.ty)} ${
-      expr.binaryKind
-    } ${printTy(rhs.ty)}`,
-    expr.span,
+  const ty = tyError(
+    fcx.cx,
+    new CompilerError(
+      `invalid types for binary operation: ${printTy(lhs.ty)} ${
+        expr.binaryKind
+      } ${printTy(rhs.ty)}`,
+      expr.span,
+    ),
   );
+  return { ...expr, lhs, rhs, ty };
 }
 
 function checkUnary(
+  fcx: FuncCtx,
   expr: Expr<Resolved> & ExprUnary<Resolved>,
   rhs: Expr<Typecked>,
 ): Expr<Typecked> {
@@ -1060,10 +1199,14 @@ function checkUnary(
     // Negating an unsigned integer is a bad idea.
   }
 
-  throw new CompilerError(
-    `invalid types for unary operation: ${expr.unaryKind} ${printTy(rhs.ty)}`,
-    expr.span,
+  const ty = tyError(
+    fcx.cx,
+    new CompilerError(
+      `invalid types for unary operation: ${expr.unaryKind} ${printTy(rhs.ty)}`,
+      expr.span,
+    ),
   );
+  return { ...expr, rhs, ty };
 }
 
 function checkCall(
@@ -1089,21 +1232,30 @@ function checkCall(
 
   const lhs = fcx.checkExpr(expr.lhs);
   lhs.ty = fcx.infcx.resolveIfPossible(lhs.ty);
+
+  // check args before checking the lhs.
+  const args = expr.args.map((arg) => fcx.checkExpr(arg));
+
   const lhsTy = lhs.ty;
   if (lhsTy.kind !== "fn") {
-    throw new CompilerError(
-      `expression of type ${printTy(lhsTy)} is not callable`,
-      lhs.span,
+    const ty = tyError(
+      fcx.cx,
+      new CompilerError(
+        `expression of type ${printTy(lhsTy)} is not callable`,
+        lhs.span,
+      ),
     );
+    return { ...expr, lhs, args, ty };
   }
-
-  const args = expr.args.map((arg) => fcx.checkExpr(arg));
 
   lhsTy.params.forEach((param, i) => {
     if (args.length <= i) {
-      throw new CompilerError(
-        `missing argument of type ${printTy(param)}`,
-        expr.span,
+      emitError(
+        fcx.cx,
+        new CompilerError(
+          `missing argument of type ${printTy(param)}`,
+          expr.span,
+        ),
       );
     }
 
@@ -1111,24 +1263,24 @@ function checkCall(
   });
 
   if (args.length > lhsTy.params.length) {
-    throw new CompilerError(
-      `too many arguments passed, expected ${lhsTy.params.length}, found ${args.length}`,
-      expr.span,
+    emitError(
+      fcx.cx,
+      new CompilerError(
+        `too many arguments passed, expected ${lhsTy.params.length}, found ${args.length}`,
+        expr.span,
+      ),
     );
   }
 
   return { ...expr, lhs, args, ty: lhsTy.returnTy };
 }
 
-function resolveBody(
-  infcx: InferContext,
-  checked: Expr<Typecked>,
-): Expr<Typecked> {
+function resolveBody(fcx: FuncCtx, checked: Expr<Typecked>): Expr<Typecked> {
   const resolveTy = (ty: Ty, span: Span) => {
-    const resTy = infcx.resolveIfPossible(ty);
+    const resTy = fcx.infcx.resolveIfPossible(ty);
     // TODO: When doing deep resolution, we need to check for _any_ vars.
     if (resTy.kind === "var") {
-      throw new CompilerError("cannot infer type", span);
+      return tyError(fcx.cx, new CompilerError("cannot infer type", span));
     }
     return resTy;
   };
