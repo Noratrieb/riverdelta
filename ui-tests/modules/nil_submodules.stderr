@@ -1,0 +1,4 @@
+error: .nil files cannot have submodules. use .mod.nil in a subdirectory
+ --> $DIR/nil_submodules.nil:1
+1 | mod b;
+        ^

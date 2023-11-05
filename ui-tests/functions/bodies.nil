@@ -1,0 +1,9 @@
+//@check-pass
+
+function helloWorld() = ;
+function block() = (
+    1;
+    2;
+);
+
+function main() = ;

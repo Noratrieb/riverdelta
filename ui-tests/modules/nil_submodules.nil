@@ -1,0 +1,3 @@
+mod b;
+
+function main() = ;

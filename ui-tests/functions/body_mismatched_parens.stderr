@@ -1,8 +1,8 @@
 error: unexpected end of file
- --> $DIR/mismatched_parens.nil:2
+ --> $DIR/body_mismatched_parens.nil:2
 2 | 
     ^
 error: `main` function not found
- --> $DIR/mismatched_parens.nil:1
+ --> $DIR/body_mismatched_parens.nil:1
 1 | function main() = (
     ^
