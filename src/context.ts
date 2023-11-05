@@ -22,6 +22,8 @@ export type CrateLoader = (
 export class GlobalContext {
   public error: ErrorHandler = new ErrorHandler();
   public finalizedCrates: Crate<Final>[] = [];
+  // For cycle detection.
+  public cratesBeingLoaded: Set<string> = new Set<string>();
   public crateId: Ids = new Ids();
 
   constructor(public opts: Options, public crateLoader: CrateLoader) {}

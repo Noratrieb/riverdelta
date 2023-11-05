@@ -90,9 +90,7 @@ export const loadCrate: CrateLoader = (
   name: string,
   span: Span,
 ): DepCrate => {
-  // We really, really want a good algorithm for finding crates.
-  // But right now we just look for files in the CWD.
-
+  // If we've loaded the crate already, great.
   const existing = gcx.finalizedCrates.find(
     (crate) => crate.packageName === name,
   );
@@ -101,6 +99,24 @@ export const loadCrate: CrateLoader = (
   }
 
   const crateId = gcx.crateId.next();
+
+  // If we have not loaded the crate yet, we may actually already be loading it.
+  // A cycle!!
+  if (gcx.cratesBeingLoaded.has(name)) {
+    return dummyErrorCrate(
+      crateId,
+      name,
+      gcx.error.emit(
+        new CompilerError(`cycle detected loading extern module ${name}`, span),
+      ),
+    );
+  }
+
+  // Let's start loading the crate!
+  gcx.cratesBeingLoaded.add(name);
+
+  // We really, really want a good algorithm for finding crates.
+  // But right now we just look for files in the CWD.
 
   const file = loadModuleFile(".", name, span);
   if (!file.ok) {
@@ -122,5 +138,7 @@ export const loadCrate: CrateLoader = (
   const typecked = typeck(gcx, resolved);
 
   gcx.finalizedCrates.push(typecked);
+  // Crate is loaded, no cycles.
+  gcx.cratesBeingLoaded.delete(name);
   return typecked;
 };
