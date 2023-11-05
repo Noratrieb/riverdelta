@@ -669,6 +669,9 @@ function lowerExpr(
               break;
             case "print":
               todo("print function");
+            case "__NULL":
+              instrs.push({ kind: "i32.const", imm: 0n });
+              break;
             default: {
               unreachable(`${res.name}#B is not a value`);
             }
@@ -688,7 +691,8 @@ function lowerExpr(
       const rhsTy = expr.rhs.ty;
       if (
         (lhsTy.kind === "int" && rhsTy.kind === "int") ||
-        (lhsTy.kind === "i32" && rhsTy.kind === "i32")
+        (lhsTy.kind === "i32" && rhsTy.kind === "i32") ||
+        (lhsTy.kind === "rawptr" && rhsTy.kind === "rawptr")
       ) {
         let kind: wasm.Instr["kind"];
         const valty = lhsTy.kind === "int" ? "i64" : "i32";
@@ -1332,6 +1336,9 @@ function sizeOfValtype(type: wasm.ValType): number {
 
 export function layoutOfStruct(ty_: TyStruct | TyRawPtr): StructLayout {
   const ty = ty_.kind === "struct" ? ty_ : ty_.inner;
+  if (ty.kind !== "struct") {
+    unreachable("must be struct");
+  }
   const fieldWasmTys = ty.fields.map(([, field]) => wasmTypeForBody(field));
 
   // TODO: Use the max alignment instead.

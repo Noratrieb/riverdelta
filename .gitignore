@@ -3,3 +3,4 @@
 *.tsbuildinfo
 /*-example.wat
 /out.wat
+.direnv

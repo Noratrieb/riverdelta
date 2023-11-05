@@ -465,6 +465,7 @@ export const BUILTINS = [
   "false",
   "trap",
   // Intrinsics:
+  "__NULL", // null raw pointer
   "__i32_store",
   "__i64_store",
   "__i32_load",
@@ -536,7 +537,7 @@ export type TyStruct = {
 
 export type TyRawPtr = {
   kind: "rawptr";
-  inner: TyStruct;
+  inner: Ty;
 };
 
 export type TyNever = {

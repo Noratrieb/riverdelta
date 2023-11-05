@@ -93,7 +93,7 @@ function builtinAsTy(cx: TypeckCtx, name: string, span: Span): Ty {
   }
 }
 
-function typeOfBuiltinValue(cx: TypeckCtx, name: BuiltinName, span: Span): Ty {
+function typeOfBuiltinValue(fcx: FuncCtx, name: BuiltinName, span: Span): Ty {
   switch (name) {
     case "false":
     case "true":
@@ -102,6 +102,8 @@ function typeOfBuiltinValue(cx: TypeckCtx, name: BuiltinName, span: Span): Ty {
       return mkTyFn([TY_STRING], TY_UNIT);
     case "trap":
       return mkTyFn([], TY_NEVER);
+    case "__NULL":
+      return { kind: "rawptr", inner: fcx.infcx.newVar() };
     case "__i32_store":
       return mkTyFn([TY_I32, TY_I32], TY_UNIT);
     case "__i64_store":
@@ -118,7 +120,7 @@ function typeOfBuiltinValue(cx: TypeckCtx, name: BuiltinName, span: Span): Ty {
       return mkTyFn([TY_I32], TY_INT);
     default: {
       return tyError(
-        cx,
+        fcx.cx,
         new CompilerError(`\`${name}\` cannot be used as a value`, span),
       );
     }
@@ -696,7 +698,7 @@ function typeOfValue(fcx: FuncCtx, res: Resolution, span: Span): Ty {
       return typeOfItem(fcx.cx, res.id, span);
     }
     case "builtin":
-      return typeOfBuiltinValue(fcx.cx, res.name, span);
+      return typeOfBuiltinValue(fcx, res.name, span);
     case "error":
       return tyErrorFrom(res);
   }
@@ -906,8 +908,29 @@ export function checkBody(
             }
             case "struct":
             case "rawptr": {
-              const fields =
-                lhs.ty.kind === "struct" ? lhs.ty.fields : lhs.ty.inner.fields;
+              let fields: [string, Ty][];
+              if (lhs.ty.kind === "struct") {
+                fields = lhs.ty.fields;
+              } else if (lhs.ty.kind === "rawptr") {
+                let inner = fcx.infcx.resolveIfPossible(lhs.ty.inner);
+                if (inner.kind !== "struct") {
+                  inner = tyError(
+                    fcx.cx,
+                    new CompilerError(
+                      "fields can only be accessed on pointers pointing to a struct",
+                      expr.lhs.span,
+                    ),
+                  );
+                  ty = inner;
+                  break;
+                } else {
+                  fields = inner.fields;
+                }
+              } else {
+                fields = [];
+                unreachable("must be struct or rawptr here");
+              }
+
               if (typeof field.value === "string") {
                 const idx = fields.findIndex(([name]) => name === field.value);
                 if (idx === -1) {
@@ -1146,6 +1169,11 @@ function checkBinary(
     }
 
     if (lhsTy.kind === "string" && rhsTy.kind === "string") {
+      return { ...expr, lhs, rhs, ty: TY_BOOL };
+    }
+
+    if (lhsTy.kind === "rawptr" && rhsTy.kind === "rawptr") {
+      fcx.infcx.assign(lhsTy.inner, rhsTy.inner, expr.span);
       return { ...expr, lhs, rhs, ty: TY_BOOL };
     }
 

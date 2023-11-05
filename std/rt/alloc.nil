@@ -43,7 +43,7 @@ function deallocateItem(ptr: I32, objSize: I32) = (
     std.println("uwu deawwocate :3");
 );
 
-// Port of https://github.com/CCareaga/heap_allocator
+// Port of https://github.com/CCareaga/heap_allocator fc423c6113df598ac8d10bc1f2954d51248e6443
 //
 // MIT License
 // 
@@ -120,12 +120,10 @@ function getWilderness() =;
 // llist.c
 
 function addNode(bin: *BinS, node: *NodeS) = (
-    node.next = ___transmute(0_I32);
-    node.prev = ___transmute(0_I32);
+    node.next = __NULL;
+    node.prev = __NULL;
 
-    let bin_head_addr: I32 = ___transmute(bin.head); // bin.head
-
-    if (bin_head_addr == 0_I32) then (
+    if (bin.head == __NULL) then (
         bin.head = node;
     ) else (
         let current: *NodeS = bin.head;
@@ -160,8 +158,21 @@ function addNode(bin: *BinS, node: *NodeS) = (
     )
 );
 
-function removeNode(bin: BinPtr, node: NodePtr) = (
+function removeNode(bin: *BinS, node: *NodeS) = (
+    if (bin.head != __NULL) then (
+      if (bin.head == node) then (
+        bin.head = bin.head.next;
+      ) else (
+        let temp: *NodeS = bin.head.next;
+        loop (
+            if (temp == __NULL) then break;
 
+            if (temp == node) then (
+                
+            )
+        )
+      )
+    )
 );
 
 function test() =;
