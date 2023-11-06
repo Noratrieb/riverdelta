@@ -1,0 +1,23 @@
+type A[T] = struct { a: T };
+type B[T, U, V] = struct {
+  b: T,
+  d: V,
+};
+type C = ();
+
+function test(
+    a1: A,
+    a2: A[],
+    a3: A[I32],
+    a4: A[I32, I32],
+
+    b1: B,
+    b2: B[],
+    b3: B[Int, Int],
+    b4: B[Int, I32, Int],
+    b5: B[Int, Int, Int, Int],
+
+    c1: C,
+    c2: C[],
+    c3: C[I32],
+) = ;

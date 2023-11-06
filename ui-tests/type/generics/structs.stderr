@@ -1,0 +1,4 @@
+error: `main` function not found
+ --> $DIR/structs.nil:1
+1 | type A[T] = struct { a: T };
+    ^

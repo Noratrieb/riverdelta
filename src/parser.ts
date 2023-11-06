@@ -126,6 +126,10 @@ function parseItem(t: State): [State, Item<Parsed>] {
   } else if (tok.kind === "type") {
     let name;
     [t, name] = expectNext<TokenIdent>(t, "identifier");
+
+    let generics;
+    [t, generics] = parseGenericsDef(t);
+
     [t] = expectNext(t, "=");
 
     let type: TypeDefKind<Parsed>;
@@ -169,6 +173,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
       {
         kind: "type",
         name: name.ident,
+        generics,
         type,
         span: name.span,
         id: ItemId.dummy(),
@@ -308,7 +313,7 @@ function parseFunctionSig(t: State): [State, FunctionSig] {
   let params: FunctionArg<Parsed>[];
   [t, params] = parseCommaSeparatedList(t, ")", (t) => {
     let name;
-    [t, name] = expectNext<TokenIdent & { span: Span }>(t, "identifier");
+    [t, name] = expectNext<TokenIdent>(t, "identifier");
     [t] = expectNext(t, ":");
     let type;
     [t, type] = parseType(t);
@@ -324,6 +329,33 @@ function parseFunctionSig(t: State): [State, FunctionSig] {
   }
 
   return [t, { name: name.ident, params, returnType }];
+}
+
+function parseGenericsDef(t: State): [State, Ident[]] {
+  let openBracket;
+  [t, openBracket] = eat(t, "[");
+  if (openBracket) {
+    let elems;
+    [t, elems] = parseCommaSeparatedList<Ident>(t, "]", (t) => {
+      let name;
+      [t, name] = expectNext<TokenIdent>(t, "identifier");
+
+      return [t, { name: name.ident, span: name.span }];
+    });
+    return [t, elems];
+  } else {
+    return [t, []];
+  }
+}
+
+function parseGenericsArgs(t: State): [State, Type<Parsed>[]] {
+  let openBracket;
+  [t, openBracket] = eat(t, "[");
+  if (openBracket) {
+    return parseCommaSeparatedList(t, "]", parseType);
+  } else {
+    return [t, []];
+  }
 }
 
 function parseExpr(t: State): [State, Expr<Parsed>] {
@@ -656,10 +688,13 @@ function parseType(t: State): [State, Type<Parsed>] {
       return [t, { kind: "never", span }];
     }
     case "identifier": {
+      let generics;
+      [t, generics] = parseGenericsArgs(t);
       return [
         t,
         {
           kind: "ident",
+          generics,
           value: { name: tok.ident, span },
           span,
         },

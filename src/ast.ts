@@ -139,8 +139,9 @@ export type FunctionArg<P extends Phase> = {
 
 export type ItemKindType<P extends Phase> = {
   kind: "type";
+  generics: Ident[];
   type: TypeDefKind<P>;
-  ty?: TyStruct;
+  ty?: Ty;
 };
 
 export type TypeDefKind<P extends Phase> =
@@ -407,6 +408,7 @@ export const UNARY_KINDS: UnaryKind[] = ["!", "-"];
 export type TypeKind<P extends Phase> =
   | {
       kind: "ident";
+      generics: Type<P>[];
       value: IdentWithRes<P>;
     }
   | {
@@ -452,6 +454,19 @@ export type Resolution =
   | {
       kind: "builtin";
       name: BuiltinName;
+    }
+  | {
+      kind: "tyParam";
+      /**
+       * The index of the type parameter, from first to last.
+       * ```
+       * type A[T, U] = (T, U);
+       *                 ^  ^
+       *                 0  1
+       * ```
+       */
+      index: number;
+      name: string;
     }
   | { kind: "error"; err: ErrorEmitted };
 
@@ -531,6 +546,8 @@ export type TyVar = {
 export type TyStruct = {
   kind: "struct";
   itemId: ItemId;
+  params: string[];
+  args: Ty[];
   _name: string;
   fields: [string, Ty][];
 };
@@ -542,6 +559,17 @@ export type TyRawPtr = {
 
 export type TyNever = {
   kind: "never";
+};
+
+export type TyParam = {
+  kind: "param";
+  /**
+   * The index of the type parameter of the parent.
+   * If the parent is `type A[T, U] = U;`
+   * then `U` will have index 1.
+   */
+  idx: number;
+  name: string;
 };
 
 export type TyError = {
@@ -561,6 +589,7 @@ export type Ty =
   | TyStruct
   | TyRawPtr
   | TyNever
+  | TyParam
   | TyError;
 
 export function tyIsUnit(ty: Ty): ty is TyUnit {
@@ -860,6 +889,7 @@ export function superFoldType<From extends Phase, To extends Phase>(
     case "ident": {
       return {
         kind: "ident",
+        generics: type.generics.map((type) => folder.type(type)),
         value: folder.ident(type.value),
         span,
       };
@@ -894,4 +924,8 @@ export function superFoldType<From extends Phase, To extends Phase>(
 
 export function varUnreachable(): never {
   unreachable("Type variables must not occur after type checking");
+}
+
+export function paramUnreachable(): never {
+  unreachable("Type parameters must not occur after monomophization");
 }

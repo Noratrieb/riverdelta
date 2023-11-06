@@ -25,7 +25,6 @@ import {
   tyIsUnit,
   Type,
   Typecked,
-  TyStruct,
   Item,
   StructLiteralField,
   superFoldExpr,
@@ -133,20 +132,56 @@ function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
     case "ident": {
       const ident = type.value;
       const res = ident.res;
+
+      const generics = type.generics.map((type) => lowerAstTy(cx, type));
+      let ty: Ty;
       switch (res.kind) {
         case "local": {
           throw new Error("Item type cannot refer to local variable");
         }
         case "item": {
-          return typeOfItem(cx, res.id, type.span);
+          ty = typeOfItem(cx, res.id, type.span);
+          break;
         }
         case "builtin": {
-          return builtinAsTy(cx, res.name, ident.span);
+          ty = builtinAsTy(cx, res.name, ident.span);
+          break;
+        }
+        case "tyParam": {
+          ty = { kind: "param", idx: res.index, name: res.name };
+          break;
         }
         case "error": {
-          return tyErrorFrom(res);
+          ty = tyErrorFrom(res);
+          break;
         }
       }
+
+      if (ty.kind === "struct") {
+        if (generics.length === ty.params.length) {
+          return { ...ty, args: generics };
+        } else {
+          return tyError(
+            cx,
+            new CompilerError(
+              `expected ${ty.params.length} generic arguments, found ${generics.length}`,
+              type.span,
+            ),
+          );
+        }
+      } else if (ty.kind !== "error") {
+        if (generics.length > 0) {
+          return tyError(
+            cx,
+            new CompilerError(
+              `type ${printTy(ty)} does not take generic arguments`,
+              type.span,
+            ),
+          );
+        }
+      }
+
+      return ty;
     }
     case "list": {
       return {
@@ -247,6 +282,8 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
         case "struct": {
           ty = {
             kind: "struct",
+            args: [],
+            params: item.generics.map((ident) => ident.name),
             itemId: item.id,
             _name: item.name,
             fields: [
@@ -264,6 +301,7 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
           break;
         }
         case "alias": {
+          // TODO: subst
           ty = lowerAstTy(cx, item.type.type);
           break;
         }
@@ -372,7 +410,7 @@ export function typeck(
           };
         }
         case "type": {
-          const ty = typeOfItem(cx, item.id, item.span) as TyStruct;
+          const ty = typeOfItem(cx, item.id, item.span);
 
           switch (item.type.kind) {
             case "struct": {
@@ -699,6 +737,11 @@ function typeOfValue(fcx: FuncCtx, res: Resolution, span: Span): Ty {
     }
     case "builtin":
       return typeOfBuiltinValue(fcx, res.name, span);
+    case "tyParam":
+      return tyError(
+        fcx.cx,
+        new CompilerError(`type parameter cannot be used as value`, span),
+      );
     case "error":
       return tyErrorFrom(res);
   }

@@ -5,6 +5,8 @@ it("should compute struct layout correctly", () => {
   const ty: TyStruct = {
     kind: "struct",
     itemId: ItemId.dummy(),
+    args: [],
+    params: [],
     _name: "",
     fields: [
       ["uwu", TY_I32],
@@ -50,6 +52,8 @@ it("should compute single field struct layout correctly", () => {
   const ty: TyStruct = {
     kind: "struct",
     itemId: ItemId.dummy(),
+    args: [],
+    params: [],
     _name: "",
     fields: [["owo", TY_INT]],
   };

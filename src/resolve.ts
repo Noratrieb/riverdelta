@@ -107,6 +107,7 @@ function resolveModule(
   });
 
   const scopes: string[] = [];
+  let tyParamScopes: string[] = [];
 
   const popScope = (expected: string) => {
     const popped = scopes.pop();
@@ -126,6 +127,18 @@ function resolveModule(
         return {
           kind: "local",
           index,
+        };
+      }
+    }
+
+    for (let i = tyParamScopes.length - 1; i >= 0; i--) {
+      const candidate = tyParamScopes[i];
+      
+      if (candidate === ident.name) {
+        return {
+          kind: "tyParam",
+          index: i,
+          name: ident.name,
         };
       }
     }
@@ -213,6 +226,13 @@ function resolveModule(
             ...item,
             defPath,
           };
+        }
+        case "type": {
+          tyParamScopes = item.generics.map(({name}) => name);
+
+          const type = { ...superFoldItem(item, this) };
+
+          return type;
         }
       }
 

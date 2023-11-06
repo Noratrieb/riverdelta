@@ -20,6 +20,7 @@ import {
   superFoldItem,
   varUnreachable,
   TyRawPtr,
+  paramUnreachable,
 } from "./ast";
 import { GlobalContext } from "./context";
 import { unreachable } from "./error";
@@ -1257,6 +1258,8 @@ function argRetAbi(param: Ty): ArgRetAbi {
       return [];
     case "var":
       varUnreachable();
+    case "param":
+      paramUnreachable();
     case "error":
       unreachable("codegen should not see errors");
   }
@@ -1314,6 +1317,8 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
       return [];
     case "var":
       varUnreachable();
+    case "param":
+      paramUnreachable();
     case "error":
       unreachable("codegen should not see errors");
   }

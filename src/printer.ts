@@ -65,6 +65,11 @@ function printFunction(func: ItemFunction<AnyPhase>): string {
 }
 
 function printTypeDef(type: ItemType<AnyPhase>): string {
+  const head = `type ${type.name}${
+    type.generics.length === 0
+      ? ""
+      : `[${type.generics.map((ident) => ident.name).join(", ")}]`
+  } = `;
   switch (type.type.kind) {
     case "struct": {
       const { fields } = type.type;
@@ -75,10 +80,10 @@ function printTypeDef(type: ItemType<AnyPhase>): string {
       const fieldPart =
         fields.length === 0 ? "{}" : `{\n${fieldStr.join("\n")}\n}`;
 
-      return `type ${type.name} = ${fieldPart};`;
+      return head + `${fieldPart};`;
     }
     case "alias": {
-      return `type ${type.name} = ${printType(type.type.type)}`;
+      return head + `${printType(type.type.type)}`;
     }
   }
 }
@@ -236,6 +241,9 @@ function printRes(res: Resolution): string {
     case "builtin": {
       return `#B`;
     }
+    case "tyParam": {
+      return `#P${res.index}`;
+    }
     case "error": {
       return "#E";
     }
@@ -282,6 +290,9 @@ export function printTy(ty: Ty): string {
     }
     case "never": {
       return "!";
+    }
+    case "param": {
+      return ty.name;
     }
     case "error":
       return "<ERROR>";
