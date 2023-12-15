@@ -1,6 +1,6 @@
 //@check-pass
-type A[T] = struct { a: T };
+type A[T] = T;
 
 function main() = ;
 
-function test(a: A[I32]) = ;
+function aaaaaaaaaaa(a: A[I32]) = ;

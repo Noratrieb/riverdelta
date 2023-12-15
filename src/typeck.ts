@@ -29,6 +29,7 @@ import {
   StructLiteralField,
   superFoldExpr,
   ExprCall,
+  substituteTy,
 } from "./ast";
 import { GlobalContext } from "./context";
 import {
@@ -140,7 +141,7 @@ function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
           throw new Error("Item type cannot refer to local variable");
         }
         case "item": {
-          ty = typeOfItem(cx, res.id, type.span);
+          ty = typeOfItem(cx, res.id, generics, type.span);
           break;
         }
         case "builtin": {
@@ -157,9 +158,12 @@ function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
         }
       }
 
-      if (ty.kind === "struct") {
+      if (ty.kind === "struct" || ty.kind === "alias") {
         if (generics.length === ty.params.length) {
-          return { ...ty, args: generics };
+          if (ty.kind === "alias") {
+            return substituteTy(ty.genericArgs, ty.actual);
+          }
+          return { ...ty, genericArgs: generics };
         } else {
           return tyError(
             cx,
@@ -209,7 +213,12 @@ function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
   }
 }
 
-function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
+function typeOfItem(
+  cx: TypeckCtx,
+  itemId: ItemId,
+  genericArgs: Ty[],
+  cause: Span,
+): Ty {
   if (itemId.crateId !== cx.ast.id) {
     // Look up foreign items in the foreign crates, we don't need to lower those
     // ourselves.
@@ -220,7 +229,7 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
       case "import":
       case "type":
       case "global":
-        return item.ty!;
+        return substituteTy(genericArgs, item.ty!);
       case "mod": {
         return tyError(
           cx,
@@ -276,7 +285,13 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
         case "struct": {
           ty = {
             kind: "struct",
-            args: [],
+            genericArgs: item.generics.map(
+              ({ name }, idx): Ty => ({
+                kind: "param",
+                name,
+                idx,
+              }),
+            ),
             params: item.generics.map((ident) => ident.name),
             itemId: item.id,
             _name: item.name,
@@ -295,8 +310,20 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
           break;
         }
         case "alias": {
-          // TODO: subst
-          ty = lowerAstTy(cx, item.type.type);
+          const actual = lowerAstTy(cx, item.type.type);
+
+          ty = {
+            kind: "alias",
+            actual,
+            genericArgs: item.generics.map(
+              ({ name }, idx): Ty => ({
+                kind: "param",
+                name,
+                idx,
+              }),
+            ),
+            params: item.generics.map((ident) => ident.name),
+          };
           break;
         }
       }
@@ -329,6 +356,8 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
     }
   }
 
+  ty = substituteTy(genericArgs, ty);
+
   cx.itemTys.set(item.id, ty);
   return ty;
 }
@@ -348,7 +377,8 @@ export function typeck(
     itemInner(item: Item<Resolved>): Item<Typecked> {
       switch (item.kind) {
         case "function": {
-          const fnTy = typeOfItem(cx, item.id, item.span) as TyFn;
+          // Functions do not have generic arguments right now.
+          const fnTy = typeOfItem(cx, item.id, [], item.span) as TyFn;
           const body = checkBody(cx, ast, item.body, fnTy);
 
           return {
@@ -360,7 +390,7 @@ export function typeck(
           };
         }
         case "import": {
-          const fnTy = typeOfItem(cx, item.id, item.span) as TyFn;
+          const fnTy = typeOfItem(cx, item.id, [], item.span) as TyFn;
 
           fnTy.params.forEach((param, i) => {
             switch (param.kind) {
@@ -404,7 +434,7 @@ export function typeck(
           };
         }
         case "type": {
-          const ty = typeOfItem(cx, item.id, item.span);
+          const ty = typeOfItem(cx, item.id, [], item.span);
 
           switch (item.type.kind) {
             case "struct": {
@@ -452,7 +482,7 @@ export function typeck(
           return item;
         }
         case "global": {
-          const ty = typeOfItem(cx, item.id, item.span);
+          const ty = typeOfItem(cx, item.id, [], item.span);
           const { init } = item;
 
           let initChecked: Expr<Typecked>;
@@ -720,7 +750,7 @@ function typeOfValue(fcx: FuncCtx, res: Resolution, span: Span): Ty {
       return fcx.localTys[idx];
     }
     case "item": {
-      return typeOfItem(fcx.cx, res.id, span);
+      return typeOfItem(fcx.cx, res.id, [], span);
     }
     case "builtin":
       return typeOfBuiltinValue(fcx, res.name, span);

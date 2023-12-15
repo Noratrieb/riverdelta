@@ -13,6 +13,7 @@ import {
   Type,
   ItemType,
   tyIsUnit,
+  substituteTy,
 } from "./ast";
 
 export function printAst(ast: Crate<AnyPhase>): string {
@@ -255,40 +256,32 @@ function printIdent(ident: IdentWithRes<AnyPhase>): string {
 
 export function printTy(ty: Ty): string {
   switch (ty.kind) {
-    case "string": {
+    case "string":
       return "String";
-    }
-    case "int": {
+    case "int":
       return "Int";
-    }
-    case "i32": {
+    case "i32":
       return "I32";
-    }
-    case "bool": {
+    case "bool":
       return "Bool";
-    }
-    case "tuple": {
+    case "tuple":
       return `(${ty.elems.map(printTy).join(", ")})`;
-    }
     case "fn": {
       const ret = tyIsUnit(ty.returnTy) ? "" : `: ${printTy(ty.returnTy)}`;
       return `fn(${ty.params.map(printTy).join(", ")})${ret}`;
     }
-    case "var": {
+    case "var":
       return `?${ty.index}`;
-    }
-    case "struct": {
+    case "struct":
       return ty._name;
-    }
-    case "rawptr": {
+    case "rawptr":
       return `*${printTy(ty.inner)}`;
-    }
-    case "never": {
+    case "never":
       return "!";
-    }
-    case "param": {
+    case "param":
       return ty.name;
-    }
+    case "alias":
+      return printTy(substituteTy(ty.genericArgs, ty.actual));
     case "error":
       return "<ERROR>";
   }

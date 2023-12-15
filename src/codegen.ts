@@ -20,7 +20,7 @@ import {
   superFoldItem,
   varUnreachable,
   TyRawPtr,
-  paramUnreachable,
+  paramUnreachable as codegenUnreachableTy,
   structFieldsSubstituted,
 } from "./ast";
 import { GlobalContext } from "./context";
@@ -1256,11 +1256,10 @@ function argRetAbi(param: Ty): ArgRetAbi {
     case "never":
       return [];
     case "var":
-      varUnreachable();
     case "param":
-      paramUnreachable();
+    case "alias":
     case "error":
-      unreachable("codegen should not see errors");
+      codegenUnreachableTy(param);
   }
 }
 
@@ -1313,11 +1312,10 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
     case "never":
       return [];
     case "var":
-      varUnreachable();
     case "param":
-      paramUnreachable();
+    case "alias":
     case "error":
-      unreachable("codegen should not see errors");
+      codegenUnreachableTy(ty);
   }
 }
 

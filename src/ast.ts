@@ -538,7 +538,7 @@ export type TyStruct = {
   kind: "struct";
   itemId: ItemId;
   params: string[];
-  args: Ty[];
+  genericArgs: Ty[];
   _name: string;
   fields_no_subst: [string, Ty][];
 };
@@ -563,6 +563,13 @@ export type TyParam = {
   name: string;
 };
 
+export type TyAlias = {
+  kind: "alias";
+  actual: Ty;
+  genericArgs: Ty[];
+  params: string[];
+};
+
 export type TyError = {
   kind: "error";
   err: ErrorEmitted;
@@ -580,6 +587,7 @@ export type Ty =
   | TyRawPtr
   | TyNever
   | TyParam
+  | TyAlias
   | TyError;
 
 export function tyIsUnit(ty: Ty): ty is TyUnit {
@@ -598,7 +606,7 @@ export type TypeckResults = {
 };
 
 export function structFieldsSubstituted(ty: TyStruct): [string, Ty][] {
-  const args = ty.args;
+  const args = ty.genericArgs;
   return ty.fields_no_subst.map(([name, type]) => [
     name,
     substituteTy(args, type),
@@ -607,12 +615,16 @@ export function structFieldsSubstituted(ty: TyStruct): [string, Ty][] {
 
 // Substitute the parameter of a type. We are only able to handle one
 // level of generic definitions, for example for fields the struct def or for exprs the function generics.
-export function substituteTy(params: Ty[], ty: Ty): Ty {
-  const subst = (ty: Ty) => substituteTy(params, ty);
-
+export function substituteTy(genericArgs: Ty[], ty: Ty): Ty {
+  const subst = (ty: Ty) => substituteTy(genericArgs, ty);
   switch (ty.kind) {
     case "param":
-      return params[ty.idx];
+      if (ty.idx >= genericArgs.length) {
+        throw new Error(
+          `substitution out of range, param index ${ty.idx} of param ${ty.name} out of range for length ${genericArgs.length}`,
+        );
+      }
+      return genericArgs[ty.idx];
     case "tuple":
       return { ...ty, elems: ty.elems.map(subst) };
     case "fn":
@@ -622,9 +634,10 @@ export function substituteTy(params: Ty[], ty: Ty): Ty {
         params: ty.params.map(subst),
       };
     case "struct":
+    case "alias":
       return {
         ...ty,
-        args: ty.args.map(subst),
+        genericArgs: ty.genericArgs.map(subst),
       };
     case "rawptr":
       return { ...ty, inner: subst(ty.inner) };
@@ -952,6 +965,6 @@ export function varUnreachable(): never {
   unreachable("Type variables must not occur after type checking");
 }
 
-export function paramUnreachable(): never {
-  unreachable("Type parameters must not occur after monomophization");
+export function paramUnreachable(ty: Ty): never {
+  unreachable(`type ${ty.kind} should never occur in codegen`);
 }
