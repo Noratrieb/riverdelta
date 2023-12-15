@@ -700,12 +700,6 @@ function parseType(t: State): [State, Type<Parsed>] {
         },
       ];
     }
-    case "[": {
-      let elem;
-      [t, elem] = parseType(t);
-      [t] = expectNext(t, "]");
-      return [t, { kind: "list", elem, span }];
-    }
     case "(": {
       // `()` is a the unit type, an empty tuple.
       // `(T)` is just `T`

@@ -1,4 +1,6 @@
-function main() = (
-  let list = std.list.new();
-  std.list.push(list, 0);
-);
+//@check-pass
+type A[T] = struct { a: T };
+
+function main() = ;
+
+function test(a: A[I32]) = ;

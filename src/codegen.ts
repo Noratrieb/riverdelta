@@ -21,6 +21,7 @@ import {
   varUnreachable,
   TyRawPtr,
   paramUnreachable,
+  structFieldsSubstituted,
 } from "./ast";
 import { GlobalContext } from "./context";
 import { unreachable } from "./error";
@@ -1247,8 +1248,6 @@ function argRetAbi(param: Ty): ArgRetAbi {
       return ["i32"];
     case "bool":
       return ["i32"];
-    case "list":
-      todo("list abi");
     case "tuple":
       return param.elems.flatMap(argRetAbi);
     case "struct":
@@ -1304,8 +1303,6 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
       return ["i32"];
     case "bool":
       return ["i32"];
-    case "list":
-      todo("list types");
     case "tuple":
       return ty.elems.flatMap(wasmTypeForBody);
     case "fn":
@@ -1344,7 +1341,8 @@ export function layoutOfStruct(ty_: TyStruct | TyRawPtr): StructLayout {
   if (ty.kind !== "struct") {
     unreachable("must be struct");
   }
-  const fieldWasmTys = ty.fields.map(([, field]) => wasmTypeForBody(field));
+  const fieldTys = structFieldsSubstituted(ty).map(([_, ty]) => ty);
+  const fieldWasmTys = fieldTys.map((field) => wasmTypeForBody(field));
 
   // TODO: Use the max alignment instead.
   const align = fieldWasmTys.some((field) =>
@@ -1359,7 +1357,7 @@ export function layoutOfStruct(ty_: TyStruct | TyRawPtr): StructLayout {
   const fields: StructFieldLayout[] = fieldWasmTys.map((field, i) => {
     const value: StructFieldLayout = {
       types: [],
-      ty: ty.fields[i][1],
+      ty: fieldTys[i],
     };
 
     const types = field.map((type) => {
@@ -1457,8 +1455,6 @@ function needsRefcount(ty: Ty): StructLayout | "string" | undefined {
       return undefined;
     case "struct":
       return layoutOfStruct(ty);
-    case "list":
-      todo("no lists yet");
     case "var":
       varUnreachable();
     default:

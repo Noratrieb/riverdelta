@@ -219,8 +219,6 @@ function printType(type: Type<AnyPhase>): string {
   switch (type.kind) {
     case "ident":
       return printIdent(type.value);
-    case "list":
-      return `[${printType(type.elem)}]`;
     case "tuple":
       return `(${type.elems.map(printType).join(", ")})`;
     case "rawptr":
@@ -268,9 +266,6 @@ export function printTy(ty: Ty): string {
     }
     case "bool": {
       return "Bool";
-    }
-    case "list": {
-      return `[${printTy(ty.elem)}]`;
     }
     case "tuple": {
       return `(${ty.elems.map(printTy).join(", ")})`;

@@ -183,12 +183,6 @@ function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
 
       return ty;
     }
-    case "list": {
-      return {
-        kind: "list",
-        elem: lowerAstTy(cx, type.elem),
-      };
-    }
     case "tuple": {
       return {
         kind: "tuple",
@@ -286,7 +280,7 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
             params: item.generics.map((ident) => ident.name),
             itemId: item.id,
             _name: item.name,
-            fields: [
+            fields_no_subst: [
               /*dummy*/
             ],
           };
@@ -297,7 +291,7 @@ function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
             ({ name, type }) => [name.name, lowerAstTy(cx, type)],
           );
 
-          ty.fields = fields;
+          ty.fields_no_subst = fields;
           break;
         }
         case "alias": {
@@ -667,13 +661,6 @@ export class InferContext {
         if (rhs.kind === "bool") return;
         break;
       }
-      case "list": {
-        if (rhs.kind === "list") {
-          this.assign(lhs.elem, rhs.elem, span);
-          return;
-        }
-        break;
-      }
       case "tuple": {
         if (rhs.kind === "tuple" && lhs.elems.length === rhs.elems.length) {
           lhs.elems.forEach((lhs, i) => this.assign(lhs, rhs.elems[i], span));
@@ -953,7 +940,7 @@ export function checkBody(
             case "rawptr": {
               let fields: [string, Ty][];
               if (lhs.ty.kind === "struct") {
-                fields = lhs.ty.fields;
+                fields = lhs.ty.fields_no_subst;
               } else if (lhs.ty.kind === "rawptr") {
                 let inner = fcx.infcx.resolveIfPossible(lhs.ty.inner);
                 if (inner.kind !== "struct") {
@@ -967,7 +954,7 @@ export function checkBody(
                   ty = inner;
                   break;
                 } else {
-                  fields = inner.fields;
+                  fields = inner.fields_no_subst;
                 }
               } else {
                 fields = [];
@@ -1100,7 +1087,7 @@ export function checkBody(
           const assignedFields = new Set();
 
           fields.forEach(({ name, expr: field }, i) => {
-            const fieldIdx = structTy.fields.findIndex(
+            const fieldIdx = structTy.fields_no_subst.findIndex(
               (def) => def[0] === name.name,
             );
             if (fieldIdx == -1) {
@@ -1112,14 +1099,14 @@ export function checkBody(
                 ),
               );
             }
-            const fieldTy = structTy.fields[fieldIdx];
+            const fieldTy = structTy.fields_no_subst[fieldIdx];
             infcx.assign(fieldTy[1], field.ty, field.span);
             assignedFields.add(name.name);
             fields[i].fieldIdx = fieldIdx;
           });
 
           const missing: string[] = [];
-          structTy.fields.forEach(([name]) => {
+          structTy.fields_no_subst.forEach(([name]) => {
             if (!assignedFields.has(name)) {
               missing.push(name);
             }

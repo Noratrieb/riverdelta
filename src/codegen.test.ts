@@ -8,7 +8,7 @@ it("should compute struct layout correctly", () => {
     args: [],
     params: [],
     _name: "",
-    fields: [
+    fields_no_subst: [
       ["uwu", TY_I32],
       ["owo", TY_INT],
     ],
@@ -55,7 +55,7 @@ it("should compute single field struct layout correctly", () => {
     args: [],
     params: [],
     _name: "",
-    fields: [["owo", TY_INT]],
+    fields_no_subst: [["owo", TY_INT]],
   };
 
   const layout = layoutOfStruct(ty);

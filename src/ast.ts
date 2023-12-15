@@ -412,10 +412,6 @@ export type TypeKind<P extends Phase> =
       value: IdentWithRes<P>;
     }
   | {
-      kind: "list";
-      elem: Type<P>;
-    }
-  | {
       kind: "tuple";
       elems: Type<P>[];
     }
@@ -517,11 +513,6 @@ export type TyBool = {
   kind: "bool";
 };
 
-export type TyList = {
-  kind: "list";
-  elem: Ty;
-};
-
 export type TyTuple = {
   kind: "tuple";
   elems: Ty[];
@@ -549,7 +540,7 @@ export type TyStruct = {
   params: string[];
   args: Ty[];
   _name: string;
-  fields: [string, Ty][];
+  fields_no_subst: [string, Ty][];
 };
 
 export type TyRawPtr = {
@@ -582,7 +573,6 @@ export type Ty =
   | TyInt
   | TyI32
   | TyBool
-  | TyList
   | TyTuple
   | TyFn
   | TyVar
@@ -606,6 +596,49 @@ export const TY_NEVER: Ty = { kind: "never" };
 export type TypeckResults = {
   main: Resolution | undefined;
 };
+
+export function structFieldsSubstituted(ty: TyStruct): [string, Ty][] {
+  const args = ty.args;
+  return ty.fields_no_subst.map(([name, type]) => [
+    name,
+    substituteTy(args, type),
+  ]);
+}
+
+// Substitute the parameter of a type. We are only able to handle one
+// level of generic definitions, for example for fields the struct def or for exprs the function generics.
+export function substituteTy(params: Ty[], ty: Ty): Ty {
+  const subst = (ty: Ty) => substituteTy(params, ty);
+
+  switch (ty.kind) {
+    case "param":
+      return params[ty.idx];
+    case "tuple":
+      return { ...ty, elems: ty.elems.map(subst) };
+    case "fn":
+      return {
+        ...ty,
+        returnTy: subst(ty.returnTy),
+        params: ty.params.map(subst),
+      };
+    case "struct":
+      return {
+        ...ty,
+        args: ty.args.map(subst),
+      };
+    case "rawptr":
+      return { ...ty, inner: subst(ty.inner) };
+    // Primitives
+    case "var":
+    case "string":
+    case "int":
+    case "i32":
+    case "bool":
+    case "never":
+    case "error":
+      return ty;
+  }
+}
 
 // folders
 
@@ -891,13 +924,6 @@ export function superFoldType<From extends Phase, To extends Phase>(
         kind: "ident",
         generics: type.generics.map((type) => folder.type(type)),
         value: folder.ident(type.value),
-        span,
-      };
-    }
-    case "list": {
-      return {
-        kind: "list",
-        elem: folder.type(type.elem),
         span,
       };
     }
