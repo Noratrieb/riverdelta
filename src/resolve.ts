@@ -133,7 +133,7 @@ function resolveModule(
 
     for (let i = tyParamScopes.length - 1; i >= 0; i--) {
       const candidate = tyParamScopes[i];
-      
+
       if (candidate === ident.name) {
         return {
           kind: "tyParam",
@@ -228,7 +228,7 @@ function resolveModule(
           };
         }
         case "type": {
-          tyParamScopes = item.generics.map(({name}) => name);
+          tyParamScopes = item.generics.map(({ name }) => name);
 
           const type = { ...superFoldItem(item, this) };
 

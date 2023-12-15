@@ -10,7 +10,7 @@ A Riverdelta program consists of many items, like functions. Every item ends wit
 semicolon.
 
 ```js
-item = item_function | item_type | item_import | item_extern | item_mod
+item = item_function | item_type | item_import | item_extern | item_mod;
 ```
 
 ### Functions
@@ -25,6 +25,7 @@ item_function := "function" function_sig "=" expr ";"
 ```js
 function helloWorld() = ;
 ```
+
 ```js
 function block() = (
     1;
@@ -135,7 +136,6 @@ Inline modules, those that contain bodies, are declared in the same file. File m
 the module statement.
 `.nil` files cannot declare file submodules but only inline modules.
 If the current file is `a/a.mod.nil`, then `mod foo;` will look for `a/b.nil` or `a/b/b.mod.nil`.
-
 
 ### Globals
 

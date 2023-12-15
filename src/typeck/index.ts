@@ -1,4 +1,19 @@
-import { Crate, Expr, Folder, Item, ItemId, Resolved, TY_I32, TY_INT, Ty, TyFn, Typecked, foldAst, mkDefaultFolder, tyIsUnit } from "../ast";
+import {
+  Crate,
+  Expr,
+  Folder,
+  Item,
+  ItemId,
+  Resolved,
+  TY_I32,
+  TY_INT,
+  Ty,
+  TyFn,
+  Typecked,
+  foldAst,
+  mkDefaultFolder,
+  tyIsUnit,
+} from "../ast";
 import { GlobalContext } from "../context";
 import { CompilerError, ErrorEmitted, Span } from "../error";
 import { ComplexMap } from "../utils";

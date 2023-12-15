@@ -1,5 +1,5 @@
 import {
-    BuiltinName,
+  BuiltinName,
   COMPARISON_KINDS,
   Crate,
   EQUALITY_KINDS,
@@ -29,7 +29,15 @@ import {
 import { CompilerError, ErrorEmitted, Span, unreachable } from "../error";
 import { printTy } from "../printer";
 import { InferContext } from "./infer";
-import { TypeckCtx, emitError, lowerAstTy, mkTyFn, tyError, tyErrorFrom, typeOfItem } from "./item";
+import {
+  TypeckCtx,
+  emitError,
+  lowerAstTy,
+  mkTyFn,
+  tyError,
+  tyErrorFrom,
+  typeOfItem,
+} from "./item";
 
 export function exprError(err: ErrorEmitted, span: Span): Expr<Typecked> {
   return {
@@ -41,36 +49,35 @@ export function exprError(err: ErrorEmitted, span: Span): Expr<Typecked> {
 }
 
 type FuncCtx = {
-    cx: TypeckCtx;
-    infcx: InferContext;
-    localTys: Ty[];
-    loopState: LoopState[];
-    checkExpr: (expr: Expr<Resolved>) => Expr<Typecked>;
-  };
-  
-  type LoopState = { hasBreak: boolean; loopId: LoopId };
-  
-  function typeOfValue(fcx: FuncCtx, res: Resolution, span: Span): Ty {
-    switch (res.kind) {
-      case "local": {
-        const idx = fcx.localTys.length - 1 - res.index;
-        return fcx.localTys[idx];
-      }
-      case "item": {
-        return typeOfItem(fcx.cx, res.id, [], span);
-      }
-      case "builtin":
-        return typeOfBuiltinValue(fcx, res.name, span);
-      case "tyParam":
-        return tyError(
-          fcx.cx,
-          new CompilerError(`type parameter cannot be used as value`, span),
-        );
-      case "error":
-        return tyErrorFrom(res);
+  cx: TypeckCtx;
+  infcx: InferContext;
+  localTys: Ty[];
+  loopState: LoopState[];
+  checkExpr: (expr: Expr<Resolved>) => Expr<Typecked>;
+};
+
+type LoopState = { hasBreak: boolean; loopId: LoopId };
+
+function typeOfValue(fcx: FuncCtx, res: Resolution, span: Span): Ty {
+  switch (res.kind) {
+    case "local": {
+      const idx = fcx.localTys.length - 1 - res.index;
+      return fcx.localTys[idx];
     }
+    case "item": {
+      return typeOfItem(fcx.cx, res.id, [], span);
+    }
+    case "builtin":
+      return typeOfBuiltinValue(fcx, res.name, span);
+    case "tyParam":
+      return tyError(
+        fcx.cx,
+        new CompilerError(`type parameter cannot be used as value`, span),
+      );
+    case "error":
+      return tyErrorFrom(res);
   }
-  
+}
 
 export function typeOfBuiltinValue(
   fcx: FuncCtx,
