@@ -1,0 +1,17 @@
+/home/nils/projects/riverdelta/target/ast.js:110
+                throw new Error(`substitution out of range, param index ${ty.idx} of param ${ty.name} out of range for length ${genericArgs.length}`);
+                ^
+
+Error: substitution out of range, param index 0 of param T out of range for length 0
+    at substituteTy (/home/nils/projects/riverdelta/target/ast.js:110:23)
+    at subst (/home/nils/projects/riverdelta/target/ast.js:106:27)
+    at Array.map (<anonymous>)
+    at substituteTy (/home/nils/projects/riverdelta/target/ast.js:125:45)
+    at typeOfItem (/home/nils/projects/riverdelta/target/typeck/item.js:193:33)
+    at Object.itemInner (/home/nils/projects/riverdelta/target/typeck/index.js:63:54)
+    at Object.item (/home/nils/projects/riverdelta/target/ast.js:146:34)
+    at /home/nils/projects/riverdelta/target/ast.js:164:55
+    at Array.map (<anonymous>)
+    at foldAst (/home/nils/projects/riverdelta/target/ast.js:164:34)
+
+Node.js v18.18.2

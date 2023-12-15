@@ -1,0 +1,17 @@
+//@check-pass
+
+function a(a: I32) =
+    ___asm(
+        __locals(),
+        "local.get 0 0",
+        "drop",
+    );
+
+function b(a: I32) =
+    ___asm(
+        __locals(),
+        "local.get",
+        "drop",
+    );
+
+function main() = ;

@@ -118,9 +118,7 @@ function appendData(cx: Context, newData: Uint8Array): number {
 
 const KNOWN_DEF_PATHS = [ALLOCATE_ITEM, DEALLOCATE_ITEM];
 
-function getKnownDefPaths(
-  pkgs: Pkg<Typecked>[],
-): ComplexMap<string[], ItemId> {
+function getKnownDefPaths(pkgs: Pkg<Typecked>[]): ComplexMap<string[], ItemId> {
   const knows = new ComplexMap<string[], ItemId>();
 
   const folder: Folder<Typecked, Typecked> = {
@@ -145,9 +143,7 @@ function getKnownDefPaths(
     },
   };
 
-  pkgs.forEach((pkg) =>
-    pkg.rootItems.forEach((item) => folder.item(item)),
-  );
+  pkgs.forEach((pkg) => pkg.rootItems.forEach((item) => folder.item(item)));
 
   return knows;
 }
@@ -380,16 +376,22 @@ function lowerFunc(cx: Context, func: ItemFunction<Typecked>) {
     scratchLocals: new Map(),
   };
 
-  lowerExpr(fcx, wasmFunc.body, fcx.func.body);
+  const body = fcx.func.body;
+  if (body.kind === "asm") {
+    fcx.wasm.locals = body.locals;
+    fcx.wasm.body = body.instructions;
+  } else {
+    lowerExpr(fcx, wasmFunc.body, body);
 
-  paramLocations.forEach((local) => {
-    const refcount = needsRefcount(local.ty);
-    if (refcount !== undefined) {
-      // TODO: correctly deal with tuples
-      loadVariable(wasmFunc.body, local);
-      subRefcount(fcx, wasmFunc.body, refcount);
-    }
-  });
+    paramLocations.forEach((local) => {
+      const refcount = needsRefcount(local.ty);
+      if (refcount !== undefined) {
+        // TODO: correctly deal with tuples
+        loadVariable(wasmFunc.body, local);
+        subRefcount(fcx, wasmFunc.body, refcount);
+      }
+    });
+  }
 
   const idx = fcx.cx.mod.funcs.length;
   fcx.cx.mod.funcs.push(wasmFunc);
@@ -1083,6 +1085,9 @@ function lowerExpr(
     case "tupleLiteral": {
       expr.fields.forEach((field) => lowerExpr(fcx, instrs, field));
       break;
+    }
+    case "asm": {
+      unreachable("asm");
     }
     case "error":
       unreachable("codegen should never see errors");

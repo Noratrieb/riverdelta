@@ -1,0 +1,4 @@
+error: inline assembly instruction must be string literal with instruction
+ --> $DIR/instr_not_string.nil:4
+4 |         0,
+            ^

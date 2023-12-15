@@ -1,0 +1,4 @@
+error: unknown instruction: meow
+ --> $DIR/invalid_instr.nil:6
+6 |         "meow meow",
+            ^^^^^^^^^^^

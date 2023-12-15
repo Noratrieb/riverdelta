@@ -211,6 +211,12 @@ function printExpr(expr: Expr<AnyPhase>, indent: number): string {
         .map((expr) => printExpr(expr, indent))
         .join(", ")})`;
     }
+    case "asm": {
+      return `___asm(___locals(${expr.locals
+        .map((valty) => `"${valty}"`)
+        // object object
+        .join(", ")}), ${expr.instructions.join(", ")})`;
+    }
     case "error":
       return "<ERROR>";
   }

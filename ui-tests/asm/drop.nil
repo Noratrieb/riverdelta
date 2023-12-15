@@ -1,0 +1,10 @@
+//@check-pass
+
+function dropping(a: I32) =
+    ___asm(
+        __locals(),
+        "local.get 0",
+        "drop",
+    );
+
+function main() = ;

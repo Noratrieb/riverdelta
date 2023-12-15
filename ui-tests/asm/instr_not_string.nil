@@ -1,0 +1,7 @@
+function a(a: I32) =
+    ___asm(
+        __locals(),
+        0,
+    );
+
+function main() = ;

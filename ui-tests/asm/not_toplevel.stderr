@@ -1,0 +1,16 @@
+error: `___asm` cannot be used as a value
+ --> $DIR/not_toplevel.nil:3
+3 |     ___asm(__locals(), "drop");
+        ^^^^^^
+error: `__locals` cannot be used as a value
+ --> $DIR/not_toplevel.nil:3
+3 |     ___asm(__locals(), "drop");
+               ^^^^^^^^
+error: expression of type <ERROR> is not callable
+ --> $DIR/not_toplevel.nil:3
+3 |     ___asm(__locals(), "drop");
+               ^^^^^^^^
+error: expression of type <ERROR> is not callable
+ --> $DIR/not_toplevel.nil:3
+3 |     ___asm(__locals(), "drop");
+        ^^^^^^

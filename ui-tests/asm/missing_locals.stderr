@@ -1,0 +1,4 @@
+error: inline assembly must have __locals() as first argument
+ --> $DIR/missing_locals.nil:4
+4 |     ___asm(
+              ^

@@ -1,0 +1,6 @@
+function dropping(a: I32) = (
+    1;
+    ___asm(__locals(), "drop");
+);
+
+function main() = ;

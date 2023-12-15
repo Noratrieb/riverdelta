@@ -1,6 +1,7 @@
 import { ErrorEmitted, LoadedFile, Span, unreachable } from "./error";
 import { LitIntType } from "./lexer";
 import { ComplexMap } from "./utils";
+import { Instr, ValType } from "./wasm/defs";
 
 export type Phase = {
   res: unknown;
@@ -308,6 +309,12 @@ export type ExprTupleLiteral<P extends Phase> = {
   fields: Expr<P>[];
 };
 
+export type ExprInlineAsm = {
+  kind: "asm";
+  locals: ValType[];
+  instructions: Instr[];
+};
+
 export type ExprError = {
   kind: "error";
   err: ErrorEmitted;
@@ -330,6 +337,7 @@ export type ExprKind<P extends Phase> =
   | ExprBreak
   | ExprStructLiteral<P>
   | ExprTupleLiteral<P>
+  | ExprInlineAsm
   | ExprError;
 
 export type Expr<P extends Phase> = ExprKind<P> & {
@@ -485,6 +493,8 @@ export const BUILTINS = [
   "__memory_grow",
   "__i32_extend_to_i64_u",
   "___transmute",
+  "___asm",
+  "__locals",
 ] as const;
 
 export type BuiltinName = (typeof BUILTINS)[number];
@@ -919,6 +929,9 @@ export function superFoldExpr<From extends Phase, To extends Phase>(
         kind: "tupleLiteral",
         fields: expr.fields.map(folder.expr.bind(folder)),
       };
+    }
+    case "asm": {
+      return { ...expr };
     }
     case "error": {
       return { ...expr };

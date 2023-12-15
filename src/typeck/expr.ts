@@ -28,12 +28,10 @@ import {
 } from "../ast";
 import { CompilerError, ErrorEmitted, Span, unreachable } from "../error";
 import { printTy } from "../printer";
+import { INSTRS, Instr, VALTYPES, ValType } from "../wasm/defs";
 import { TypeckCtx, emitError, mkTyFn, tyError, tyErrorFrom } from "./base";
 import { InferContext } from "./infer";
-import {
-  lowerAstTy,
-  typeOfItem,
-} from "./item";
+import { lowerAstTy, typeOfItem } from "./item";
 
 export function exprError(err: ErrorEmitted, span: Span): Expr<Typecked> {
   return {
@@ -128,6 +126,15 @@ export function checkBody(
     loopState: [],
     checkExpr: () => unreachable(),
   };
+
+  if (
+    body.kind === "call" &&
+    body.lhs.kind === "ident" &&
+    body.lhs.value.res.kind === "builtin" &&
+    body.lhs.value.res.name === "___asm"
+  ) {
+    return checkInlineAsm(cx, body, fnTy.returnTy);
+  }
 
   const checker: Folder<Resolved, Typecked> = {
     ...mkDefaultFolder(),
@@ -503,6 +510,9 @@ export function checkBody(
 
           return { ...expr, fields, ty };
         }
+        case "asm": {
+          unreachable("asm expression doesn't exist before type checking");
+        }
         case "error": {
           return { ...expr, ty: tyErrorFrom(expr) };
         }
@@ -528,6 +538,90 @@ export function checkBody(
   const resolved = resolveBody(fcx, checked);
 
   return resolved;
+}
+
+function checkInlineAsm(
+  cx: TypeckCtx,
+  body: Expr<Resolved> & ExprCall<Resolved>,
+  retTy: Ty,
+): Expr<Typecked> {
+  const err = (msg: string, span: Span): Expr<Typecked> =>
+    exprError(emitError(cx, new CompilerError(msg, span)), span);
+
+  const args = body.args;
+
+  if (
+    args.length < 1 ||
+    args[0].kind !== "call" ||
+    args[0].lhs.kind !== "ident" ||
+    args[0].lhs.value.res.kind !== "builtin" ||
+    args[0].lhs.value.res.name !== "__locals"
+  ) {
+    return err(
+      "inline assembly must have __locals() as first argument",
+      body.span,
+    );
+  }
+
+  const locals: ValType[] = [];
+  for (const local of args[0].args) {
+    const isValtype = (s: string): s is ValType =>
+      VALTYPES.includes(s as ValType);
+    if (
+      local.kind !== "literal" ||
+      local.value.kind !== "str" ||
+      !isValtype(local.value.value)
+    ) {
+      return err(
+        "inline assembly local must be string literal of value type",
+        local.span,
+      );
+    }
+    locals.push(local.value.value);
+  }
+
+  const instructions: Instr[] = [];
+  for (const expr of args.slice(1)) {
+    if (expr.kind !== "literal" || expr.value.kind !== "str") {
+      return err(
+        "inline assembly instruction must be string literal with instruction",
+        expr.span,
+      );
+    }
+    const text = expr.value.value;
+    const parts = text.split(" ");
+    const imms = parts.slice(1);
+    const wasmInstr = INSTRS.find((instrVal) => instrVal.name === parts[0]);
+    if (!wasmInstr) {
+      return err(`unknown instruction: ${parts[0]}`, expr.span);
+    }
+    if (wasmInstr.immediates === "select") {
+      throw new Error("todo: select");
+    } else if (wasmInstr.immediates === "memarg") {
+      throw new Error("todo: memarg");
+    } else {
+      if (imms.length !== wasmInstr.immediates.length) {
+        return err(
+          `mismatched immediate lengths, expected ${wasmInstr.immediates.length}, got ${imms.length}`,
+          expr.span,
+        );
+      }
+      if (wasmInstr.immediates.length > 1) {
+        throw new Error("todo: immediates");
+      }
+
+      if (wasmInstr.immediates.length === 0) {
+        instructions.push({ kind: wasmInstr.name } as Instr);
+      } else {
+        instructions.push({
+          kind: wasmInstr.name,
+          imm: Number(imms[0]),
+        } as Instr);
+      }
+    }
+  }
+
+  return { kind: "asm", locals, ty: retTy, instructions, span: body.span };
 }
 
 function checkLValue(cx: TypeckCtx, expr: Expr<Typecked>) {
@@ -641,21 +735,19 @@ function checkCall(
   fcx: FuncCtx,
   expr: ExprCall<Resolved> & Expr<Resolved>,
 ): Expr<Typecked> {
-  if (
-    expr.lhs.kind === "ident" &&
-    expr.lhs.value.res.kind === "builtin" &&
-    expr.lhs.value.res.name === "___transmute"
-  ) {
-    const ty = fcx.infcx.newVar();
-    const args = expr.args.map((arg) => fcx.checkExpr(arg));
-    const ret: Expr<Typecked> = {
-      ...expr,
-      lhs: { ...expr.lhs, ty: TY_UNIT },
-      args,
-      ty,
-    };
+  if (expr.lhs.kind === "ident" && expr.lhs.value.res.kind === "builtin") {
+    if (expr.lhs.value.res.name === "___transmute") {
+      const ty = fcx.infcx.newVar();
+      const args = expr.args.map((arg) => fcx.checkExpr(arg));
+      const ret: Expr<Typecked> = {
+        ...expr,
+        lhs: { ...expr.lhs, ty: TY_UNIT },
+        args,
+        ty,
+      };
 
-    return ret;
+      return ret;
+    }
   }
 
   const lhs = fcx.checkExpr(expr.lhs);
