@@ -28,14 +28,10 @@ import {
 } from "../ast";
 import { CompilerError, ErrorEmitted, Span, unreachable } from "../error";
 import { printTy } from "../printer";
+import { TypeckCtx, emitError, mkTyFn, tyError, tyErrorFrom } from "./base";
 import { InferContext } from "./infer";
 import {
-  TypeckCtx,
-  emitError,
   lowerAstTy,
-  mkTyFn,
-  tyError,
-  tyErrorFrom,
   typeOfItem,
 } from "./item";
 

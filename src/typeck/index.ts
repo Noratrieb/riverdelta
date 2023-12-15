@@ -17,9 +17,10 @@ import {
 import { GlobalContext } from "../context";
 import { CompilerError, ErrorEmitted, Span } from "../error";
 import { ComplexMap } from "../utils";
+import { emitError } from "./base";
 import { checkBody, exprError } from "./expr";
 import { InferContext } from "./infer";
-import { emitError, typeOfItem } from "./item";
+import { typeOfItem } from "./item";
 
 export function typeck(
   gcx: GlobalContext,
