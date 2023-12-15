@@ -1,7 +1,7 @@
 import {
   BuiltinName,
   COMPARISON_KINDS,
-  Crate,
+  Pkg,
   EQUALITY_KINDS,
   Expr,
   ExprBinary,
@@ -119,7 +119,7 @@ export function typeOfBuiltinValue(
 
 export function checkBody(
   cx: TypeckCtx,
-  ast: Crate<Resolved>,
+  ast: Pkg<Resolved>,
   body: Expr<Resolved>,
   fnTy: TyFn,
 ): Expr<Typecked> {

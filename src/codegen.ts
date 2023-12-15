@@ -1,5 +1,5 @@
 import {
-  Crate,
+  Pkg,
   Expr,
   ExprBlock,
   Folder,
@@ -119,7 +119,7 @@ function appendData(cx: Context, newData: Uint8Array): number {
 const KNOWN_DEF_PATHS = [ALLOCATE_ITEM, DEALLOCATE_ITEM];
 
 function getKnownDefPaths(
-  crates: Crate<Typecked>[],
+  pkgs: Pkg<Typecked>[],
 ): ComplexMap<string[], ItemId> {
   const knows = new ComplexMap<string[], ItemId>();
 
@@ -145,15 +145,15 @@ function getKnownDefPaths(
     },
   };
 
-  crates.forEach((crate) =>
-    crate.rootItems.forEach((item) => folder.item(item)),
+  pkgs.forEach((pkg) =>
+    pkg.rootItems.forEach((item) => folder.item(item)),
   );
 
   return knows;
 }
 
 export function lower(gcx: GlobalContext): wasm.Module {
-  const knownDefPaths = getKnownDefPaths(gcx.finalizedCrates);
+  const knownDefPaths = getKnownDefPaths(gcx.finalizedPkgs);
 
   const mod: wasm.Module = {
     types: [],
@@ -220,7 +220,7 @@ export function lower(gcx: GlobalContext): wasm.Module {
       }
     });
   }
-  gcx.finalizedCrates.forEach((ast) => lowerMod(ast.rootItems));
+  gcx.finalizedPkgs.forEach((ast) => lowerMod(ast.rootItems));
 
   const HEAP_ALIGN = 0x08;
   cx.reservedHeapMemoryStart =
@@ -228,7 +228,7 @@ export function lower(gcx: GlobalContext): wasm.Module {
       ? (mod.datas[0].init.length + (HEAP_ALIGN - 1)) & ~(HEAP_ALIGN - 1)
       : 0;
 
-  addRt(cx, gcx.finalizedCrates);
+  addRt(cx, gcx.finalizedPkgs);
 
   // THE LINKER
   const offset = cx.mod.imports.length;
@@ -1576,16 +1576,16 @@ function todo(msg: string): never {
 }
 
 // Make the program runnable using wasi-preview-1
-function addRt(cx: Context, crates: Crate<Typecked>[]) {
+function addRt(cx: Context, pkgs: Pkg<Typecked>[]) {
   const { mod } = cx;
 
-  const crate0 = unwrap(crates.find((crate) => crate.id === 0));
+  const pkg0 = unwrap(pkgs.find((pkg) => pkg.id === 0));
 
   const mainCall: wasm.Instr = { kind: "call", func: DUMMY_IDX };
   cx.relocations.push({
     kind: "funccall",
     instr: mainCall,
-    res: unwrap(crate0.typeckResults.main),
+    res: unwrap(pkg0.typeckResults.main),
   });
 
   const start: wasm.Func = {

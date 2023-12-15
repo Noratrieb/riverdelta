@@ -1,5 +1,5 @@
 import {
-  Crate,
+  Pkg,
   ItemId,
   Resolved,
   Ty,
@@ -26,7 +26,7 @@ export type TypeckCtx = {
    * afterwards, we get the ty.
    */
   itemTys: ComplexMap<ItemId, Ty | null>;
-  ast: Crate<Resolved>;
+  ast: Pkg<Resolved>;
 };
 
 export function mkTyFn(params: Ty[], returnTy: Ty): Ty {
@@ -160,8 +160,8 @@ export function typeOfItem(
   genericArgs: Ty[],
   cause: Span,
 ): Ty {
-  if (itemId.crateId !== cx.ast.id) {
-    // Look up foreign items in the foreign crates, we don't need to lower those
+  if (itemId.pkgId !== cx.ast.id) {
+    // Look up foreign items in the foreign pkgs, we don't need to lower those
     // ourselves.
     const item = cx.gcx.findItem(itemId);
 

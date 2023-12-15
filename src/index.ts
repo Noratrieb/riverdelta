@@ -8,9 +8,9 @@ import { typeck } from "./typeck";
 import { writeModuleWatToString } from "./wasm/wat";
 import fs from "fs";
 import { exec } from "child_process";
-import { Crate, Built, Typecked } from "./ast";
+import { Pkg, Built, Typecked } from "./ast";
 import { GlobalContext, parseArgs } from "./context";
-import { loadCrate } from "./loader";
+import { loadPkg } from "./loader";
 
 const INPUT = `
 type A = struct { a: Int };
@@ -39,13 +39,13 @@ function main() {
 
   const file: LoadedFile = { path: filename, content: input };
 
-  const gcx = new GlobalContext(opts, loadCrate);
-  const mainCrate = gcx.crateId.next();
+  const gcx = new GlobalContext(opts, loadPkg);
+  const mainPkg = gcx.pkgId.next();
 
   const start = Date.now();
 
   if (packageName !== "std") {
-    gcx.crateLoader(gcx, "std", Span.startOfFile(file));
+    gcx.pkgLoader(gcx, "std", Span.startOfFile(file));
   }
 
   const tokens = tokenize(gcx.error, file);
@@ -60,7 +60,7 @@ function main() {
 
   const parseState: ParseState = { tokens: tokens.tokens, gcx, file };
 
-  const ast: Crate<Built> = parse(packageName, parseState, mainCrate);
+  const ast: Pkg<Built> = parse(packageName, parseState, mainPkg);
   if (debug.has("ast")) {
     console.log("-----AST---------------");
 
@@ -83,7 +83,7 @@ function main() {
   if (debug.has("typecked")) {
     console.log("-----AST typecked------");
   }
-  const typecked: Crate<Typecked> = typeck(gcx, resolved);
+  const typecked: Pkg<Typecked> = typeck(gcx, resolved);
   if (debug.has("typecked")) {
     const typeckPrinted = printAst(typecked);
     console.log(typeckPrinted);
@@ -98,7 +98,7 @@ function main() {
     process.exit(1);
   }
 
-  gcx.finalizedCrates.push(typecked);
+  gcx.finalizedPkgs.push(typecked);
   const wasmModule = lowerToWasm(gcx);
   const moduleStringColor = writeModuleWatToString(wasmModule, true);
   const moduleString = writeModuleWatToString(wasmModule);

@@ -1,7 +1,7 @@
 import {
   ARITH_FACTOR_KINDS,
   ARITH_TERM_KINDS,
-  Crate,
+  Pkg,
   BinaryKind,
   COMPARISON_KINDS,
   mkDefaultFolder,
@@ -58,8 +58,8 @@ class FatalParseError extends Error {
 export function parse(
   packageName: string,
   t: State,
-  crateId: number,
-): Crate<Built> {
+  pkgId: number,
+): Pkg<Built> {
   let items: Item<Parsed>[];
   let fatalError: ErrorEmitted | undefined = undefined;
   try {
@@ -73,10 +73,10 @@ export function parse(
     }
   }
 
-  const ast: Crate<Built> = buildCrate(
+  const ast: Pkg<Built> = buildPkg(
     packageName,
     items,
-    crateId,
+    pkgId,
     t.file,
     fatalError,
   );
@@ -847,7 +847,7 @@ function unexpectedToken(t: ParseState, token: Token, expected: string): never {
   );
 }
 
-function validateAst(ast: Crate<Built>, gcx: GlobalContext) {
+function validateAst(ast: Pkg<Built>, gcx: GlobalContext) {
   const seenItemIds = new ComplexSet();
 
   const validator: Folder<Built, Built> = {
@@ -915,19 +915,19 @@ function validateAst(ast: Crate<Built>, gcx: GlobalContext) {
   foldAst(ast, validator);
 }
 
-function buildCrate(
+function buildPkg(
   packageName: string,
   rootItems: Item<Parsed>[],
-  crateId: number,
+  pkgId: number,
   rootFile: LoadedFile,
   fatalError: ErrorEmitted | undefined,
-): Crate<Built> {
+): Pkg<Built> {
   const itemId = new Ids();
-  itemId.next(); // crate root ID
+  itemId.next(); // pkg root ID
   const loopId = new Ids();
 
-  const ast: Crate<Built> = {
-    id: crateId,
+  const ast: Pkg<Built> = {
+    id: pkgId,
     rootItems,
     itemsById: new ComplexMap(),
     packageName,
@@ -938,7 +938,7 @@ function buildCrate(
   const assigner: Folder<Parsed, Built> = {
     ...mkDefaultFolder(),
     itemInner(item: Item<Parsed>): Item<Built> {
-      const id = new ItemId(crateId, itemId.next());
+      const id = new ItemId(pkgId, itemId.next());
       return { ...superFoldItem(item, this), id };
     },
     expr(expr: Expr<Parsed>): Expr<Built> {
@@ -958,7 +958,7 @@ function buildCrate(
     },
   };
 
-  const crate = foldAst(ast, assigner);
+  const pkg = foldAst(ast, assigner);
 
-  return crate;
+  return pkg;
 }

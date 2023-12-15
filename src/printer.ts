@@ -1,6 +1,6 @@
 import {
   AnyPhase,
-  Crate,
+  Pkg,
   Expr,
   ItemFunction,
   IdentWithRes,
@@ -16,7 +16,7 @@ import {
   substituteTy,
 } from "./ast";
 
-export function printAst(ast: Crate<AnyPhase>): string {
+export function printAst(ast: Pkg<AnyPhase>): string {
   return ast.rootItems.map(printItem).join("\n");
 }
 

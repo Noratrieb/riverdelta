@@ -1,5 +1,5 @@
 import {
-  Crate,
+  Pkg,
   Expr,
   Folder,
   Item,
@@ -23,8 +23,8 @@ import { emitError, typeOfItem } from "./item";
 
 export function typeck(
   gcx: GlobalContext,
-  ast: Crate<Resolved>,
-): Crate<Typecked> {
+  ast: Pkg<Resolved>,
+): Pkg<Typecked> {
   const cx = {
     gcx,
     itemTys: new ComplexMap<ItemId, Ty | null>(),
@@ -203,7 +203,7 @@ export function typeck(
   });
 
   if (ast.id === 0) {
-    // Only the final id=0 crate needs and cares about main.
+    // Only the final id=0 pkg needs and cares about main.
     if (!main) {
       emitError(
         cx,

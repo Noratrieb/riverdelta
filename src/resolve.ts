@@ -1,5 +1,5 @@
 import {
-  Crate,
+  Pkg,
   BUILTINS,
   Built,
   BuiltinName,
@@ -25,17 +25,17 @@ import { ComplexMap } from "./utils";
 const BUILTIN_SET = new Set<string>(BUILTINS);
 
 type Context = {
-  ast: Crate<Built>;
+  ast: Pkg<Built>;
   gcx: GlobalContext;
   modContentsCache: ComplexMap<ItemId, Map<string, ItemId>>;
   newItemsById: ComplexMap<ItemId, Item<Resolved>>;
 };
 
-function loadCrate(cx: Context, name: string, span: Span): Map<string, ItemId> {
-  const loadedCrate = cx.gcx.crateLoader(cx.gcx, name, span);
+function loadPkg(cx: Context, name: string, span: Span): Map<string, ItemId> {
+  const loadedPkg = cx.gcx.pkgLoader(cx.gcx, name, span);
 
   const contents = new Map(
-    loadedCrate.rootItems.map((item) => [item.name, item.id]),
+    loadedPkg.rootItems.map((item) => [item.name, item.id]),
   );
 
   return contents;
@@ -56,7 +56,7 @@ function resolveModItem(
   if ("contents" in mod) {
     contents = new Map(mod.contents.map((item) => [item.name, item.id]));
   } else {
-    contents = loadCrate(cx, mod.name, mod.span);
+    contents = loadPkg(cx, mod.name, mod.span);
   }
 
   cx.modContentsCache.set(mod.id, contents);
@@ -65,8 +65,8 @@ function resolveModItem(
 
 export function resolve(
   gcx: GlobalContext,
-  ast: Crate<Built>,
-): Crate<Resolved> {
+  ast: Pkg<Built>,
+): Pkg<Resolved> {
   const cx: Context = {
     ast,
     gcx,
@@ -151,12 +151,12 @@ function resolveModule(
       };
     }
 
-    // All loaded crates are in scope.
-    for (const crate of [cx.ast, ...cx.gcx.finalizedCrates]) {
-      if (ident.name === crate.packageName) {
+    // All loaded pkgs are in scope.
+    for (const pkg of [cx.ast, ...cx.gcx.finalizedPkgs]) {
+      if (ident.name === pkg.packageName) {
         return {
           kind: "item",
-          id: ItemId.crateRoot(crate.id),
+          id: ItemId.pkgRoot(pkg.id),
         };
       }
     }
@@ -217,10 +217,10 @@ function resolveModule(
           };
         }
         case "extern": {
-          // Eagerly resolve the crate.
-          // Note that because you can reference extern crates before the item,
-          // we still need the loadCrate in the field access code above.
-          loadCrate(cx, item.name, item.span);
+          // Eagerly resolve the pkg.
+          // Note that because you can reference extern pkgs before the item,
+          // we still need the loadPkg in the field access code above.
+          loadPkg(cx, item.name, item.span);
 
           return {
             ...item,

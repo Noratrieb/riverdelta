@@ -50,10 +50,10 @@ export type AnyPhase = {
   typeckResults: No | HasTypeckResults;
 };
 
-export type CrateId = number;
+export type PkgId = number;
 
-export type Crate<P extends Phase> = {
-  id: CrateId;
+export type Pkg<P extends Phase> = {
+  id: PkgId;
   rootItems: Item<P>[];
   itemsById: ComplexMap<ItemId, Item<P>>;
   packageName: string;
@@ -61,7 +61,7 @@ export type Crate<P extends Phase> = {
   fatalError: ErrorEmitted | undefined;
 } & P["typeckResults"];
 
-export type DepCrate = Crate<Final>;
+export type DepPkg = Pkg<Final>;
 
 export type Ident = {
   name: string;
@@ -74,11 +74,11 @@ export type IdentWithRes<P extends Phase> = {
 } & P["res"];
 
 export class ItemId {
-  public crateId: number;
+  public pkgId: number;
   public itemIdx: number;
 
-  constructor(crateId: number, itemIdx: number) {
-    this.crateId = crateId;
+  constructor(pkgId: number, itemIdx: number) {
+    this.pkgId = pkgId;
     this.itemIdx = itemIdx;
   }
 
@@ -86,15 +86,15 @@ export class ItemId {
     return new ItemId(999999, 999999);
   }
 
-  static crateRoot(crate: CrateId): ItemId {
-    return new ItemId(crate, 0);
+  static pkgRoot(pkg: PkgId): ItemId {
+    return new ItemId(pkg, 0);
   }
 
   toString(): string {
-    if (this.crateId === 0) {
+    if (this.pkgId === 0) {
       return `${this.itemIdx}`;
     }
-    return `[${this.crateId}@${this.itemIdx}]`;
+    return `[${this.pkgId}@${this.itemIdx}]`;
   }
 }
 
@@ -698,9 +698,9 @@ export function mkDefaultFolder<
 }
 
 export function foldAst<From extends Phase, To extends Phase>(
-  ast: Crate<From>,
+  ast: Pkg<From>,
   folder: Folder<From, To>,
-): Crate<To> {
+): Pkg<To> {
   if ((folder.item as any)[ITEM_DEFAULT] !== ITEM_DEFAULT) {
     unreachable("must not override `item` on folders");
   }

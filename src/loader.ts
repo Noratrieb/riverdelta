@@ -1,5 +1,5 @@
-import { CrateId, DepCrate } from "./ast";
-import { CrateLoader, GlobalContext } from "./context";
+import { PkgId, DepPkg } from "./ast";
+import { PkgLoader, GlobalContext } from "./context";
 import { CompilerError, ErrorEmitted, LoadedFile, Span } from "./error";
 import fs from "fs";
 import path from "path";
@@ -67,11 +67,11 @@ export function loadModuleFile(
   return { ok: true, value: { content, path: filePath } };
 }
 
-function dummyErrorCrate(
-  id: CrateId,
+function dummyErrorPkg(
+  id: PkgId,
   packageName: string,
   emitted: ErrorEmitted,
-): DepCrate {
+): DepPkg {
   return {
     id,
     packageName,
@@ -85,26 +85,26 @@ function dummyErrorCrate(
   };
 }
 
-export const loadCrate: CrateLoader = (
+export const loadPkg: PkgLoader = (
   gcx: GlobalContext,
   name: string,
   span: Span,
-): DepCrate => {
-  // If we've loaded the crate already, great.
-  const existing = gcx.finalizedCrates.find(
-    (crate) => crate.packageName === name,
+): DepPkg => {
+  // If we've loaded the pkg already, great.
+  const existing = gcx.finalizedPkgs.find(
+    (pkg) => pkg.packageName === name,
   );
   if (existing) {
     return existing;
   }
 
-  const crateId = gcx.crateId.next();
+  const pkgId = gcx.pkgId.next();
 
-  // If we have not loaded the crate yet, we may actually already be loading it.
+  // If we have not loaded the pkg yet, we may actually already be loading it.
   // A cycle!!
-  if (gcx.cratesBeingLoaded.has(name)) {
-    return dummyErrorCrate(
-      crateId,
+  if (gcx.pkgsBeingLoaded.has(name)) {
+    return dummyErrorPkg(
+      pkgId,
       name,
       gcx.error.emit(
         new CompilerError(`cycle detected loading extern module ${name}`, span),
@@ -112,33 +112,33 @@ export const loadCrate: CrateLoader = (
     );
   }
 
-  // Let's start loading the crate!
-  gcx.cratesBeingLoaded.add(name);
+  // Let's start loading the pkg!
+  gcx.pkgsBeingLoaded.add(name);
 
-  // We really, really want a good algorithm for finding crates.
+  // We really, really want a good algorithm for finding pkgs.
   // But right now we just look for files in the CWD.
 
   const file = loadModuleFile(".", name, span);
   if (!file.ok) {
-    return dummyErrorCrate(crateId, name, gcx.error.emit(file.err));
+    return dummyErrorPkg(pkgId, name, gcx.error.emit(file.err));
   }
 
   const tokens = tokenize(gcx.error, file.value);
   if (!tokens.ok) {
-    return dummyErrorCrate(crateId, name, tokens.err);
+    return dummyErrorPkg(pkgId, name, tokens.err);
   }
   const parseState: ParseState = {
     tokens: tokens.tokens,
     file: file.value,
     gcx,
   };
-  const ast = parse(name, parseState, crateId);
+  const ast = parse(name, parseState, pkgId);
   const resolved = resolve(gcx, ast);
 
   const typecked = typeck(gcx, resolved);
 
-  gcx.finalizedCrates.push(typecked);
-  // Crate is loaded, no cycles.
-  gcx.cratesBeingLoaded.delete(name);
+  gcx.finalizedPkgs.push(typecked);
+  // Pkg is loaded, no cycles.
+  gcx.pkgsBeingLoaded.delete(name);
   return typecked;
 };
