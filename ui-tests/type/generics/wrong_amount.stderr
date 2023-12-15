@@ -1,36 +1,17 @@
-error: expected 1 generic arguments, found 0
- --> $DIR/wrong_amount.nil:9
-9 |     a1: A,
-            ^
-error: expected 1 generic arguments, found 0
- --> $DIR/wrong_amount.nil:10
-10 |     a2: A[],
-             ^
-error: expected 1 generic arguments, found 2
- --> $DIR/wrong_amount.nil:12
-12 |     a4: A[I32, I32],
-             ^
-error: expected 3 generic arguments, found 0
- --> $DIR/wrong_amount.nil:14
-14 |     b1: B,
-             ^
-error: expected 3 generic arguments, found 0
- --> $DIR/wrong_amount.nil:15
-15 |     b2: B[],
-             ^
-error: expected 3 generic arguments, found 2
- --> $DIR/wrong_amount.nil:16
-16 |     b3: B[Int, Int],
-             ^
-error: expected 3 generic arguments, found 4
- --> $DIR/wrong_amount.nil:18
-18 |     b5: B[Int, Int, Int, Int],
-             ^
-error: type () does not take generic arguments
- --> $DIR/wrong_amount.nil:22
-22 |     c3: C[I32],
-             ^
-error: `main` function not found
- --> $DIR/wrong_amount.nil:1
-1 | type A[T] = struct { a: T };
-    ^
+/home/nils/projects/riverdelta/target/ast.js:110
+                throw new Error(`substitution out of range, param index ${ty.idx} of param ${ty.name} out of range for length ${genericArgs.length}`);
+                ^
+
+Error: substitution out of range, param index 0 of param T out of range for length 0
+    at substituteTy (/home/nils/projects/riverdelta/target/ast.js:110:23)
+    at subst (/home/nils/projects/riverdelta/target/ast.js:106:27)
+    at Array.map (<anonymous>)
+    at substituteTy (/home/nils/projects/riverdelta/target/ast.js:125:45)
+    at typeOfItem (/home/nils/projects/riverdelta/target/typeck/item.js:193:33)
+    at Object.itemInner (/home/nils/projects/riverdelta/target/typeck/index.js:63:54)
+    at Object.item (/home/nils/projects/riverdelta/target/ast.js:146:34)
+    at /home/nils/projects/riverdelta/target/ast.js:164:55
+    at Array.map (<anonymous>)
+    at foldAst (/home/nils/projects/riverdelta/target/ast.js:164:34)
+
+Node.js v18.18.2

@@ -1,5 +1,3 @@
-//@check-pass
-
 function a(a: I32) =
     ___asm(
         __locals(),

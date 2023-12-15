@@ -1,5 +1,3 @@
-//@check-pass
-
 function dropping(a: I32) =
     ___asm(
         __locals(),

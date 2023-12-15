@@ -1,0 +1,6 @@
+import ("wasi_snapshot_preview1" "fd_write")
+    fd_write(fd: I32, ciovec_ptr: I32, ciovec_len: I32, out_ptr: I32): I32;
+
+function print(s: String) = (
+    let s: (I32, I32) = ___transmute(s);
+);
