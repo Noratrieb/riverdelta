@@ -1,6 +1,6 @@
-import { TY_INT, TY_STRING, TY_UNIT } from "./ast";
-import { Emitter, ErrorHandler, Span } from "./error";
-import { InferContext } from "./typeck";
+import { TY_INT, TY_STRING, TY_UNIT } from "../ast";
+import { Emitter, ErrorHandler, Span } from "../error";
+import { InferContext } from "./infer";
 
 const SPAN: Span = Span.startOfFile({ content: "" });
 

@@ -1,99 +1,82 @@
 import {
-  Crate,
-  BuiltinName,
+    BuiltinName,
   COMPARISON_KINDS,
-  mkDefaultFolder,
+  Crate,
   EQUALITY_KINDS,
   Expr,
   ExprBinary,
+  ExprCall,
   ExprUnary,
-  foldAst,
   Folder,
-  ItemId,
   LOGICAL_KINDS,
   LoopId,
   Resolution,
   Resolved,
-  Ty,
+  StructLiteralField,
   TY_BOOL,
   TY_I32,
   TY_INT,
   TY_NEVER,
   TY_STRING,
   TY_UNIT,
+  Ty,
   TyFn,
-  tyIsUnit,
   Type,
   Typecked,
-  Item,
-  StructLiteralField,
+  mkDefaultFolder,
   superFoldExpr,
-  ExprCall,
-  substituteTy,
-} from "./ast";
-import { GlobalContext } from "./context";
-import {
-  CompilerError,
-  ErrorEmitted,
-  ErrorHandler,
-  Span,
-  unreachable,
-} from "./error";
-import { printTy } from "./printer";
-import { ComplexMap } from "./utils";
+} from "../ast";
+import { CompilerError, ErrorEmitted, Span, unreachable } from "../error";
+import { printTy } from "../printer";
+import { InferContext } from "./infer";
+import { TypeckCtx, emitError, lowerAstTy, mkTyFn, tyError, tyErrorFrom, typeOfItem } from "./item";
 
-type TypeckCtx = {
-  gcx: GlobalContext;
-  /**
-   * A cache of all item types.
-   * Starts off as undefined, then gets set to null
-   * while computing the type (for cycle detection) and
-   * afterwards, we get the ty.
-   */
-  itemTys: ComplexMap<ItemId, Ty | null>;
-  ast: Crate<Resolved>;
-};
-
-function mkTyFn(params: Ty[], returnTy: Ty): Ty {
-  return { kind: "fn", params, returnTy };
-}
-
-function tyError(cx: TypeckCtx, err: CompilerError): Ty {
+export function exprError(err: ErrorEmitted, span: Span): Expr<Typecked> {
   return {
     kind: "error",
-    err: emitError(cx, err),
+    err,
+    span,
+    ty: tyErrorFrom({ err }),
   };
 }
 
-function tyErrorFrom(prev: { err: ErrorEmitted }): Ty {
-  return { kind: "error", err: prev.err };
-}
-
-function emitError(cx: TypeckCtx, err: CompilerError): ErrorEmitted {
-  return cx.gcx.error.emit(err);
-}
-
-function builtinAsTy(cx: TypeckCtx, name: string, span: Span): Ty {
-  switch (name) {
-    case "String": {
-      return TY_STRING;
-    }
-    case "Int": {
-      return TY_INT;
-    }
-    case "I32": {
-      return TY_I32;
-    }
-    case "Bool": {
-      return TY_BOOL;
-    }
-    default: {
-      return tyError(cx, new CompilerError(`\`${name}\` is not a type`, span));
+type FuncCtx = {
+    cx: TypeckCtx;
+    infcx: InferContext;
+    localTys: Ty[];
+    loopState: LoopState[];
+    checkExpr: (expr: Expr<Resolved>) => Expr<Typecked>;
+  };
+  
+  type LoopState = { hasBreak: boolean; loopId: LoopId };
+  
+  function typeOfValue(fcx: FuncCtx, res: Resolution, span: Span): Ty {
+    switch (res.kind) {
+      case "local": {
+        const idx = fcx.localTys.length - 1 - res.index;
+        return fcx.localTys[idx];
+      }
+      case "item": {
+        return typeOfItem(fcx.cx, res.id, [], span);
+      }
+      case "builtin":
+        return typeOfBuiltinValue(fcx, res.name, span);
+      case "tyParam":
+        return tyError(
+          fcx.cx,
+          new CompilerError(`type parameter cannot be used as value`, span),
+        );
+      case "error":
+        return tyErrorFrom(res);
     }
   }
-}
+  
 
-function typeOfBuiltinValue(fcx: FuncCtx, name: BuiltinName, span: Span): Ty {
+export function typeOfBuiltinValue(
+  fcx: FuncCtx,
+  name: BuiltinName,
+  span: Span,
+): Ty {
   switch (name) {
     case "false":
     case "true":
@@ -125,652 +108,6 @@ function typeOfBuiltinValue(fcx: FuncCtx, name: BuiltinName, span: Span): Ty {
       );
     }
   }
-}
-
-// TODO: Cleanup, maybe get the ident switch into this function because typeOfItem is unused.
-function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
-  switch (type.kind) {
-    case "ident": {
-      const ident = type.value;
-      const res = ident.res;
-
-      const generics = type.generics.map((type) => lowerAstTy(cx, type));
-      let ty: Ty;
-      switch (res.kind) {
-        case "local": {
-          throw new Error("Item type cannot refer to local variable");
-        }
-        case "item": {
-          ty = typeOfItem(cx, res.id, generics, type.span);
-          break;
-        }
-        case "builtin": {
-          ty = builtinAsTy(cx, res.name, ident.span);
-          break;
-        }
-        case "tyParam": {
-          ty = { kind: "param", idx: res.index, name: res.name };
-          break;
-        }
-        case "error": {
-          ty = tyErrorFrom(res);
-          break;
-        }
-      }
-
-      if (ty.kind === "struct" || ty.kind === "alias") {
-        if (generics.length === ty.params.length) {
-          if (ty.kind === "alias") {
-            return substituteTy(ty.genericArgs, ty.actual);
-          }
-          return { ...ty, genericArgs: generics };
-        } else {
-          return tyError(
-            cx,
-            new CompilerError(
-              `expected ${ty.params.length} generic arguments, found ${generics.length}`,
-              type.span,
-            ),
-          );
-        }
-      } else if (ty.kind !== "error") {
-        if (generics.length > 0) {
-          return tyError(
-            cx,
-            new CompilerError(
-              `type ${printTy(ty)} does not take generic arguments`,
-              type.span,
-            ),
-          );
-        }
-      }
-
-      return ty;
-    }
-    case "tuple": {
-      return {
-        kind: "tuple",
-        elems: type.elems.map((type) => lowerAstTy(cx, type)),
-      };
-    }
-    case "rawptr": {
-      const inner = lowerAstTy(cx, type.inner);
-      if (inner.kind !== "struct") {
-        return tyError(
-          cx,
-          new CompilerError("raw pointers must point to structs", type.span),
-        );
-      }
-
-      return { kind: "rawptr", inner };
-    }
-    case "never": {
-      return TY_NEVER;
-    }
-    case "error": {
-      return tyErrorFrom(type);
-    }
-  }
-}
-
-function typeOfItem(
-  cx: TypeckCtx,
-  itemId: ItemId,
-  genericArgs: Ty[],
-  cause: Span,
-): Ty {
-  if (itemId.crateId !== cx.ast.id) {
-    // Look up foreign items in the foreign crates, we don't need to lower those
-    // ourselves.
-    const item = cx.gcx.findItem(itemId);
-
-    switch (item.kind) {
-      case "function":
-      case "import":
-      case "type":
-      case "global":
-        return substituteTy(genericArgs, item.ty!);
-      case "mod": {
-        return tyError(
-          cx,
-          new CompilerError(
-            `module ${item.name} cannot be used as a type or value`,
-            cause,
-          ),
-        );
-      }
-      case "extern": {
-        return tyError(
-          cx,
-          new CompilerError(
-            `extern declaration ${item.name} cannot be used as a type or value`,
-            cause,
-          ),
-        );
-      }
-    }
-  }
-
-  const item = cx.gcx.findItem(itemId, cx.ast);
-  const cachedTy = cx.itemTys.get(itemId);
-  if (cachedTy) {
-    return cachedTy;
-  }
-  if (cachedTy === null) {
-    return tyError(
-      cx,
-      new CompilerError(
-        `cycle computing type of #G${itemId.toString()}`,
-        item.span,
-      ),
-    );
-  }
-  cx.itemTys.set(itemId, null);
-
-  let ty: Ty;
-
-  switch (item.kind) {
-    case "function":
-    case "import": {
-      const args = item.params.map((arg) => lowerAstTy(cx, arg.type));
-      const returnTy: Ty = item.returnType
-        ? lowerAstTy(cx, item.returnType)
-        : TY_UNIT;
-
-      ty = { kind: "fn", params: args, returnTy };
-      break;
-    }
-    case "type": {
-      switch (item.type.kind) {
-        case "struct": {
-          ty = {
-            kind: "struct",
-            genericArgs: item.generics.map(
-              ({ name }, idx): Ty => ({
-                kind: "param",
-                name,
-                idx,
-              }),
-            ),
-            params: item.generics.map((ident) => ident.name),
-            itemId: item.id,
-            _name: item.name,
-            fields_no_subst: [
-              /*dummy*/
-            ],
-          };
-          // Set it here already to allow for recursive types.
-          cx.itemTys.set(item.id, ty);
-
-          const fields = item.type.fields.map<[string, Ty]>(
-            ({ name, type }) => [name.name, lowerAstTy(cx, type)],
-          );
-
-          ty.fields_no_subst = fields;
-          break;
-        }
-        case "alias": {
-          const actual = lowerAstTy(cx, item.type.type);
-
-          ty = {
-            kind: "alias",
-            actual,
-            genericArgs: item.generics.map(
-              ({ name }, idx): Ty => ({
-                kind: "param",
-                name,
-                idx,
-              }),
-            ),
-            params: item.generics.map((ident) => ident.name),
-          };
-          break;
-        }
-      }
-      break;
-    }
-    case "mod": {
-      return tyError(
-        cx,
-        new CompilerError(
-          `module ${item.name} cannot be used as a type or value`,
-          cause,
-        ),
-      );
-    }
-    case "extern": {
-      return tyError(
-        cx,
-        new CompilerError(
-          `extern declaration ${item.name} cannot be used as a type or value`,
-          cause,
-        ),
-      );
-    }
-    case "global": {
-      ty = lowerAstTy(cx, item.type);
-      break;
-    }
-    case "error": {
-      return tyErrorFrom(item);
-    }
-  }
-
-  ty = substituteTy(genericArgs, ty);
-
-  cx.itemTys.set(item.id, ty);
-  return ty;
-}
-
-export function typeck(
-  gcx: GlobalContext,
-  ast: Crate<Resolved>,
-): Crate<Typecked> {
-  const cx = {
-    gcx,
-    itemTys: new ComplexMap<ItemId, Ty | null>(),
-    ast,
-  };
-
-  const checker: Folder<Resolved, Typecked> = {
-    ...mkDefaultFolder(),
-    itemInner(item: Item<Resolved>): Item<Typecked> {
-      switch (item.kind) {
-        case "function": {
-          // Functions do not have generic arguments right now.
-          const fnTy = typeOfItem(cx, item.id, [], item.span) as TyFn;
-          const body = checkBody(cx, ast, item.body, fnTy);
-
-          return {
-            ...item,
-            name: item.name,
-            params: item.params.map((arg) => ({ ...arg })),
-            body,
-            ty: fnTy,
-          };
-        }
-        case "import": {
-          const fnTy = typeOfItem(cx, item.id, [], item.span) as TyFn;
-
-          fnTy.params.forEach((param, i) => {
-            switch (param.kind) {
-              case "int":
-              case "i32":
-                break;
-              default: {
-                emitError(
-                  cx,
-                  new CompilerError(
-                    `import parameters must be I32 or Int`,
-                    item.params[i].span,
-                  ),
-                );
-              }
-            }
-          });
-
-          if (!tyIsUnit(fnTy.returnTy)) {
-            switch (fnTy.returnTy.kind) {
-              case "int":
-              case "i32":
-                break;
-              default: {
-                emitError(
-                  cx,
-                  new CompilerError(
-                    `import return must be I32, Int or ()`,
-                    item.returnType!.span,
-                  ),
-                );
-              }
-            }
-          }
-
-          return {
-            ...item,
-            kind: "import",
-            params: item.params.map((arg) => ({ ...arg })),
-            ty: fnTy,
-          };
-        }
-        case "type": {
-          const ty = typeOfItem(cx, item.id, [], item.span);
-
-          switch (item.type.kind) {
-            case "struct": {
-              const fieldNames = new Set();
-              item.type.fields.forEach(({ name }) => {
-                if (fieldNames.has(name)) {
-                  emitError(
-                    cx,
-                    new CompilerError(
-                      `type ${item.name} has a duplicate field: ${name.name}`,
-                      name.span,
-                    ),
-                  );
-                } else {
-                  fieldNames.add(name);
-                }
-              });
-
-              return {
-                ...item,
-                type: {
-                  kind: "struct",
-                  fields: item.type.fields.map((field) => ({ ...field })),
-                },
-                ty,
-              };
-            }
-            case "alias": {
-              return {
-                ...item,
-                type: { ...item.type },
-                ty,
-              };
-            }
-          }
-        }
-        case "mod": {
-          return {
-            ...item,
-            contents: item.contents.map((item) => this.item(item)),
-          };
-        }
-        case "extern": {
-          // Nothing to check.
-          return item;
-        }
-        case "global": {
-          const ty = typeOfItem(cx, item.id, [], item.span);
-          const { init } = item;
-
-          let initChecked: Expr<Typecked>;
-          if (init.kind !== "literal" || init.value.kind !== "int") {
-            const err: ErrorEmitted = emitError(
-              cx,
-              new CompilerError(
-                "globals must be initialized with an integer literal",
-                init.span,
-              ),
-            );
-            initChecked = exprError(err, init.span);
-          } else {
-            const initTy = init.value.type === "I32" ? TY_I32 : TY_INT;
-            const infcx = new InferContext(cx.gcx.error);
-            infcx.assign(ty, initTy, init.span);
-            initChecked = { ...init, ty };
-          }
-
-          return {
-            ...item,
-            ty,
-            init: initChecked,
-          };
-        }
-        case "error": {
-          return { ...item };
-        }
-      }
-    },
-    expr(_expr) {
-      throw new Error("expressions need to be handled in checkBody");
-    },
-    ident(ident) {
-      return ident;
-    },
-    type(_type) {
-      throw new Error("all types should be typechecked manually");
-    },
-  };
-
-  const typecked = foldAst(ast, checker);
-
-  const main = typecked.rootItems.find((item) => {
-    if (item.kind === "function" && item.name === "main") {
-      if (!tyIsUnit(item.ty!.returnTy)) {
-        emitError(
-          cx,
-          new CompilerError(
-            `\`main\` has an invalid signature. main takes no arguments and returns nothing`,
-            item.span,
-          ),
-        );
-      }
-
-      return true;
-    }
-    return false;
-  });
-
-  if (ast.id === 0) {
-    // Only the final id=0 crate needs and cares about main.
-    if (!main) {
-      emitError(
-        cx,
-        new CompilerError(
-          `\`main\` function not found`,
-          Span.startOfFile(ast.rootFile),
-        ),
-      );
-    }
-
-    typecked.typeckResults = { main: undefined };
-    if (main) {
-      typecked.typeckResults.main = { kind: "item", id: main.id };
-    }
-  }
-
-  return typecked;
-}
-
-type TyVarRes =
-  | {
-      kind: "final";
-      ty: Ty;
-    }
-  | {
-      kind: "unified";
-      index: number;
-    }
-  | {
-      kind: "unknown";
-    };
-
-export class InferContext {
-  tyVars: TyVarRes[] = [];
-
-  constructor(public error: ErrorHandler) {}
-
-  public newVar(): Ty {
-    const index = this.tyVars.length;
-    this.tyVars.push({ kind: "unknown" });
-    return { kind: "var", index };
-  }
-
-  private tryResolveVar(variable: number): Ty | undefined {
-    const varRes = this.tyVars[variable];
-    switch (varRes.kind) {
-      case "final": {
-        return varRes.ty;
-      }
-      case "unified": {
-        const ty = this.tryResolveVar(varRes.index);
-        if (ty) {
-          this.tyVars[variable] = { kind: "final", ty };
-          return ty;
-        } else {
-          return undefined;
-        }
-      }
-      case "unknown": {
-        return undefined;
-      }
-    }
-  }
-
-  private findRoot(variable: number): number {
-    let root = variable;
-    let nextVar;
-    while ((nextVar = this.tyVars[root]).kind === "unified") {
-      root = nextVar.index;
-    }
-    return root;
-  }
-
-  /**
-   * Try to constrain a type variable to be of a specific type.
-   * INVARIANT: Both sides must not be of res "final", use resolveIfPossible
-   * before calling this.
-   */
-  private constrainVar(variable: number, ty: Ty) {
-    const root = this.findRoot(variable);
-
-    if (ty.kind === "var") {
-      // Now we point our root to the other root to unify the two graphs.
-      const otherRoot = this.findRoot(ty.index);
-
-      // If both types have the same root, we don't need to do anything
-      // as they're already part of the same graph.
-      if (root != otherRoot) {
-        this.tyVars[root] = { kind: "unified", index: otherRoot };
-      }
-    } else {
-      this.tyVars[root] = { kind: "final", ty };
-    }
-  }
-
-  public resolveIfPossible(ty: Ty): Ty {
-    // TODO: dont be shallow resolve
-    // note that fixing this will cause cycles. fix those cycles instead using
-    // the fancy occurs check as errs called it.
-    if (ty.kind === "var") {
-      return this.tryResolveVar(ty.index) ?? ty;
-    } else {
-      return ty;
-    }
-  }
-
-  public assign(lhs_: Ty, rhs_: Ty, span: Span): void {
-    const lhs = this.resolveIfPossible(lhs_);
-    const rhs = this.resolveIfPossible(rhs_);
-
-    if (lhs.kind === "var") {
-      this.constrainVar(lhs.index, rhs);
-      return;
-    }
-    if (rhs.kind === "var") {
-      this.constrainVar(rhs.index, lhs);
-      return;
-    }
-
-    if (lhs.kind === "error" || rhs.kind === "error") {
-      // This Is Fine 🐶🔥.
-      return;
-    }
-
-    if (rhs.kind === "never") {
-      // not sure whether this is entirely correct wrt inference.. it will work out, probably.
-      return;
-    }
-
-    switch (lhs.kind) {
-      case "string": {
-        if (rhs.kind === "string") return;
-        break;
-      }
-      case "int": {
-        if (rhs.kind === "int") return;
-        break;
-      }
-      case "i32": {
-        if (rhs.kind === "i32") return;
-        break;
-      }
-      case "bool": {
-        if (rhs.kind === "bool") return;
-        break;
-      }
-      case "tuple": {
-        if (rhs.kind === "tuple" && lhs.elems.length === rhs.elems.length) {
-          lhs.elems.forEach((lhs, i) => this.assign(lhs, rhs.elems[i], span));
-          return;
-        }
-        break;
-      }
-      case "fn": {
-        if (rhs.kind === "fn" && lhs.params.length === rhs.params.length) {
-          // swapping because of contravariance in the future maybe
-          lhs.params.forEach((lhs, i) => this.assign(rhs.params[i], lhs, span));
-
-          this.assign(lhs.returnTy, rhs.returnTy, span);
-
-          return;
-        }
-        break;
-      }
-      case "struct": {
-        if (rhs.kind === "struct" && lhs.itemId === rhs.itemId) {
-          return;
-        }
-        break;
-      }
-      case "rawptr": {
-        if (rhs.kind === "rawptr") {
-          this.assign(lhs.inner, rhs.inner, span);
-          return;
-        }
-        break;
-      }
-    }
-
-    this.error.emit(
-      new CompilerError(
-        `cannot assign ${printTy(rhs)} to ${printTy(lhs)}`,
-        span,
-      ),
-    );
-  }
-}
-
-type FuncCtx = {
-  cx: TypeckCtx;
-  infcx: InferContext;
-  localTys: Ty[];
-  loopState: LoopState[];
-  checkExpr: (expr: Expr<Resolved>) => Expr<Typecked>;
-};
-
-type LoopState = { hasBreak: boolean; loopId: LoopId };
-
-function typeOfValue(fcx: FuncCtx, res: Resolution, span: Span): Ty {
-  switch (res.kind) {
-    case "local": {
-      const idx = fcx.localTys.length - 1 - res.index;
-      return fcx.localTys[idx];
-    }
-    case "item": {
-      return typeOfItem(fcx.cx, res.id, [], span);
-    }
-    case "builtin":
-      return typeOfBuiltinValue(fcx, res.name, span);
-    case "tyParam":
-      return tyError(
-        fcx.cx,
-        new CompilerError(`type parameter cannot be used as value`, span),
-      );
-    case "error":
-      return tyErrorFrom(res);
-  }
-}
-
-function exprError(err: ErrorEmitted, span: Span): Expr<Typecked> {
-  return {
-    kind: "error",
-    err,
-    span,
-    ty: tyErrorFrom({ err }),
-  };
 }
 
 export function checkBody(
