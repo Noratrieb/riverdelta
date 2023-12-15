@@ -1,6 +1,11 @@
-//@check-pass
-type A[T] = T;
-
 function main() = ;
 
-function aaaaaaaaaaa(a: A[I32]) = ;
+function memcpy(dst: I32, src: I32, n: I32) = 
+    ___asm(
+        __locals(),
+        "local.get 2",
+        "local.get 1",
+        "local.get 0",
+        "memory.copy",
+    )
+;
