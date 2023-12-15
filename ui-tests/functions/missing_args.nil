@@ -1,0 +1,5 @@
+function main() = (
+    x();
+);
+
+function x(a: Int) = ;

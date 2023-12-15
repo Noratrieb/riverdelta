@@ -1,11 +1,4 @@
-//@check-pass
-type A[T] = struct { a: T };
-type B[T, U, V] = struct {
-  b: T,
-  d: V,
-};
-type C = ();
-
-function main() = ;
-
-function test(a: A[I32], b: B[I32, Int, I32], c: C) = ;
+function main() = (
+  let list = std.list.new();
+  std.list.push(list, 0);
+);

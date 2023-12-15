@@ -1,0 +1,21 @@
+type List[T] = struct {
+    ptr: Int,
+    len: Int,
+    cap: Int,
+};
+
+function new(): List[Int] = (
+    List { ptr: 0, len: 0, cap: 0 }
+);
+
+function push(list: List[Int], elem: Int) = (
+    growIfNeeded(list, 1);
+);
+
+// PRIVATE:
+
+function growIfNeeded(list: List[Int], elems: Int) = (
+    if (list.len + elems) < list.cap then (
+        let newMemory = std.rt.alloc.allocateItem(0_I32, 0_I32);
+    );
+);

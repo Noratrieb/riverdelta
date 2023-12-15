@@ -1328,6 +1328,7 @@ function checkCall(
           expr.span,
         ),
       );
+      return;
     }
 
     fcx.infcx.assign(param, args[i].ty, args[i].span);

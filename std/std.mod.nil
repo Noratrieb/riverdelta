@@ -1,4 +1,5 @@
 mod rt;
+mod list;
 
 function printlnI32(x: I32) = (
     printI32(x);
