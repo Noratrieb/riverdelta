@@ -1,8 +1,0 @@
-type A[T] = struct { a: T };
-type B[T] = struct {
-  b: T,
-};
-
-function main() = ;
-
-function test(b: B[I32]) = ;

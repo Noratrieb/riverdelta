@@ -1,6 +1,14 @@
+# nix
+.direnv
+
+# tyepscript
 /node_modules
 /target
 *.tsbuildinfo
+
+# riverdelta outputs/references
 /*-example.wat
 /out.wat
-.direnv
+
+# riverdelta test inputs
+/*.nil
