@@ -17,6 +17,7 @@ import {
   Typecked,
   mkDefaultFolder,
   superFoldExpr,
+  ExprStructLiteral,
 } from "../ast";
 import { CompilerError, ErrorEmitted, Span, unreachable } from "../error";
 import { printTy } from "../printer";
@@ -44,27 +45,6 @@ type FuncCtx = {
 };
 
 type LoopState = { hasBreak: boolean; loopId: LoopId };
-
-function typeOfValue(fcx: FuncCtx, res: Resolution, span: Span): Ty {
-  switch (res.kind) {
-    case "local": {
-      const idx = fcx.localTys.length - 1 - res.index;
-      return fcx.localTys[idx];
-    }
-    case "item": {
-      return typeOfItem(fcx.cx, res.id, [], span);
-    }
-    case "builtin":
-      return typeOfBuiltinValue(fcx, res.name, span);
-    case "tyParam":
-      return tyError(
-        fcx.cx,
-        new CompilerError(`type parameter cannot be used as value`, span),
-      );
-    case "error":
-      return tyErrorFrom(res);
-  }
-}
 
 export function typeOfBuiltinValue(
   fcx: FuncCtx,
@@ -257,7 +237,34 @@ export function checkBody(
         }
         case "ident":
         case "path": {
-          const ty = typeOfValue(fcx, expr.value.res, expr.value.span);
+          const { res, span } = expr.value;
+          let ty: Ty;
+          switch (res.kind) {
+            case "local": {
+              const idx = fcx.localTys.length - 1 - res.index;
+              ty = fcx.localTys[idx];
+              break;
+            }
+            case "item": {
+              ty = typeOfItem(fcx.cx, res.id, [], span);
+              break;
+            }
+            case "builtin":
+              ty = typeOfBuiltinValue(fcx, res.name, span);
+              break;
+            case "tyParam":
+              ty = tyError(
+                fcx.cx,
+                new CompilerError(
+                  `type parameter cannot be used as value`,
+                  span,
+                ),
+              );
+              break;
+            case "error":
+              ty = tyErrorFrom(res);
+              break;
+          }
 
           return { ...expr, ty };
         }
@@ -437,61 +444,7 @@ export function checkBody(
           };
         }
         case "structLiteral": {
-          const fields = expr.fields.map<StructLiteralField<Typecked>>(
-            ({ name, expr }) => ({ name, expr: this.expr(expr) }),
-          );
-
-          const structTy = typeOfValue(fcx, expr.name.res, expr.name.span);
-
-          if (structTy.kind !== "struct") {
-            const err: ErrorEmitted = emitError(
-              fcx.cx,
-              new CompilerError(
-                `struct literal is only allowed for struct types`,
-                expr.span,
-              ),
-            );
-            return exprError(err, expr.span);
-          }
-
-          const assignedFields = new Set();
-
-          fields.forEach(({ name, expr: field }, i) => {
-            const fieldIdx = structTy.fields_no_subst.findIndex(
-              (def) => def[0] === name.name,
-            );
-            if (fieldIdx == -1) {
-              emitError(
-                fcx.cx,
-                new CompilerError(
-                  `field ${name.name} doesn't exist on type ${expr.name.name}`,
-                  name.span,
-                ),
-              );
-            }
-            const fieldTy = structTy.fields_no_subst[fieldIdx];
-            infcx.assign(fieldTy[1], field.ty, field.span);
-            assignedFields.add(name.name);
-            fields[i].fieldIdx = fieldIdx;
-          });
-
-          const missing: string[] = [];
-          structTy.fields_no_subst.forEach(([name]) => {
-            if (!assignedFields.has(name)) {
-              missing.push(name);
-            }
-          });
-          if (missing.length > 0) {
-            emitError(
-              fcx.cx,
-              new CompilerError(
-                `missing fields in literal: ${missing.join(", ")}`,
-                expr.span,
-              ),
-            );
-          }
-
-          return { ...expr, fields, ty: structTy };
+          return checkStructLiteral(fcx, this, expr);
         }
         case "tupleLiteral": {
           const fields = expr.fields.map((expr) => this.expr(expr));
@@ -615,6 +568,81 @@ function checkInlineAsm(
   }
 
   return { kind: "asm", locals, ty: retTy, instructions, span: body.span };
+}
+
+function checkStructLiteral(
+  fcx: FuncCtx,
+  self: Folder<Resolved, Typecked>,
+  expr: ExprStructLiteral<Resolved> & Expr<Resolved>,
+) {
+  const fields = expr.fields.map<StructLiteralField<Typecked>>(
+    ({ name, expr }) => ({ name, expr: self.expr(expr) }),
+  );
+
+  const { name } = expr;
+
+  if (name.res.kind !== "item") {
+    return exprError(
+      emitError(
+        fcx.cx,
+        new CompilerError("struct literal must be struct type", name.span),
+      ),
+      name.span,
+    );
+  }
+
+  // TODO: Handle generic arugments
+  const structTy = typeOfItem(fcx.cx, name.res.id, [], name.span);
+
+  if (structTy.kind !== "struct") {
+    const err: ErrorEmitted = emitError(
+      fcx.cx,
+      new CompilerError(
+        `struct literal is only allowed for struct types`,
+        expr.span,
+      ),
+    );
+    return exprError(err, expr.span);
+  }
+
+  const assignedFields = new Set();
+
+  fields.forEach(({ name, expr: field }, i) => {
+    const fieldIdx = structTy.fields_no_subst.findIndex(
+      (def) => def[0] === name.name,
+    );
+    if (fieldIdx == -1) {
+      emitError(
+        fcx.cx,
+        new CompilerError(
+          `field ${name.name} doesn't exist on type ${name.name}`,
+          name.span,
+        ),
+      );
+    }
+    const fieldTy = structTy.fields_no_subst[fieldIdx];
+    fcx.infcx.assign(fieldTy[1], field.ty, field.span);
+    assignedFields.add(name.name);
+    fields[i].fieldIdx = fieldIdx;
+  });
+
+  const missing: string[] = [];
+  structTy.fields_no_subst.forEach(([name]) => {
+    if (!assignedFields.has(name)) {
+      missing.push(name);
+    }
+  });
+  if (missing.length > 0) {
+    emitError(
+      fcx.cx,
+      new CompilerError(
+        `missing fields in literal: ${missing.join(", ")}`,
+        expr.span,
+      ),
+    );
+  }
+
+  return { ...expr, fields, ty: structTy };
 }
 
 function checkLValue(cx: TypeckCtx, expr: Expr<Typecked>) {

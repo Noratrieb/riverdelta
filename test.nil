@@ -1,11 +1,8 @@
 function main() = ;
 
-function memcpy(dst: I32, src: I32, n: I32) = 
-    ___asm(
-        __locals(),
-        "local.get 2",
-        "local.get 1",
-        "local.get 0",
-        "memory.copy",
-    )
-;
+type A[T] = T;
+type B[T] = struct { a: T };
+
+//function ohno(x: A[A[A[I32]]]): I32 = x;
+
+function generic(a: B[I32]): B[I32] = a;

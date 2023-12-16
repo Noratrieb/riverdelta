@@ -28,8 +28,9 @@ function builtinAsTy(cx: TypeckCtx, name: string, span: Span): Ty {
  * Lowers the AST representation of a type into its resolved Ty representation.
  * Will also validate the type, for example ensuring that generic arguments match up.
  */
-// TODO: Cleanup, maybe get the ident switch into this function because typeOfItem is unused.
 export function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
+  // This function is called for every syntactical type in the program.
+  // Could be a function argument, but also a struct field or a local variable annotation.
   switch (type.kind) {
     case "ident": {
       const ident = type.value;
