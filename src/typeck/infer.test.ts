@@ -1,5 +1,5 @@
 import { Emitter, ErrorHandler, Span } from "../error";
-import { TY_INT, TY_STRING, TY_UNIT } from "../types";
+import { TYS } from "../types";
 import { InferContext } from "./infer";
 
 const SPAN: Span = Span.startOfFile({ content: "" });
@@ -16,7 +16,7 @@ it("should infer types across assignments", () => {
   infcx.assign(a, b, SPAN);
   infcx.assign(b, c, SPAN);
 
-  infcx.assign(a, TY_INT, SPAN);
+  infcx.assign(a, TYS.INT, SPAN);
 
   const aTy = infcx.resolveIfPossible(c);
   const bTy = infcx.resolveIfPossible(c);
@@ -36,11 +36,11 @@ it("should conflict assignments to resolvable type vars", () => {
   const b = infcx.newVar();
 
   infcx.assign(a, b, SPAN);
-  infcx.assign(b, TY_INT, SPAN);
+  infcx.assign(b, TYS.INT, SPAN);
 
   expect(errorLines).toEqual(0);
 
-  infcx.assign(a, TY_STRING, SPAN);
+  infcx.assign(a, TYS.STRING, SPAN);
 
   expect(errorLines).toBeGreaterThan(0);
 });
@@ -57,7 +57,7 @@ it("should not cycle", () => {
   const aType = infcx.resolveIfPossible(a);
   expect(aType.kind).toEqual("var");
 
-  infcx.assign(a, TY_UNIT, SPAN);
+  infcx.assign(a, TYS.UNIT, SPAN);
 
   const bType = infcx.resolveIfPossible(b);
   expect(bType.kind).toEqual("tuple");

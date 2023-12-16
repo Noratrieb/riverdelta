@@ -11,17 +11,14 @@ import {
 } from "../ast";
 import { GlobalContext } from "../context";
 import { CompilerError, ErrorEmitted, Span } from "../error";
-import { TY_I32, TY_INT, Ty, TyFn, tyIsUnit } from "../types";
+import { TYS, Ty, TyFn, tyIsUnit } from "../types";
 import { ComplexMap } from "../utils";
 import { emitError } from "./base";
 import { checkBody, exprError } from "./expr";
 import { InferContext } from "./infer";
 import { typeOfItem } from "./item";
 
-export function typeck(
-  gcx: GlobalContext,
-  ast: Pkg<Resolved>,
-): Pkg<Typecked> {
+export function typeck(gcx: GlobalContext, ast: Pkg<Resolved>): Pkg<Typecked> {
   const cx = {
     gcx,
     itemTys: new ComplexMap<ItemId, Ty | null>(),
@@ -152,7 +149,7 @@ export function typeck(
             );
             initChecked = exprError(err, init.span);
           } else {
-            const initTy = init.value.type === "I32" ? TY_I32 : TY_INT;
+            const initTy = init.value.type === "I32" ? TYS.I32 : TYS.INT;
             const infcx = new InferContext(cx.gcx.error);
             infcx.assign(ty, initTy, init.span);
             initChecked = { ...init, ty };

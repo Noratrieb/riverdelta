@@ -1,6 +1,6 @@
 import { ItemId } from "./ast";
 import { layoutOfStruct } from "./codegen";
-import { TY_I32, TY_INT, TyStruct } from "./types";
+import { TYS, TyStruct } from "./types";
 
 it("should compute struct layout correctly", () => {
   const ty: TyStruct = {
@@ -10,8 +10,8 @@ it("should compute struct layout correctly", () => {
     params: [],
     _name: "",
     fields_no_subst: [
-      ["uwu", TY_I32],
-      ["owo", TY_INT],
+      ["uwu", TYS.I32],
+      ["owo", TYS.INT],
     ],
   };
 
@@ -56,7 +56,7 @@ it("should compute single field struct layout correctly", () => {
     genericArgs: [],
     params: [],
     _name: "",
-    fields_no_subst: [["owo", TY_INT]],
+    fields_no_subst: [["owo", TYS.INT]],
   };
 
   const layout = layoutOfStruct(ty);

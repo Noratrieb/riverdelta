@@ -91,9 +91,7 @@ export const loadPkg: PkgLoader = (
   span: Span,
 ): DepPkg => {
   // If we've loaded the pkg already, great.
-  const existing = gcx.finalizedPkgs.find(
-    (pkg) => pkg.packageName === name,
-  );
+  const existing = gcx.finalizedPkgs.find((pkg) => pkg.packageName === name);
   if (existing) {
     return existing;
   }

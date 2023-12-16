@@ -98,12 +98,14 @@ export function tyIsUnit(ty: Ty): ty is TyUnit {
   return ty.kind === "tuple" && ty.elems.length === 0;
 }
 
-export const TY_UNIT: Ty = { kind: "tuple", elems: [] };
-export const TY_STRING: Ty = { kind: "string" };
-export const TY_BOOL: Ty = { kind: "bool" };
-export const TY_INT: Ty = { kind: "int" };
-export const TY_I32: Ty = { kind: "i32" };
-export const TY_NEVER: Ty = { kind: "never" };
+export const TYS = {
+  UNIT: { kind: "tuple", elems: [] } as Ty,
+  STRING: { kind: "string" } as Ty,
+  BOOL: { kind: "bool" } as Ty,
+  INT: { kind: "int" } as Ty,
+  I32: { kind: "i32" } as Ty,
+  NEVER: { kind: "never" } as Ty,
+} as const;
 
 export type TypeckResults = {
   main: Resolution | undefined;

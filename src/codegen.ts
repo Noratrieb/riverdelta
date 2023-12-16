@@ -20,7 +20,14 @@ import {
 import { GlobalContext } from "./context";
 import { unreachable } from "./error";
 import { printTy } from "./printer";
-import { Ty, TyFn, TyRawPtr, TyStruct, TyTuple, structFieldsSubstituted } from "./types";
+import {
+  Ty,
+  TyFn,
+  TyRawPtr,
+  TyStruct,
+  TyTuple,
+  structFieldsSubstituted,
+} from "./types";
 import { ComplexMap, encodeUtf8, unwrap } from "./utils";
 import * as wasm from "./wasm/defs";
 

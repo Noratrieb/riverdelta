@@ -63,10 +63,7 @@ function resolveModItem(
   return contents.get(name);
 }
 
-export function resolve(
-  gcx: GlobalContext,
-  ast: Pkg<Built>,
-): Pkg<Resolved> {
+export function resolve(gcx: GlobalContext, ast: Pkg<Built>): Pkg<Resolved> {
   const cx: Context = {
     ast,
     gcx,

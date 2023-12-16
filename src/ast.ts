@@ -508,7 +508,6 @@ export type LocalInfo = {
 
 // types
 
-
 // folders
 
 export type FoldFn<From, To> = (value: From) => To;

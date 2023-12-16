@@ -1,26 +1,22 @@
-import {
-  ItemId,
-  Resolved,
-  Type,
-} from "../ast";
+import { ItemId, Resolved, Type } from "../ast";
 import { CompilerError, Span } from "../error";
 import { printTy } from "../printer";
-import { TY_BOOL, TY_I32, TY_INT, TY_NEVER, TY_STRING, TY_UNIT, Ty, substituteTy } from "../types";
+import { TYS, Ty, substituteTy } from "../types";
 import { TypeckCtx, tyError, tyErrorFrom } from "./base";
 
 function builtinAsTy(cx: TypeckCtx, name: string, span: Span): Ty {
   switch (name) {
     case "String": {
-      return TY_STRING;
+      return TYS.STRING;
     }
     case "Int": {
-      return TY_INT;
+      return TYS.INT;
     }
     case "I32": {
-      return TY_I32;
+      return TYS.I32;
     }
     case "Bool": {
-      return TY_BOOL;
+      return TYS.BOOL;
     }
     default: {
       return tyError(cx, new CompilerError(`\`${name}\` is not a type`, span));
@@ -110,7 +106,7 @@ export function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
       return { kind: "rawptr", inner };
     }
     case "never": {
-      return TY_NEVER;
+      return TYS.NEVER;
     }
     case "error": {
       return tyErrorFrom(type);
@@ -180,7 +176,7 @@ export function typeOfItem(
       const args = item.params.map((arg) => lowerAstTy(cx, arg.type));
       const returnTy: Ty = item.returnType
         ? lowerAstTy(cx, item.returnType)
-        : TY_UNIT;
+        : TYS.UNIT;
 
       ty = { kind: "fn", params: args, returnTy };
       break;

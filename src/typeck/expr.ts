@@ -20,7 +20,7 @@ import {
 } from "../ast";
 import { CompilerError, ErrorEmitted, Span, unreachable } from "../error";
 import { printTy } from "../printer";
-import { TY_BOOL, TY_I32, TY_INT, TY_NEVER, TY_STRING, TY_UNIT, Ty, TyFn } from "../types";
+import { TYS, Ty, TyFn } from "../types";
 import { INSTRS, Instr, VALTYPES, ValType } from "../wasm/defs";
 import { TypeckCtx, emitError, mkTyFn, tyError, tyErrorFrom } from "./base";
 import { InferContext } from "./infer";
@@ -74,27 +74,27 @@ export function typeOfBuiltinValue(
   switch (name) {
     case "false":
     case "true":
-      return TY_BOOL;
+      return TYS.BOOL;
     case "print":
-      return mkTyFn([TY_STRING], TY_UNIT);
+      return mkTyFn([TYS.STRING], TYS.UNIT);
     case "trap":
-      return mkTyFn([], TY_NEVER);
+      return mkTyFn([], TYS.NEVER);
     case "__NULL":
       return { kind: "rawptr", inner: fcx.infcx.newVar() };
     case "__i32_store":
-      return mkTyFn([TY_I32, TY_I32], TY_UNIT);
+      return mkTyFn([TYS.I32, TYS.I32], TYS.UNIT);
     case "__i64_store":
-      return mkTyFn([TY_I32, TY_INT], TY_UNIT);
+      return mkTyFn([TYS.I32, TYS.INT], TYS.UNIT);
     case "__i32_load":
-      return mkTyFn([TY_I32], TY_I32);
+      return mkTyFn([TYS.I32], TYS.I32);
     case "__i64_load":
-      return mkTyFn([TY_I32], TY_INT);
+      return mkTyFn([TYS.I32], TYS.INT);
     case "__memory_size":
-      return mkTyFn([], TY_I32);
+      return mkTyFn([], TYS.I32);
     case "__memory_grow":
-      return mkTyFn([TY_I32], TY_I32);
+      return mkTyFn([TYS.I32], TYS.I32);
     case "__i32_extend_to_i64_u":
-      return mkTyFn([TY_I32], TY_INT);
+      return mkTyFn([TYS.I32], TYS.INT);
     default: {
       return tyError(
         fcx.cx,
@@ -134,7 +134,7 @@ export function checkBody(
     expr(expr): Expr<Typecked> {
       switch (expr.kind) {
         case "empty": {
-          return { ...expr, ty: TY_UNIT };
+          return { ...expr, ty: TYS.UNIT };
         }
         case "let": {
           const loweredBindingTy = expr.type && lowerAstTy(cx, expr.type);
@@ -160,7 +160,7 @@ export function checkBody(
             name: expr.name,
             type,
             rhs,
-            ty: TY_UNIT,
+            ty: TYS.UNIT,
             span: expr.span,
           };
         }
@@ -215,7 +215,7 @@ export function checkBody(
             kind: "assign",
             lhs,
             rhs,
-            ty: TY_UNIT,
+            ty: TYS.UNIT,
           };
         }
         case "block": {
@@ -223,7 +223,7 @@ export function checkBody(
 
           const exprs = expr.exprs.map((expr) => this.expr(expr));
 
-          const ty = exprs.length > 0 ? exprs[exprs.length - 1].ty : TY_UNIT;
+          const ty = exprs.length > 0 ? exprs[exprs.length - 1].ty : TYS.UNIT;
 
           fcx.localTys.length = prevLocalTysLen;
 
@@ -237,16 +237,16 @@ export function checkBody(
           let ty;
           switch (expr.value.kind) {
             case "str": {
-              ty = TY_STRING;
+              ty = TYS.STRING;
               break;
             }
             case "int": {
               switch (expr.value.type) {
                 case "Int":
-                  ty = TY_INT;
+                  ty = TYS.INT;
                   break;
                 case "I32":
-                  ty = TY_I32;
+                  ty = TYS.I32;
                   break;
               }
               break;
@@ -387,15 +387,15 @@ export function checkBody(
           const then = this.expr(expr.then);
           const elsePart = expr.else && this.expr(expr.else);
 
-          infcx.assign(TY_BOOL, cond.ty, cond.span);
+          infcx.assign(TYS.BOOL, cond.ty, cond.span);
 
           let ty: Ty;
           if (elsePart) {
             infcx.assign(then.ty, elsePart.ty, elsePart.span);
             ty = then.ty!;
           } else {
-            infcx.assign(TY_UNIT, then.ty, then.span);
-            ty = TY_UNIT;
+            infcx.assign(TYS.UNIT, then.ty, then.span);
+            ty = TYS.UNIT;
           }
 
           return { ...expr, cond, then, else: elsePart, ty };
@@ -407,10 +407,10 @@ export function checkBody(
           });
 
           const body = this.expr(expr.body);
-          infcx.assign(TY_UNIT, body.ty, body.span);
+          infcx.assign(TYS.UNIT, body.ty, body.span);
 
           const hadBreak = fcx.loopState.pop();
-          const ty = hadBreak ? TY_UNIT : TY_NEVER;
+          const ty = hadBreak ? TYS.UNIT : TYS.NEVER;
 
           return {
             ...expr,
@@ -432,7 +432,7 @@ export function checkBody(
 
           return {
             ...expr,
-            ty: TY_NEVER,
+            ty: TYS.NEVER,
             target,
           };
         }
@@ -648,39 +648,39 @@ function checkBinary(
 
   if (COMPARISON_KINDS.includes(expr.binaryKind)) {
     if (lhsTy.kind === "int" && rhsTy.kind === "int") {
-      return { ...expr, lhs, rhs, ty: TY_BOOL };
+      return { ...expr, lhs, rhs, ty: TYS.BOOL };
     }
 
     if (lhsTy.kind === "i32" && rhsTy.kind === "i32") {
-      return { ...expr, lhs, rhs, ty: TY_BOOL };
+      return { ...expr, lhs, rhs, ty: TYS.BOOL };
     }
 
     if (lhsTy.kind === "string" && rhsTy.kind === "string") {
-      return { ...expr, lhs, rhs, ty: TY_BOOL };
+      return { ...expr, lhs, rhs, ty: TYS.BOOL };
     }
 
     if (lhsTy.kind === "rawptr" && rhsTy.kind === "rawptr") {
       fcx.infcx.assign(lhsTy.inner, rhsTy.inner, expr.span);
-      return { ...expr, lhs, rhs, ty: TY_BOOL };
+      return { ...expr, lhs, rhs, ty: TYS.BOOL };
     }
 
     if (EQUALITY_KINDS.includes(expr.binaryKind)) {
       if (lhsTy.kind === "bool" && rhsTy.kind === "bool") {
-        return { ...expr, lhs, rhs, ty: TY_BOOL };
+        return { ...expr, lhs, rhs, ty: TYS.BOOL };
       }
     }
   }
 
   if (lhsTy.kind === "int" && rhsTy.kind === "int") {
-    return { ...expr, lhs, rhs, ty: TY_INT };
+    return { ...expr, lhs, rhs, ty: TYS.INT };
   }
   if (lhsTy.kind === "i32" && rhsTy.kind === "i32") {
-    return { ...expr, lhs, rhs, ty: TY_I32 };
+    return { ...expr, lhs, rhs, ty: TYS.I32 };
   }
 
   if (LOGICAL_KINDS.includes(expr.binaryKind)) {
     if (lhsTy.kind === "bool" && rhsTy.kind === "bool") {
-      return { ...expr, lhs, rhs, ty: TY_BOOL };
+      return { ...expr, lhs, rhs, ty: TYS.BOOL };
     }
   }
 
@@ -734,7 +734,7 @@ function checkCall(
       const args = expr.args.map((arg) => fcx.checkExpr(arg));
       const ret: Expr<Typecked> = {
         ...expr,
-        lhs: { ...expr.lhs, ty: TY_UNIT },
+        lhs: { ...expr.lhs, ty: TYS.UNIT },
         args,
         ty,
       };
