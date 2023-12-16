@@ -1,5 +1,6 @@
-import { ItemId, TY_I32, TY_INT, TyStruct } from "./ast";
+import { ItemId } from "./ast";
 import { layoutOfStruct } from "./codegen";
+import { TY_I32, TY_INT, TyStruct } from "./types";
 
 it("should compute struct layout correctly", () => {
   const ty: TyStruct = {

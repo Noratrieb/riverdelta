@@ -13,14 +13,6 @@ import {
   Resolution,
   Resolved,
   StructLiteralField,
-  TY_BOOL,
-  TY_I32,
-  TY_INT,
-  TY_NEVER,
-  TY_STRING,
-  TY_UNIT,
-  Ty,
-  TyFn,
   Type,
   Typecked,
   mkDefaultFolder,
@@ -28,6 +20,7 @@ import {
 } from "../ast";
 import { CompilerError, ErrorEmitted, Span, unreachable } from "../error";
 import { printTy } from "../printer";
+import { TY_BOOL, TY_I32, TY_INT, TY_NEVER, TY_STRING, TY_UNIT, Ty, TyFn } from "../types";
 import { INSTRS, Instr, VALTYPES, ValType } from "../wasm/defs";
 import { TypeckCtx, emitError, mkTyFn, tyError, tyErrorFrom } from "./base";
 import { InferContext } from "./infer";

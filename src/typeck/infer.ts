@@ -1,6 +1,6 @@
-import { Ty } from "../ast";
 import { CompilerError, ErrorHandler, Span } from "../error";
 import { printTy } from "../printer";
+import { Ty } from "../types";
 
 type TyVarRes =
   | {

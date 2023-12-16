@@ -1,18 +1,11 @@
 import {
   ItemId,
   Resolved,
-  Ty,
-  TY_BOOL,
-  TY_I32,
-  TY_INT,
-  TY_NEVER,
-  TY_STRING,
-  TY_UNIT,
   Type,
-  substituteTy,
 } from "../ast";
 import { CompilerError, Span } from "../error";
 import { printTy } from "../printer";
+import { TY_BOOL, TY_I32, TY_INT, TY_NEVER, TY_STRING, TY_UNIT, Ty, substituteTy } from "../types";
 import { TypeckCtx, tyError, tyErrorFrom } from "./base";
 
 function builtinAsTy(cx: TypeckCtx, name: string, span: Span): Ty {

@@ -5,17 +5,13 @@ import {
   Item,
   ItemId,
   Resolved,
-  TY_I32,
-  TY_INT,
-  Ty,
-  TyFn,
   Typecked,
   foldAst,
   mkDefaultFolder,
-  tyIsUnit,
 } from "../ast";
 import { GlobalContext } from "../context";
 import { CompilerError, ErrorEmitted, Span } from "../error";
+import { TY_I32, TY_INT, Ty, TyFn, tyIsUnit } from "../types";
 import { ComplexMap } from "../utils";
 import { emitError } from "./base";
 import { checkBody, exprError } from "./expr";

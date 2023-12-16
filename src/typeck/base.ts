@@ -1,6 +1,7 @@
-import { ItemId, Pkg, Resolved, Ty } from "../ast";
+import { ItemId, Pkg, Resolved } from "../ast";
 import { GlobalContext } from "../context";
 import { CompilerError, ErrorEmitted } from "../error";
+import { Ty } from "../types";
 import { ComplexMap } from "../utils";
 
 export type TypeckCtx = {

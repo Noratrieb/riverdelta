@@ -9,12 +9,10 @@ import {
   ItemMod,
   Resolution,
   StringLiteral,
-  Ty,
   Type,
   ItemType,
-  tyIsUnit,
-  substituteTy,
 } from "./ast";
+import { Ty, substituteTy, tyIsUnit } from "./types";
 
 export function printAst(ast: Pkg<AnyPhase>): string {
   return ast.rootItems.map(printItem).join("\n");
