@@ -1,21 +1,48 @@
 type List[T] = struct {
-    ptr: Int,
-    len: Int,
-    cap: Int,
+    ptr: I32,
+    len: I32,
+    cap: I32,
 };
 
 function new(): List[Int] = (
-    List { ptr: 0, len: 0, cap: 0 }
+    List { ptr: 0_I32, len: 0_I32, cap: 0_I32 }
 );
 
 function push(list: List[Int], elem: Int) = (
-    growIfNeeded(list, 1);
+    growIfNeeded(list, 1_I32);
+    let addr = list.ptr + (SIZEOF * list.len);
+    __i64_store(addr, elem);
+    list.len = list.len + 1_I32;
+);
+
+function debugPrint(list: List[Int]) = (
+    let i = 0_I32;
+    print("[");
+    loop (
+        if i >= list.len then (
+            break;
+        );
+        let elem = __i64_load(list.ptr + (i * SIZEOF));
+        std.printInt(elem);
+        if (i + 1_I32) < list.len then print(", ");
+
+        i = i + 1_I32;
+    );
+    std.println("]");
 );
 
 // PRIVATE:
 
-function growIfNeeded(list: List[Int], elems: Int) = (
+global SIZEOF: I32 = 8_I32;
+global ALIGNOF: I32 = 8_I32;
+
+function growIfNeeded(list: List[Int], elems: I32) = (
     if (list.len + elems) < list.cap then (
-        let newMemory = std.rt.alloc.allocateItem(0_I32, 0_I32);
+        let newMemory = std.rt.alloc.allocate(SIZEOF * list.cap * 2_I32, ALIGNOF);
+        let oldMemory = list.ptr;
+        let amount = SIZEOF * list.len;
+        std.rt.memcpy(newMemory, oldMemory, amount);
+
+        if list.cap > 0_I32 then std.rt.alloc.deallocate(list.ptr, list.cap * SIZEOF);
     );
 );

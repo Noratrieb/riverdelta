@@ -286,6 +286,10 @@ export function checkBody(
           let ty: Ty;
           let fieldIdx: number | undefined;
           switch (lhs.ty.kind) {
+            case "error": {
+              ty = tyErrorFrom(lhs.ty);
+              break;
+            }
             case "tuple": {
               const { elems } = lhs.ty;
               if (typeof field.value === "number") {
@@ -777,6 +781,11 @@ function checkCall(
   const args = expr.args.map((arg) => fcx.checkExpr(arg));
 
   const lhsTy = lhs.ty;
+
+  if (lhsTy.kind === "error") {
+    return { ...expr, lhs, args, ty: lhsTy };
+  }
+
   if (lhsTy.kind !== "fn") {
     const ty = tyError(
       fcx.cx,

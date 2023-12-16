@@ -75,7 +75,7 @@ it("should compute single field struct layout correctly", () => {
           ],
         },
       ],
-      "size": 8,
+      "size": 16,
     }
   `);
 });

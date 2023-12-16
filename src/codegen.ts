@@ -42,8 +42,8 @@ const WASM_PAGE = 65536;
 
 const DUMMY_IDX = 9999999;
 
-const ALLOCATE_ITEM: string[] = ["std", "rt", "alloc", "allocateItem"];
-const DEALLOCATE_ITEM: string[] = ["std", "rt", "alloc", "deallocateItem"];
+const ALLOCATE: string[] = ["std", "rt", "alloc", "allocate"];
+const DEALLOCATE: string[] = ["std", "rt", "alloc", "deallocate"];
 
 type RelocationKind =
   | {
@@ -118,7 +118,7 @@ function appendData(cx: Context, newData: Uint8Array): number {
   }
 }
 
-const KNOWN_DEF_PATHS = [ALLOCATE_ITEM, DEALLOCATE_ITEM];
+const KNOWN_DEF_PATHS = [ALLOCATE, DEALLOCATE];
 
 function getKnownDefPaths(pkgs: Pkg<Typecked>[]): ComplexMap<string[], ItemId> {
   const knows = new ComplexMap<string[], ItemId>();
@@ -384,7 +384,7 @@ function lowerFunc(cx: Context, func: ItemFunction<Typecked>) {
     fcx.wasm.body = body.instructions;
   } else {
     lowerExpr(fcx, wasmFunc.body, body);
-    paramLocations.forEach((local) => {     
+    paramLocations.forEach((local) => {
       const refcount = needsRefcount(local.ty);
       if (refcount !== undefined) {
         // TODO: correctly deal with tuples
@@ -814,7 +814,10 @@ function lowerExpr(
       const { res } = expr.lhs.value;
       if (res.kind === "builtin") {
         const assertArgs = (n: number) => {
-          if (expr.args.length !== n) unreachable("nope");
+          if (expr.args.length !== n)
+            unreachable(
+              `wrong amount of arguments for ${res.name}: expected ${n} found ${expr.args.length}`,
+            );
         };
         switch (res.name) {
           case "trap": {
@@ -842,7 +845,7 @@ function lowerExpr(
             break exprKind;
           }
           case "__i64_store": {
-            assertArgs(3);
+            assertArgs(2);
             lowerExpr(fcx, instrs, expr.args[0]);
             lowerExpr(fcx, instrs, expr.args[1]);
             instrs.push({ kind: "i64.store", imm: {} });
@@ -1053,7 +1056,7 @@ function lowerExpr(
       instrs.push({ kind: "i32.const", imm: BigInt(layout.size) });
       instrs.push({ kind: "i32.const", imm: BigInt(layout.align) });
       const allocate: wasm.Instr = { kind: "call", func: DUMMY_IDX };
-      const allocateItemId = fcx.cx.knownDefPaths.get(ALLOCATE_ITEM);
+      const allocateItemId = fcx.cx.knownDefPaths.get(ALLOCATE);
       if (!allocateItemId) {
         unreachable("std.rt.allocateItem not found");
       }
@@ -1384,9 +1387,6 @@ export function layoutOfStruct(ty_: TyStruct | TyRawPtr): StructLayout {
     return value;
   });
 
-  // we ignore the refcount for struct size.
-  offset -= 4;
-
   if (align === 8 && offset % 8 !== 0) {
     offset += 4;
   }
@@ -1508,7 +1508,7 @@ function subRefcount(
   instrs: wasm.Instr[],
   kind: StructLayout | "string",
 ) {
-  const deallocateItemId = fcx.cx.knownDefPaths.get(DEALLOCATE_ITEM);
+  const deallocateItemId = fcx.cx.knownDefPaths.get(DEALLOCATE);
   if (!deallocateItemId) {
     unreachable("std.rt.deallocateItem not found");
   }
