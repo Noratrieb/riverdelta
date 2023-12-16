@@ -31,7 +31,7 @@ export function typeck(gcx: GlobalContext, ast: Pkg<Resolved>): Pkg<Typecked> {
       switch (item.kind) {
         case "function": {
           // Functions do not have generic arguments right now.
-          const fnTy = typeOfItem(cx, item.id, [], item.span) as TyFn;
+          const fnTy = typeOfItem(cx, item.id, item.span) as TyFn;
           const body = checkBody(cx, ast, item.body, fnTy);
 
           return {
@@ -43,7 +43,7 @@ export function typeck(gcx: GlobalContext, ast: Pkg<Resolved>): Pkg<Typecked> {
           };
         }
         case "import": {
-          const fnTy = typeOfItem(cx, item.id, [], item.span) as TyFn;
+          const fnTy = typeOfItem(cx, item.id, item.span) as TyFn;
 
           fnTy.params.forEach((param, i) => {
             switch (param.kind) {
@@ -87,7 +87,7 @@ export function typeck(gcx: GlobalContext, ast: Pkg<Resolved>): Pkg<Typecked> {
           };
         }
         case "type": {
-          const ty = typeOfItem(cx, item.id, [], item.span);
+          const ty = typeOfItem(cx, item.id, item.span);
 
           switch (item.type.kind) {
             case "struct": {
@@ -135,7 +135,7 @@ export function typeck(gcx: GlobalContext, ast: Pkg<Resolved>): Pkg<Typecked> {
           return item;
         }
         case "global": {
-          const ty = typeOfItem(cx, item.id, [], item.span);
+          const ty = typeOfItem(cx, item.id, item.span);
           const { init } = item;
 
           let initChecked: Expr<Typecked>;

@@ -173,7 +173,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
       {
         kind: "type",
         name: name.ident,
-        generics,
+        genericParams: generics,
         type,
         span: name.span,
         id: ItemId.dummy(),
@@ -694,7 +694,7 @@ function parseType(t: State): [State, Type<Parsed>] {
         t,
         {
           kind: "ident",
-          generics,
+          genericArgs: generics,
           value: { name: tok.ident, span },
           span,
         },

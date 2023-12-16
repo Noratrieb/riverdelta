@@ -1,7 +1,7 @@
-import { ItemId, Resolved, Type } from "../ast";
+import { Ident, Item, ItemId, Resolved, Type, Typecked } from "../ast";
 import { CompilerError, Span } from "../error";
 import { printTy } from "../printer";
-import { TYS, Ty, substituteTy } from "../types";
+import { TYS, Ty, createIdentityGenericArgs, substituteTy } from "../types";
 import { TypeckCtx, tyError, tyErrorFrom } from "./base";
 
 function builtinAsTy(cx: TypeckCtx, name: string, span: Span): Ty {
@@ -36,58 +36,77 @@ export function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
       const ident = type.value;
       const res = ident.res;
 
-      const generics = type.generics.map((type) => lowerAstTy(cx, type));
+      const genericArgs = type.genericArgs.map((type) => lowerAstTy(cx, type));
       let ty: Ty;
+      let generics: Generics;
+      // We only actually substitute anything when "peeking" behind a type into its
+      // internals, where the params are used. This is only the case for aliases today.
+      let isAlias = false;
       switch (res.kind) {
         case "local": {
           throw new Error("Item type cannot refer to local variable");
         }
         case "item": {
-          ty = typeOfItem(cx, res.id, generics, type.span);
+          ty = typeOfItem(cx, res.id, type.span);
+          const item = cx.gcx.findItem<Resolved>(res.id, cx.ast);
+          if (item.kind === "type" && item.type.kind === "alias") {
+            isAlias = true;
+          }
+          generics = itemGenerics(item);
           break;
         }
         case "builtin": {
           ty = builtinAsTy(cx, res.name, ident.span);
+          generics = { kind: "none" };
           break;
         }
         case "tyParam": {
           ty = { kind: "param", idx: res.index, name: res.name };
+          generics = { kind: "none" };
           break;
         }
         case "error": {
-          ty = tyErrorFrom(res);
-          break;
+          // Skip generics validation, it's fine!
+          return tyErrorFrom(res);
         }
       }
 
-      if (ty.kind === "struct" || ty.kind === "alias") {
-        if (generics.length === ty.params.length) {
-          if (ty.kind === "alias") {
-            return substituteTy(ty.genericArgs, ty.actual);
-          }
-          return { ...ty, genericArgs: generics };
-        } else {
-          return tyError(
-            cx,
-            new CompilerError(
-              `expected ${ty.params.length} generic arguments, found ${generics.length}`,
-              type.span,
-            ),
-          );
-        }
-      } else if (ty.kind !== "error") {
-        if (generics.length > 0) {
-          return tyError(
-            cx,
-            new CompilerError(
-              `type ${printTy(ty)} does not take generic arguments`,
-              type.span,
-            ),
-          );
-        }
+      if (
+        (generics.kind === "none" || generics.params.length === 0) &&
+        genericArgs.length > 0
+      ) {
+        return tyError(
+          cx,
+          new CompilerError(
+            `type ${printTy(ty)} does not take any generic arguments but ${
+              genericArgs.length
+            } were passed`,
+            type.span,
+          ),
+        );
       }
-
-      return ty;
+      if (
+        generics.kind === "some" &&
+        generics.params.length > genericArgs.length
+      ) {
+        return tyError(
+          cx,
+          new CompilerError(
+            `missing generics for type ${printTy(ty)}, expected ${
+              generics.params.length
+            }, but only ${genericArgs.length} were passed`,
+            type.span,
+          ),
+        );
+      }
+      if (isAlias) {
+        return substituteTy(genericArgs, ty);
+      } else {
+        if (ty.kind === "struct") {
+          return { ...ty, genericArgs };
+        }
+        return ty;
+      }
     }
     case "tuple": {
       return {
@@ -115,12 +134,31 @@ export function lowerAstTy(cx: TypeckCtx, type: Type<Resolved>): Ty {
   }
 }
 
-export function typeOfItem(
-  cx: TypeckCtx,
-  itemId: ItemId,
-  genericArgs: Ty[],
-  cause: Span,
-): Ty {
+type Generics =
+  | {
+      kind: "none";
+    }
+  | {
+      kind: "some";
+      params: Ident[];
+    };
+
+function itemGenerics(item: Item<Typecked> | Item<Resolved>): Generics {
+  const none: Generics = { kind: "none" };
+  switch (item.kind) {
+    case "function":
+    case "extern":
+    case "error":
+    case "global":
+    case "mod":
+    case "import":
+      return none;
+    case "type":
+      return { kind: "some", params: item.genericParams };
+  }
+}
+
+export function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
   if (itemId.pkgId !== cx.ast.id) {
     // Look up foreign items in the foreign pkgs, we don't need to lower those
     // ourselves.
@@ -131,7 +169,7 @@ export function typeOfItem(
       case "import":
       case "type":
       case "global":
-        return substituteTy(genericArgs, item.ty!);
+        return item.ty!;
       case "mod": {
         return tyError(
           cx,
@@ -187,14 +225,7 @@ export function typeOfItem(
         case "struct": {
           ty = {
             kind: "struct",
-            genericArgs: item.generics.map(
-              ({ name }, idx): Ty => ({
-                kind: "param",
-                name,
-                idx,
-              }),
-            ),
-            params: item.generics.map((ident) => ident.name),
+            genericArgs: createIdentityGenericArgs(item.genericParams),
             itemId: item.id,
             _name: item.name,
             fields_no_subst: [
@@ -214,51 +245,40 @@ export function typeOfItem(
         case "alias": {
           const actual = lowerAstTy(cx, item.type.type);
 
-          ty = {
-            kind: "alias",
-            actual,
-            genericArgs: item.generics.map(
-              ({ name }, idx): Ty => ({
-                kind: "param",
-                name,
-                idx,
-              }),
-            ),
-            params: item.generics.map((ident) => ident.name),
-          };
+          ty = actual;
           break;
         }
       }
       break;
     }
     case "mod": {
-      return tyError(
+      ty = tyError(
         cx,
         new CompilerError(
           `module ${item.name} cannot be used as a type or value`,
           cause,
         ),
       );
+      break;
     }
     case "extern": {
-      return tyError(
+      ty = tyError(
         cx,
         new CompilerError(
           `extern declaration ${item.name} cannot be used as a type or value`,
           cause,
         ),
       );
+      break;
     }
     case "global": {
       ty = lowerAstTy(cx, item.type);
       break;
     }
     case "error": {
-      return tyErrorFrom(item);
+      ty = tyErrorFrom(item);
     }
   }
-
-  ty = substituteTy(genericArgs, ty);
 
   cx.itemTys.set(item.id, ty);
   return ty;

@@ -65,9 +65,9 @@ function printFunction(func: ItemFunction<AnyPhase>): string {
 
 function printTypeDef(type: ItemType<AnyPhase>): string {
   const head = `type ${type.name}${
-    type.generics.length === 0
+    type.genericParams.length === 0
       ? ""
-      : `[${type.generics.map((ident) => ident.name).join(", ")}]`
+      : `[${type.genericParams.map((ident) => ident.name).join(", ")}]`
   } = `;
   switch (type.type.kind) {
     case "struct": {
@@ -284,8 +284,6 @@ export function printTy(ty: Ty): string {
       return "!";
     case "param":
       return ty.name;
-    case "alias":
-      return printTy(substituteTy(ty.genericArgs, ty.actual));
     case "error":
       return "<ERROR>";
   }

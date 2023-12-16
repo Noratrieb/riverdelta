@@ -225,7 +225,7 @@ function resolveModule(
           };
         }
         case "type": {
-          tyParamScopes = item.generics.map(({ name }) => name);
+          tyParamScopes = item.genericParams.map(({ name }) => name);
 
           const type = { ...superFoldItem(item, this) };
 

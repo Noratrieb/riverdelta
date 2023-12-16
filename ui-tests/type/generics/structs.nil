@@ -1,3 +1,4 @@
+//@check-pass
 type A[T] = struct { a: T };
 type B[T, U, V] = struct {
   b: T,
@@ -6,3 +7,5 @@ type B[T, U, V] = struct {
 type C = ();
 
 function test(a: A[I32], b: B[I32, Int, I32], c: C) = ;
+
+function main() = ;

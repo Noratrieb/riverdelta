@@ -141,7 +141,7 @@ export type FunctionArg<P extends Phase> = {
 
 export type ItemKindType<P extends Phase> = {
   kind: "type";
-  generics: Ident[];
+  genericParams: Ident[];
   type: TypeDefKind<P>;
   ty?: Ty;
 };
@@ -417,7 +417,7 @@ export const UNARY_KINDS: UnaryKind[] = ["!", "-"];
 export type TypeKind<P extends Phase> =
   | {
       kind: "ident";
-      generics: Type<P>[];
+      genericArgs: Type<P>[];
       value: IdentWithRes<P>;
     }
   | {
@@ -793,7 +793,7 @@ export function superFoldType<From extends Phase, To extends Phase>(
     case "ident": {
       return {
         kind: "ident",
-        generics: type.generics.map((type) => folder.type(type)),
+        genericArgs: type.genericArgs.map((type) => folder.type(type)),
         value: folder.ident(type.value),
         span,
       };

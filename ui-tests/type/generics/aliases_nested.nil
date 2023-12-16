@@ -1,0 +1,6 @@
+//@check-pass
+type A[T] = T;
+
+function ohno(x: A[A[A[I32]]]): I32 = x;
+
+function main() = ;

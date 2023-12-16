@@ -1,4 +1,4 @@
-import { ItemId, Resolution } from "./ast";
+import { Ident, ItemId, Resolution } from "./ast";
 import { ErrorEmitted } from "./error";
 
 export type TyString = {
@@ -41,7 +41,6 @@ export type TyVar = {
 export type TyStruct = {
   kind: "struct";
   itemId: ItemId;
-  params: string[];
   genericArgs: Ty[];
   _name: string;
   fields_no_subst: [string, Ty][];
@@ -67,13 +66,6 @@ export type TyParam = {
   name: string;
 };
 
-export type TyAlias = {
-  kind: "alias";
-  actual: Ty;
-  genericArgs: Ty[];
-  params: string[];
-};
-
 export type TyError = {
   kind: "error";
   err: ErrorEmitted;
@@ -91,7 +83,6 @@ export type Ty =
   | TyRawPtr
   | TyNever
   | TyParam
-  | TyAlias
   | TyError;
 
 export function tyIsUnit(ty: Ty): ty is TyUnit {
@@ -140,7 +131,6 @@ export function substituteTy(genericArgs: Ty[], ty: Ty): Ty {
         params: ty.params.map(subst),
       };
     case "struct":
-    case "alias":
       return {
         ...ty,
         genericArgs: ty.genericArgs.map(subst),
@@ -157,4 +147,14 @@ export function substituteTy(genericArgs: Ty[], ty: Ty): Ty {
     case "error":
       return ty;
   }
+}
+
+export function createIdentityGenericArgs(params: Ident[]): Ty[] {
+  return params.map(
+    (name, idx): Ty => ({
+      kind: "param",
+      name: name.name,
+      idx,
+    }),
+  );
 }

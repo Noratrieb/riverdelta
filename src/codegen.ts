@@ -384,8 +384,7 @@ function lowerFunc(cx: Context, func: ItemFunction<Typecked>) {
     fcx.wasm.body = body.instructions;
   } else {
     lowerExpr(fcx, wasmFunc.body, body);
-
-    paramLocations.forEach((local) => {
+    paramLocations.forEach((local) => {     
       const refcount = needsRefcount(local.ty);
       if (refcount !== undefined) {
         // TODO: correctly deal with tuples
@@ -1264,7 +1263,6 @@ function argRetAbi(param: Ty): ArgRetAbi {
       return [];
     case "var":
     case "param":
-    case "alias":
     case "error":
       codegenUnreachableTy(param);
   }
@@ -1320,7 +1318,6 @@ function wasmTypeForBody(ty: Ty): wasm.ValType[] {
       return [];
     case "var":
     case "param":
-    case "alias":
     case "error":
       codegenUnreachableTy(ty);
   }

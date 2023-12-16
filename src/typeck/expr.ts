@@ -10,7 +10,6 @@ import {
   Folder,
   LOGICAL_KINDS,
   LoopId,
-  Resolution,
   Resolved,
   StructLiteralField,
   Type,
@@ -91,7 +90,6 @@ export function checkBody(
   fnTy: TyFn,
 ): Expr<Typecked> {
   const infcx = new InferContext(cx.gcx.error);
-
   const fcx: FuncCtx = {
     cx,
     infcx,
@@ -246,7 +244,8 @@ export function checkBody(
               break;
             }
             case "item": {
-              ty = typeOfItem(fcx.cx, res.id, [], span);
+              // TODO: what do we do about generis here?
+              ty = typeOfItem(fcx.cx, res.id, span);
               break;
             }
             case "builtin":
@@ -592,7 +591,7 @@ function checkStructLiteral(
   }
 
   // TODO: Handle generic arugments
-  const structTy = typeOfItem(fcx.cx, name.res.id, [], name.span);
+  const structTy = typeOfItem(fcx.cx, name.res.id, name.span);
 
   if (structTy.kind !== "struct") {
     const err: ErrorEmitted = emitError(

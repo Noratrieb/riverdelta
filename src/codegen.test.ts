@@ -7,7 +7,6 @@ it("should compute struct layout correctly", () => {
     kind: "struct",
     itemId: ItemId.dummy(),
     genericArgs: [],
-    params: [],
     _name: "",
     fields_no_subst: [
       ["uwu", TYS.I32],
@@ -54,7 +53,6 @@ it("should compute single field struct layout correctly", () => {
     kind: "struct",
     itemId: ItemId.dummy(),
     genericArgs: [],
-    params: [],
     _name: "",
     fields_no_subst: [["owo", TYS.INT]],
   };

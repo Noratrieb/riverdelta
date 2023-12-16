@@ -21,3 +21,5 @@ function test(
     c2: C[],
     c3: C[I32],
 ) = ;
+
+function main() = ;
