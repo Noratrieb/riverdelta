@@ -29,7 +29,7 @@ function allocate(size: I32, align: I32): I32 = (
     alignedPtr
 );
 
-function deallocate(ptr: I32, size: I32) = (
+function deallocate(_ptr: I32, _size: I32) = (
     std.println("uwu deawwocate :3");
 );
 

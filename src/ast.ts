@@ -134,9 +134,8 @@ export type ItemKindFunction<P extends Phase> = {
 };
 
 export type FunctionArg<P extends Phase> = {
-  name: string;
+  ident: Ident;
   type: Type<P>;
-  span: Span;
 };
 
 export type ItemKindType<P extends Phase> = {
@@ -449,6 +448,8 @@ export type Resolution =
        * ```
        * When traversing resolutions, a stack of locals has to be kept.
        * It's similar to a De Bruijn index.
+       * 
+       * You generally want to index the stack as stack[stack.len - 1 - res.idx].
        */
       index: number;
     }
@@ -577,10 +578,9 @@ export function superFoldItem<From extends Phase, To extends Phase>(
 ): Item<To> {
   switch (item.kind) {
     case "function": {
-      const args = item.params.map(({ name, type, span }) => ({
-        name,
+      const args = item.params.map(({ ident, type }) => ({
+        ident,
         type: folder.type(type),
-        span,
       }));
 
       return {
@@ -620,10 +620,9 @@ export function superFoldItem<From extends Phase, To extends Phase>(
       };
     }
     case "import": {
-      const args = item.params.map(({ name, type, span }) => ({
-        name,
+      const args = item.params.map(({ ident, type }) => ({
+        ident,
         type: folder.type(type),
-        span,
       }));
       return {
         ...item,

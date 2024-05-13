@@ -1,6 +1,6 @@
 //@check-pass
 
-function dropping(a: I32) =
+function dropping(_a: I32) =
     ___asm(
         __locals(),
         "local.get 0",

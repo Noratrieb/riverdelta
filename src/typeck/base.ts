@@ -32,5 +32,5 @@ export function tyErrorFrom(prev: { err: ErrorEmitted }): Ty {
 }
 
 export function emitError(cx: TypeckCtx, err: CompilerError): ErrorEmitted {
-  return cx.gcx.error.emit(err);
+  return cx.gcx.error.emitError(err);
 }

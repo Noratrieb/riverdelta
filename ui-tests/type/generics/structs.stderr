@@ -1,0 +1,12 @@
+warning: unused function parameter: `a`
+ --> $DIR/structs.nil:9
+9 | function test(a: A[I32], b: B[I32, Int, I32], c: C) = ;
+                  ^
+warning: unused function parameter: `b`
+ --> $DIR/structs.nil:9
+9 | function test(a: A[I32], b: B[I32, Int, I32], c: C) = ;
+                             ^
+warning: unused function parameter: `c`
+ --> $DIR/structs.nil:9
+9 | function test(a: A[I32], b: B[I32, Int, I32], c: C) = ;
+                                                  ^

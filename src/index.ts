@@ -44,7 +44,7 @@ function main() {
 
   const start = Date.now();
 
-  if (packageName !== "std") {
+  if (packageName !== "std" && !opts.noStd) {
     gcx.pkgLoader(gcx, "std", Span.startOfFile(file));
   }
 

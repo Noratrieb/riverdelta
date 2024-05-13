@@ -1,0 +1,22 @@
+//@check-pass
+
+function main() = (
+  let x = 0;
+  let _ok = 0;
+  let used = 0;
+
+  used;
+);
+
+function x() = (
+  let x = 0;
+  (
+    let x = 0;
+    call(x);
+  );
+  let y = x;
+);
+
+function call(_a: Int) = ;
+
+function param(p: Int) = ;

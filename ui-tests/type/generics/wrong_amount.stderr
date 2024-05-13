@@ -22,3 +22,51 @@ error: type () does not take any generic arguments but 1 were passed
  --> $DIR/wrong_amount.nil:22
 22 |     c3: C[I32],
              ^
+warning: unused function parameter: `a1`
+ --> $DIR/wrong_amount.nil:9
+9 |     a1: A,
+        ^^
+warning: unused function parameter: `a2`
+ --> $DIR/wrong_amount.nil:10
+10 |     a2: A[],
+         ^^
+warning: unused function parameter: `a3`
+ --> $DIR/wrong_amount.nil:11
+11 |     a3: A[I32],
+         ^^
+warning: unused function parameter: `a4`
+ --> $DIR/wrong_amount.nil:12
+12 |     a4: A[I32, I32],
+         ^^
+warning: unused function parameter: `b1`
+ --> $DIR/wrong_amount.nil:14
+14 |     b1: B,
+         ^^
+warning: unused function parameter: `b2`
+ --> $DIR/wrong_amount.nil:15
+15 |     b2: B[],
+         ^^
+warning: unused function parameter: `b3`
+ --> $DIR/wrong_amount.nil:16
+16 |     b3: B[Int, Int],
+         ^^
+warning: unused function parameter: `b4`
+ --> $DIR/wrong_amount.nil:17
+17 |     b4: B[Int, I32, Int],
+         ^^
+warning: unused function parameter: `b5`
+ --> $DIR/wrong_amount.nil:18
+18 |     b5: B[Int, Int, Int, Int],
+         ^^
+warning: unused function parameter: `c1`
+ --> $DIR/wrong_amount.nil:20
+20 |     c1: C,
+         ^^
+warning: unused function parameter: `c2`
+ --> $DIR/wrong_amount.nil:21
+21 |     c2: C[],
+         ^^
+warning: unused function parameter: `c3`
+ --> $DIR/wrong_amount.nil:22
+22 |     c3: C[I32],
+         ^^

@@ -92,7 +92,7 @@ function resolveModule(
   contents.forEach((item) => {
     const existing = items.get(item.name);
     if (existing !== undefined) {
-      cx.gcx.error.emit(
+      cx.gcx.error.emitError(
         new CompilerError(
           `item \`${item.name}\` has already been declared`,
           item.span,
@@ -164,7 +164,7 @@ function resolveModule(
 
     return {
       kind: "error",
-      err: cx.gcx.error.emit(
+      err: cx.gcx.error.emitError(
         new CompilerError(`cannot find ${ident.name}`, ident.span),
       ),
     };
@@ -179,18 +179,17 @@ function resolveModule(
 
       switch (item.kind) {
         case "function": {
-          const params = item.params.map(({ name, span, type }) => ({
-            name,
-            span,
+          const params = item.params.map(({ ident, type }) => ({
+            ident,
             type: this.type(type),
           }));
           const returnType = item.returnType && this.type(item.returnType);
 
-          item.params.forEach(({ name }) => scopes.push(name));
+          item.params.forEach(({ ident: name }) => scopes.push(name.name));
           const body = this.expr(item.body);
           const revParams = item.params.slice();
           revParams.reverse();
-          revParams.forEach(({ name }) => popScope(name));
+          revParams.forEach(({ ident: name }) => popScope(name.name));
 
           return {
             kind: "function",
@@ -289,7 +288,7 @@ function resolveModule(
                 let pathRes: Resolution;
 
                 if (typeof expr.field.value === "number") {
-                  const err: ErrorEmitted = cx.gcx.error.emit(
+                  const err: ErrorEmitted = cx.gcx.error.emitError(
                     new CompilerError(
                       "module contents cannot be indexed with a number",
                       expr.field.span,
@@ -304,7 +303,7 @@ function resolveModule(
                   );
 
                   if (pathResItem === undefined) {
-                    const err: ErrorEmitted = cx.gcx.error.emit(
+                    const err: ErrorEmitted = cx.gcx.error.emitError(
                       new CompilerError(
                         `module ${module.name} has no item ${expr.field.value}`,
                         expr.field.span,

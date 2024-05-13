@@ -162,7 +162,7 @@ export class InferContext {
       }
     }
 
-    this.error.emit(
+    this.error.emitError(
       new CompilerError(
         `cannot assign ${printTy(rhs)} to ${printTy(lhs)}`,
         span,

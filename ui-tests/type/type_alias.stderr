@@ -1,0 +1,4 @@
+warning: unused variable: `a`
+ --> $DIR/type_alias.nil:6
+6 |     let a: A = (0, 0);
+            ^

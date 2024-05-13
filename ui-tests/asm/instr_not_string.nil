@@ -1,4 +1,4 @@
-function a(a: I32) =
+function a(_a: I32) =
     ___asm(
         __locals(),
         0,

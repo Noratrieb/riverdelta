@@ -10,3 +10,11 @@ error: cannot assign String to Int
  --> $DIR/basic_recovery.nil:3
 3 |   let b: Int = "";
           ^
+warning: unused variable: `a`
+ --> $DIR/basic_recovery.nil:2
+2 |   let a: Int = "";
+          ^
+warning: unused variable: `b`
+ --> $DIR/basic_recovery.nil:3
+3 |   let b: Int = "";
+          ^

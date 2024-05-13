@@ -1,0 +1,24 @@
+warning: unused variable: `a1`
+ --> $DIR/type_assignments.nil:15
+15 |     let a1: Int = a;
+             ^^
+warning: unused variable: `b1`
+ --> $DIR/type_assignments.nil:16
+16 |     let b1: I32 = b;
+             ^^
+warning: unused variable: `c1`
+ --> $DIR/type_assignments.nil:17
+17 |     let c1: String = c;
+             ^^
+warning: unused variable: `d1`
+ --> $DIR/type_assignments.nil:18
+18 |     let d1: Bool = d;
+             ^^
+warning: unused variable: `e1`
+ --> $DIR/type_assignments.nil:19
+19 |     let e1: CustomType = e;
+             ^^
+warning: unused variable: `f1`
+ --> $DIR/type_assignments.nil:20
+20 |     let f1: (Int, I32) = f;
+             ^^

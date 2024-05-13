@@ -57,7 +57,7 @@ function printItem(item: Item<AnyPhase>): string {
 
 function printFunction(func: ItemFunction<AnyPhase>): string {
   const args = func.params
-    .map(({ name, type }) => `${name}: ${printType(type)}`)
+    .map(({ ident: name, type }) => `${name}: ${printType(type)}`)
     .join(", ");
   const ret = func.returnType ? `: ${printType(func.returnType)}` : "";
   return `function ${func.name}(${args})${ret} = ${printExpr(func.body, 0)};`;
@@ -89,7 +89,7 @@ function printTypeDef(type: ItemType<AnyPhase>): string {
 
 function printImportDef(def: ItemImport<AnyPhase>): string {
   const args = def.params
-    .map(({ name, type }) => `${name}: ${printType(type)}`)
+    .map(({ ident: name, type }) => `${name}: ${printType(type)}`)
     .join(", ");
   const ret = def.returnType ? `: ${printType(def.returnType)}` : "";
 

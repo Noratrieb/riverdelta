@@ -114,7 +114,7 @@ export function tokenize(handler: ErrorHandler, file: LoadedFile): LexerResult {
     return { ok: true, tokens: tokenizeInner(file) };
   } catch (e) {
     if (e instanceof LexerError) {
-      const err: ErrorEmitted = handler.emit(e.inner);
+      const err: ErrorEmitted = handler.emitError(e.inner);
       return { ok: false, err };
     } else {
       throw e;

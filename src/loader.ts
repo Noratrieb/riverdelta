@@ -104,7 +104,7 @@ export const loadPkg: PkgLoader = (
     return dummyErrorPkg(
       pkgId,
       name,
-      gcx.error.emit(
+      gcx.error.emitError(
         new CompilerError(`cycle detected loading extern module ${name}`, span),
       ),
     );
@@ -118,7 +118,7 @@ export const loadPkg: PkgLoader = (
 
   const file = loadModuleFile(".", name, span);
   if (!file.ok) {
-    return dummyErrorPkg(pkgId, name, gcx.error.emit(file.err));
+    return dummyErrorPkg(pkgId, name, gcx.error.emitError(file.err));
   }
 
   const tokens = tokenize(gcx.error, file.value);

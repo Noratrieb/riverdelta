@@ -233,7 +233,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
       [t] = expectNext(t, ")");
     } else {
       if (name.span.file.path === undefined) {
-        t.gcx.error.emit(
+        t.gcx.error.emitError(
           new CompilerError(
             `no known source file for statement, cannot load file relative to it`,
             name.span,
@@ -245,7 +245,7 @@ function parseItem(t: State): [State, Item<Parsed>] {
         const file = loadModuleFile(name.span.file.path, name.ident, name.span);
 
         if (!file.ok) {
-          t.gcx.error.emit(file.err);
+          t.gcx.error.emitError(file.err);
           contents = [];
         } else {
           const tokens = tokenize(t.gcx.error, file.value);
@@ -311,15 +311,19 @@ function parseFunctionSig(t: State): [State, FunctionSig] {
   [t] = expectNext(t, "(");
 
   let params: FunctionArg<Parsed>[];
-  [t, params] = parseCommaSeparatedList(t, ")", (t) => {
-    let name;
-    [t, name] = expectNext<TokenIdent>(t, "identifier");
-    [t] = expectNext(t, ":");
-    let type;
-    [t, type] = parseType(t);
+  [t, params] = parseCommaSeparatedList(
+    t,
+    ")",
+    (t): [State, FunctionArg<Parsed>] => {
+      let name;
+      [t, name] = expectNext<TokenIdent>(t, "identifier");
+      [t] = expectNext(t, ":");
+      let type;
+      [t, type] = parseType(t);
 
-    return [t, { name: name.ident, type, span: name.span }];
-  });
+      return [t, { ident: { name: name.ident, span: name.span }, type }];
+    },
+  );
 
   let colon;
   let returnType = undefined;
@@ -732,7 +736,7 @@ function parseType(t: State): [State, Type<Parsed>] {
     }
     default: {
       throw new FatalParseError(
-        t.gcx.error.emit(
+        t.gcx.error.emitError(
           new CompilerError(
             `unexpected token: \`${tok.kind}\`, expected type`,
             span,
@@ -799,7 +803,7 @@ function expectNext<T extends BaseToken>(
   [t, tok] = maybeNextT(t);
   if (!tok) {
     throw new FatalParseError(
-      t.gcx.error.emit(
+      t.gcx.error.emitError(
         new CompilerError(
           `expected \`${kind}\`, found end of file`,
           Span.eof(t.file),
@@ -809,7 +813,7 @@ function expectNext<T extends BaseToken>(
   }
   if (tok.kind !== kind) {
     throw new FatalParseError(
-      t.gcx.error.emit(
+      t.gcx.error.emitError(
         new CompilerError(
           `expected \`${kind}\`, found \`${tok.kind}\``,
           tok.span,
@@ -824,7 +828,7 @@ function next(t: State): [State, Token] {
   const [rest, next] = maybeNextT(t);
   if (!next) {
     throw new FatalParseError(
-      t.gcx.error.emit(
+      t.gcx.error.emitError(
         new CompilerError("unexpected end of file", Span.eof(t.file)),
       ),
     );
@@ -841,7 +845,7 @@ function maybeNextT(t: State): [State, Token | undefined] {
 
 function unexpectedToken(t: ParseState, token: Token, expected: string): never {
   throw new FatalParseError(
-    t.gcx.error.emit(
+    t.gcx.error.emitError(
       new CompilerError(`unexpected token, expected ${expected}`, token.span),
     ),
   );
@@ -875,7 +879,7 @@ function validateAst(ast: Pkg<Built>, gcx: GlobalContext) {
         });
         return expr;
       } else if (expr.kind === "let") {
-        gcx.error.emit(
+        gcx.error.emitError(
           new CompilerError("let is only allowed in blocks", expr.span),
         );
         return superFoldExpr(expr, this);
@@ -886,7 +890,7 @@ function validateAst(ast: Pkg<Built>, gcx: GlobalContext) {
             const innerClass = binaryExprPrecedenceClass(inner.binaryKind);
 
             if (ourClass !== innerClass) {
-              gcx.error.emit(
+              gcx.error.emitError(
                 new CompilerError(
                   `mixing operators without parentheses is not allowed. ${side} is ${inner.binaryKind}, which is different from ${expr.binaryKind}`,
                   expr.span,

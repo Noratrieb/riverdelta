@@ -1,11 +1,11 @@
-function a(a: I32) =
+function a(_a: I32) =
     ___asm(
         __locals(),
         "local.get 0 0",
         "drop",
     );
 
-function b(a: I32) =
+function b(_a: I32) =
     ___asm(
         __locals(),
         "local.get",

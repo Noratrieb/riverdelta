@@ -17,6 +17,7 @@ import { emitError } from "./base";
 import { checkBody, exprError } from "./expr";
 import { InferContext } from "./infer";
 import { typeOfItem } from "./item";
+import { lintProgram } from "./lint";
 
 export function typeck(gcx: GlobalContext, ast: Pkg<Resolved>): Pkg<Typecked> {
   const cx = {
@@ -55,7 +56,7 @@ export function typeck(gcx: GlobalContext, ast: Pkg<Resolved>): Pkg<Typecked> {
                   cx,
                   new CompilerError(
                     `import parameters must be I32 or Int`,
-                    item.params[i].span,
+                    item.params[i].ident.span,
                   ),
                 );
               }
@@ -213,6 +214,8 @@ export function typeck(gcx: GlobalContext, ast: Pkg<Resolved>): Pkg<Typecked> {
       typecked.typeckResults.main = { kind: "item", id: main.id };
     }
   }
+
+  lintProgram(gcx, typecked);
 
   return typecked;
 }

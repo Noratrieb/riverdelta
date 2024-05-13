@@ -81,6 +81,7 @@ export type Options = {
   packageName: string;
   debug: Set<string>;
   noOutput: boolean;
+  noStd: boolean;
 };
 
 export function parseArgs(hardcodedInput: string): Options {
@@ -89,6 +90,7 @@ export function parseArgs(hardcodedInput: string): Options {
   let packageName: string;
   let debug = new Set<string>();
   let noOutput = false;
+  let noStd = false;
 
   if (process.argv.length > 2) {
     filename = process.argv[2];
@@ -117,6 +119,9 @@ export function parseArgs(hardcodedInput: string): Options {
     if (process.argv.some((arg) => arg === "--no-output")) {
       noOutput = true;
     }
+    if (process.argv.some((arg) => arg === "--no-std")) {
+      noStd = true;
+    }
   } else {
     filename = "<hardcoded>";
     input = hardcodedInput;
@@ -136,5 +141,6 @@ export function parseArgs(hardcodedInput: string): Options {
     packageName,
     debug,
     noOutput,
+    noStd,
   };
 }

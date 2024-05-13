@@ -2,3 +2,7 @@ error: type I32 does not take any generic arguments but 1 were passed
  --> $DIR/generics_on_primitive.nil:2
 2 |     let a: I32[I32] = 0;
                ^^^
+warning: unused variable: `a`
+ --> $DIR/generics_on_primitive.nil:2
+2 |     let a: I32[I32] = 0;
+            ^

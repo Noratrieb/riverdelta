@@ -1,4 +1,4 @@
-function dropping(a: I32) =
+function dropping(_a: I32) =
     ___asm(
         "local.get 0",
         "drop",

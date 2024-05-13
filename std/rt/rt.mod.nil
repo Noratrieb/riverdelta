@@ -1,6 +1,7 @@
 mod alloc;
 
-function memcpy(dst: I32, src: I32, n: I32) = 
+// The function parameters are not actually unused.
+function memcpy(_dst: I32, _src: I32, _n: I32) = 
     ___asm(
         __locals(),
         "local.get 2",

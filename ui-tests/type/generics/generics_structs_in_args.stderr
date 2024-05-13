@@ -1,0 +1,12 @@
+warning: unused function parameter: `a`
+ --> $DIR/generics_structs_in_args.nil:11
+11 | function test(a: A[I32], b: B[I32, Int, I32], c: C) = ;
+                   ^
+warning: unused function parameter: `b`
+ --> $DIR/generics_structs_in_args.nil:11
+11 | function test(a: A[I32], b: B[I32, Int, I32], c: C) = ;
+                              ^
+warning: unused function parameter: `c`
+ --> $DIR/generics_structs_in_args.nil:11
+11 | function test(a: A[I32], b: B[I32, Int, I32], c: C) = ;
+                                                   ^

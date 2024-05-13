@@ -44,10 +44,16 @@ export class ErrorHandler {
     private emitter = (msg: string) => globalThis.console.error(msg),
   ) {}
 
-  public emit(err: CompilerError): ErrorEmitted {
-    renderError(this.emitter, err);
+  public emitError(err: CompilerError): ErrorEmitted {
+    renderDiagnostic(this.emitter, err, (msg) => chalk.red(`error: ${msg}`));
     this.errors.push(err);
     return ERROR_EMITTED;
+  }
+
+  public warn(err: CompilerError): void {
+    renderDiagnostic(this.emitter, err, (msg) =>
+      chalk.yellow(`warning: ${msg}`),
+    );
   }
 
   public hasErrors(): boolean {
@@ -72,7 +78,11 @@ export class CompilerError {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const console = {};
 
-function renderError(emitter: Emitter, e: CompilerError) {
+function renderDiagnostic(
+  emitter: Emitter,
+  e: CompilerError,
+  render_msg: (msg: string) => string,
+) {
   const { span } = e;
   const { content } = span.file;
 
@@ -88,7 +98,7 @@ function renderError(emitter: Emitter, e: CompilerError) {
   }
   const lineIdx = lineSpans.indexOf(line);
   const lineNo = lineIdx + 1;
-  emitter(chalk.red(`error: ${e.msg}`));
+  emitter(render_msg(e.msg));
   emitter(` --> ${span.file.path ?? "<unknown>"}:${lineNo}`);
 
   emitter(`${lineNo} | ${spanToSnippet(content, line)}`);
