@@ -851,17 +851,6 @@ function lowerExpr(
             instrs.push({ kind: "i64.store", imm: {} });
             break exprKind;
           }
-          case "__memory_size": {
-            assertArgs(0);
-            instrs.push({ kind: "memory.size" });
-            break exprKind;
-          }
-          case "__memory_grow": {
-            assertArgs(1);
-            lowerExpr(fcx, instrs, expr.args[0]);
-            instrs.push({ kind: "memory.grow" });
-            break exprKind;
-          }
           case "__i32_extend_to_i64_u": {
             assertArgs(1);
             lowerExpr(fcx, instrs, expr.args[0]);

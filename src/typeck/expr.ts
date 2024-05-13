@@ -68,10 +68,6 @@ export function typeOfBuiltinValue(
       return mkTyFn([TYS.I32], TYS.I32);
     case "__i64_load":
       return mkTyFn([TYS.I32], TYS.INT);
-    case "__memory_size":
-      return mkTyFn([], TYS.I32);
-    case "__memory_grow":
-      return mkTyFn([TYS.I32], TYS.I32);
     case "__i32_extend_to_i64_u":
       return mkTyFn([TYS.I32], TYS.INT);
     default: {

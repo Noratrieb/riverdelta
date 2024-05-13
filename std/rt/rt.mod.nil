@@ -9,3 +9,16 @@ function memcpy(_dst: I32, _src: I32, _n: I32) =
         "local.get 0",
         "memory.copy",
     );
+
+function memoryGrow(_size: I32): I32 =
+    ___asm(
+        __locals(),
+        "local.get 0",
+        "memory.grow",        
+    );
+
+function memorySize(): I32 =
+    ___asm(
+        __locals(),
+        "memory.size",
+    );

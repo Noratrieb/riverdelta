@@ -15,9 +15,9 @@ function allocate(size: I32, align: I32): I32 = (
     let alignedPtr = std.alignUp(HEAD_PTR, align);
     let newHeadPtr = alignedPtr + size;
 
-    if newHeadPtr > __memory_size() then (
+    if newHeadPtr > std.rt.memorySize() then (
         // 16 pages, very arbitrary.
-        let result = __memory_grow(16_I32);
+        let result = std.rt.memoryGrow(16_I32);
         // If allocation failed we get -1. We don't have negative numbers yet, lol.
         if result > 4294967295_I32 then (
             std.abort("failed to grow memory");
