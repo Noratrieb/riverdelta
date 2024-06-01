@@ -12,7 +12,7 @@ import {
   Type,
   ItemType,
 } from "./ast";
-import { Ty, substituteTy, tyIsUnit } from "./types";
+import { Ty, tyIsUnit } from "./types";
 
 export function printAst(ast: Pkg<AnyPhase>): string {
   return ast.rootItems.map(printItem).join("\n");
@@ -50,6 +50,9 @@ function printItem(item: Item<AnyPhase>): string {
         )};`
       );
     }
+    case "use": {
+      return id + `use ${item.segments.map((ident) => ident.name).join(".")};`;
+    }
     case "error":
       return "<ERROR>";
   }
@@ -57,7 +60,7 @@ function printItem(item: Item<AnyPhase>): string {
 
 function printFunction(func: ItemFunction<AnyPhase>): string {
   const args = func.params
-    .map(({ ident: name, type }) => `${name}: ${printType(type)}`)
+    .map(({ ident: name, type }) => `${name.name}: ${printType(type)}`)
     .join(", ");
   const ret = func.returnType ? `: ${printType(func.returnType)}` : "";
   return `function ${func.name}(${args})${ret} = ${printExpr(func.body, 0)};`;
@@ -89,7 +92,7 @@ function printTypeDef(type: ItemType<AnyPhase>): string {
 
 function printImportDef(def: ItemImport<AnyPhase>): string {
   const args = def.params
-    .map(({ ident: name, type }) => `${name}: ${printType(type)}`)
+    .map(({ ident: name, type }) => `${name.name}: ${printType(type)}`)
     .join(", ");
   const ret = def.returnType ? `: ${printType(def.returnType)}` : "";
 

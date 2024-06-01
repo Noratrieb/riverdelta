@@ -99,7 +99,14 @@ function resolveModule(
         ),
       );
     } else {
-      items.set(item.name, item.id);
+      // TODO: This is awful
+      if (item.kind === "use") {
+        cx.gcx.error.emitError(
+          new CompilerError("TODO: use is not properly implemented", item.span),
+        );
+      } else {
+        items.set(item.name, item.id);
+      }
     }
   });
 

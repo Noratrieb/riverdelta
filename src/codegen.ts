@@ -209,6 +209,7 @@ export function lower(gcx: GlobalContext): wasm.Module {
         }
         case "extern":
         case "type":
+        case "use":
           break;
         case "error":
           unreachable("codegen should never see errors");

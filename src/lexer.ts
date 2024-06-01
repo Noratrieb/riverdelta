@@ -20,6 +20,7 @@ export type DatalessToken =
   | "mod"
   | "global"
   | "struct"
+  | "use"
   | "("
   | ")"
   | "{"
@@ -364,6 +365,7 @@ const KEYOWRDS: DatalessToken[] = [
   "mod",
   "global",
   "struct",
+  "use",
 ];
 
 const KEYWORD_SET = new Set<string>(KEYOWRDS);

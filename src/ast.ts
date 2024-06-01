@@ -107,6 +107,7 @@ export type ItemKind<P extends Phase> =
   | ItemKindMod<P>
   | ItemKindExtern
   | ItemKindGlobal<P>
+  | ItemKindUse<P>
   | ItemKindError;
 
 type ItemVariant<Variant, P extends Phase> = Variant & Item<P>;
@@ -117,6 +118,7 @@ export type ItemImport<P extends Phase> = ItemVariant<ItemKindImport<P>, P>;
 export type ItemMod<P extends Phase> = ItemVariant<ItemKindMod<P>, P>;
 export type ItemExtern<P extends Phase> = ItemVariant<ItemKindExtern, P>;
 export type ItemGlobal<P extends Phase> = ItemVariant<ItemKindGlobal<P>, P>;
+export type ItemUse<P extends Phase> = ItemVariant<ItemKindUse<P>, P>;
 export type ItemError<P extends Phase> = ItemVariant<ItemKindError, P>;
 
 export type Item<P extends Phase> = ItemKind<P> & {
@@ -182,6 +184,11 @@ export type ItemKindGlobal<P extends Phase> = {
   init: Expr<P>;
   ty?: Ty;
 };
+
+export type ItemKindUse<P extends Phase> = {
+  kind: "use";
+  segments: Ident[];
+} & P["res"];
 
 export type ItemKindError = {
   kind: "error";
@@ -448,7 +455,7 @@ export type Resolution =
        * ```
        * When traversing resolutions, a stack of locals has to be kept.
        * It's similar to a De Bruijn index.
-       * 
+       *
        * You generally want to index the stack as stack[stack.len - 1 - res.idx].
        */
       index: number;
@@ -651,6 +658,9 @@ export function superFoldItem<From extends Phase, To extends Phase>(
         type: folder.type(item.type),
         init: folder.expr(item.init),
       };
+    }
+    case "use": {
+      return { ...item };
     }
     case "error": {
       return { ...item };

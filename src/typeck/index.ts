@@ -162,6 +162,9 @@ export function typeck(gcx: GlobalContext, ast: Pkg<Resolved>): Pkg<Typecked> {
             init: initChecked,
           };
         }
+        case "use": {
+          return { ...item };
+        }
         case "error": {
           return { ...item };
         }

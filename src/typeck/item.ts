@@ -152,6 +152,7 @@ function itemGenerics(item: Item<Typecked> | Item<Resolved>): Generics {
     case "global":
     case "mod":
     case "import":
+    case "use":
       return none;
     case "type":
       return { kind: "some", params: item.genericParams };
@@ -273,6 +274,11 @@ export function typeOfItem(cx: TypeckCtx, itemId: ItemId, cause: Span): Ty {
     }
     case "global": {
       ty = lowerAstTy(cx, item.type);
+      break;
+    }
+    case "use": {
+      // TODO: use the power of typescript to eliminate `use` from this.
+      ty = TYS.UNIT;
       break;
     }
     case "error": {

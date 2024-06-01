@@ -27,6 +27,7 @@ import {
   ItemGlobal,
   StructLiteralField,
   TypeDefKind,
+  ItemUse,
 } from "./ast";
 import { GlobalContext } from "./context";
 import { CompilerError, ErrorEmitted, LoadedFile, Span } from "./error";
@@ -293,6 +294,33 @@ function parseItem(t: State): [State, Item<Parsed>] {
       id: ItemId.dummy(),
     };
     return [t, global];
+  } else if (tok.kind === "use") {
+    let ident;
+    [t, ident] = expectNext<TokenIdent>(t, "identifier");
+
+    const segments: Ident[] = [{ name: ident.ident, span: ident.span }];
+
+    while (true) {
+      let semi;
+      [t, semi] = eat(t, ".");
+      if (!semi) {
+        break;
+      }
+      [t, ident] = expectNext<TokenIdent>(t, "identifier");
+      segments.push({ name: ident.ident, span: ident.span });
+    }
+
+    [t] = expectNext(t, ";");
+
+    const use: ItemUse<Parsed> = {
+      kind: "use",
+      name: segments[segments.length - 1].name,
+      segments,
+      span: tok.span,
+      id: ItemId.dummy(),
+    };
+
+    return [t, use];
   } else {
     unexpectedToken(t, tok, "item");
   }
