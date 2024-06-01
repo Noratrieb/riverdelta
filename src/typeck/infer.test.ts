@@ -7,7 +7,7 @@ const SPAN: Span = Span.startOfFile({ content: "" });
 const dummyEmitter: Emitter = () => {};
 
 it("should infer types across assignments", () => {
-  const infcx = new InferContext(new ErrorHandler(dummyEmitter));
+  const infcx = new InferContext(new ErrorHandler(false, dummyEmitter));
 
   const a = infcx.newVar();
   const b = infcx.newVar();
@@ -30,7 +30,7 @@ it("should infer types across assignments", () => {
 it("should conflict assignments to resolvable type vars", () => {
   let errorLines = 0;
   const emitter = () => (errorLines += 1);
-  const infcx = new InferContext(new ErrorHandler(emitter));
+  const infcx = new InferContext(new ErrorHandler(false, emitter));
 
   const a = infcx.newVar();
   const b = infcx.newVar();
@@ -46,7 +46,7 @@ it("should conflict assignments to resolvable type vars", () => {
 });
 
 it("should not cycle", () => {
-  const infcx = new InferContext(new ErrorHandler(dummyEmitter));
+  const infcx = new InferContext(new ErrorHandler(false, dummyEmitter));
 
   const a = infcx.newVar();
   const b = infcx.newVar();

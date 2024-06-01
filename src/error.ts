@@ -39,12 +39,19 @@ export type Emitter = (string: string) => void;
 
 export class ErrorHandler {
   private errors: CompilerError[] = [];
+  private treatErrAsBug: boolean;
 
   constructor(
+    treatErrAsBug: boolean,
     private emitter = (msg: string) => globalThis.console.error(msg),
-  ) {}
+  ) {
+    this.treatErrAsBug = treatErrAsBug;
+  }
 
   public emitError(err: CompilerError): ErrorEmitted {
+    if (this.treatErrAsBug) {
+      throw new Error(`--treat-err-as-bug: ${err.msg}`);
+    }
     renderDiagnostic(this.emitter, err, (msg) => chalk.red(`error: ${msg}`));
     this.errors.push(err);
     return ERROR_EMITTED;

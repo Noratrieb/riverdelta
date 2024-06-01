@@ -276,8 +276,7 @@ function resolveModule(
           const lhs = this.expr(expr.lhs);
 
           if (lhs.kind === "ident" || lhs.kind === "path") {
-            const res =
-              lhs.kind === "ident" ? resolveIdent(lhs.value) : lhs.value.res;
+            const res = lhs.value.res;
             const segments =
               lhs.kind === "ident" ? [lhs.value.name] : lhs.segments;
 
@@ -325,7 +324,7 @@ function resolveModule(
             }
           }
 
-          return superFoldExpr(expr, this);
+          return { ...expr, lhs };
         }
         default: {
           return superFoldExpr(expr, this);

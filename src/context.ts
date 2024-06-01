@@ -20,13 +20,15 @@ export type PkgLoader = (
  * dependencies (which also use the same context) do not care about that.
  */
 export class GlobalContext {
-  public error: ErrorHandler = new ErrorHandler();
+  public error: ErrorHandler;
   public finalizedPkgs: Pkg<Final>[] = [];
   // For cycle detection.
   public pkgsBeingLoaded: Set<string> = new Set<string>();
   public pkgId: Ids = new Ids();
 
-  constructor(public opts: Options, public pkgLoader: PkgLoader) {}
+  constructor(public opts: Options, public pkgLoader: PkgLoader) {
+    this.error = new ErrorHandler(opts.treatErrAsBug);
+  }
 
   public findItem<P extends Phase>(
     id: ItemId,
@@ -82,6 +84,7 @@ export type Options = {
   debug: Set<string>;
   noOutput: boolean;
   noStd: boolean;
+  treatErrAsBug: boolean;
 };
 
 export function parseArgs(hardcodedInput: string): Options {
@@ -91,6 +94,7 @@ export function parseArgs(hardcodedInput: string): Options {
   let debug = new Set<string>();
   let noOutput = false;
   let noStd = false;
+  let treatErrAsBug = false;
 
   if (process.argv.length > 2) {
     filename = process.argv[2];
@@ -122,6 +126,9 @@ export function parseArgs(hardcodedInput: string): Options {
     if (process.argv.some((arg) => arg === "--no-std")) {
       noStd = true;
     }
+    if (process.argv.some((arg) => arg === "--treat-err-as-bug")) {
+      treatErrAsBug = true;
+    }
   } else {
     filename = "<hardcoded>";
     input = hardcodedInput;
@@ -142,5 +149,6 @@ export function parseArgs(hardcodedInput: string): Options {
     debug,
     noOutput,
     noStd,
+    treatErrAsBug,
   };
 }

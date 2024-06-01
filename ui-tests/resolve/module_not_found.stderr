@@ -1,0 +1,4 @@
+error: cannot find list
+ --> $DIR/module_not_found.nil:2
+2 |   let _l = list.new();
+               ^^^^
