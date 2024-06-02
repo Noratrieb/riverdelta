@@ -1,12 +1,12 @@
 warning: unused variable: `x`
- --> $DIR/unused_vars.nil:4
+ --> ./ui-tests/lint/unused_vars.nil:4
 4 |   let x = 0;
           ^
 warning: unused variable: `y`
- --> $DIR/unused_vars.nil:17
+ --> ./ui-tests/lint/unused_vars.nil:17
 17 |   let y = x;
            ^
 warning: unused function parameter: `p`
- --> $DIR/unused_vars.nil:22
+ --> ./ui-tests/lint/unused_vars.nil:22
 22 | function param(p: Int) = ;
                     ^

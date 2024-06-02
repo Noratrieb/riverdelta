@@ -9,8 +9,9 @@ import { writeModuleWatToString } from "./wasm/wat";
 import fs from "fs";
 import { exec } from "child_process";
 import { Pkg, Built, Typecked } from "./ast";
-import { GlobalContext, parseArgs } from "./context";
+import { GlobalContext } from "./context";
 import { loadPkg } from "./loader";
+import { parseArgs } from "./options";
 
 const INPUT = `
 type A = struct { a: Int };

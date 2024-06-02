@@ -2,6 +2,7 @@ function a(_a: I32) =
     ___asm(
         __locals(),
         0,
+        //~^ ERROR: inline assembly instruction must be string literal with instruction
     );
 
 function main() = ;

@@ -1,13 +1,14 @@
 import { Emitter, ErrorHandler, Span } from "../error";
+import { defaultOptions } from "../options";
 import { TYS } from "../types";
 import { InferContext } from "./infer";
 
-const SPAN: Span = Span.startOfFile({ content: "" });
+const SPAN: Span = Span.startOfFile({ content: "", path: "" });
 
 const dummyEmitter: Emitter = () => {};
 
 it("should infer types across assignments", () => {
-  const infcx = new InferContext(new ErrorHandler(false, dummyEmitter));
+  const infcx = new InferContext(new ErrorHandler(defaultOptions(), dummyEmitter));
 
   const a = infcx.newVar();
   const b = infcx.newVar();
@@ -30,7 +31,7 @@ it("should infer types across assignments", () => {
 it("should conflict assignments to resolvable type vars", () => {
   let errorLines = 0;
   const emitter = () => (errorLines += 1);
-  const infcx = new InferContext(new ErrorHandler(false, emitter));
+  const infcx = new InferContext(new ErrorHandler(defaultOptions(), emitter));
 
   const a = infcx.newVar();
   const b = infcx.newVar();
@@ -46,7 +47,7 @@ it("should conflict assignments to resolvable type vars", () => {
 });
 
 it("should not cycle", () => {
-  const infcx = new InferContext(new ErrorHandler(false, dummyEmitter));
+  const infcx = new InferContext(new ErrorHandler(defaultOptions(), dummyEmitter));
 
   const a = infcx.newVar();
   const b = infcx.newVar();

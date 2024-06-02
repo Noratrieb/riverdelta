@@ -1,20 +1,20 @@
 error: cannot find c
- --> $DIR/basic_recovery.nil:4
-4 |   c;
+ --> ./ui-tests/basic_recovery.nil:8
+8 |   c;
       ^
 error: cannot assign String to Int
- --> $DIR/basic_recovery.nil:2
+ --> ./ui-tests/basic_recovery.nil:2
 2 |   let a: Int = "";
           ^
 error: cannot assign String to Int
- --> $DIR/basic_recovery.nil:3
-3 |   let b: Int = "";
+ --> ./ui-tests/basic_recovery.nil:5
+5 |   let b: Int = "";
           ^
 warning: unused variable: `a`
- --> $DIR/basic_recovery.nil:2
+ --> ./ui-tests/basic_recovery.nil:2
 2 |   let a: Int = "";
           ^
 warning: unused variable: `b`
- --> $DIR/basic_recovery.nil:3
-3 |   let b: Int = "";
+ --> ./ui-tests/basic_recovery.nil:5
+5 |   let b: Int = "";
           ^

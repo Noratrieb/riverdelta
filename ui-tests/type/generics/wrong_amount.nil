@@ -6,20 +6,26 @@ type B[T, U, V] = struct {
 type C = ();
 
 function test(
-    a1: A,
-    a2: A[],
-    a3: A[I32],
-    a4: A[I32, I32],
+    _a1: A,
+    //~^ ERROR: missing generics for type A, expected 1, but only 0 were passed
+    _a2: A[],
+    //~^ ERROR: missing generics for type A, expected 1, but only 0 were passed
+    _a3: A[I32],
+    _a4: A[I32, I32],
 
-    b1: B,
-    b2: B[],
-    b3: B[Int, Int],
-    b4: B[Int, I32, Int],
-    b5: B[Int, Int, Int, Int],
+    _b1: B,
+    //~^ ERROR: missing generics for type B, expected 3, but only 0 were passed
+    _b2: B[],
+    //~^ ERROR: missing generics for type B, expected 3, but only 0 were passed
+    _b3: B[Int, Int],
+    //~^ ERROR: issing generics for type B, expected 3, but only 2 were passed
+    _b4: B[Int, I32, Int],
+    _b5: B[Int, Int, Int, Int],
 
-    c1: C,
-    c2: C[],
-    c3: C[I32],
+    _c1: C,
+    _c2: C[],
+    _c3: C[I32],
+    //~^ ERROR: type () does not take any generic arguments but 1 were passed
 ) = ;
 
 function main() = ;

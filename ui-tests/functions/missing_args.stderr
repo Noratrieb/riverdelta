@@ -1,4 +1,4 @@
 error: missing argument of type Int
- --> $DIR/missing_args.nil:2
+ --> ./ui-tests/functions/missing_args.nil:2
 2 |     x();
          ^

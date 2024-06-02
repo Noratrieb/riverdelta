@@ -1,3 +1,4 @@
 function main() = (
-  let _false, l = list.new();
+  let _l = list.new();
+  //~^ ERROR: cannot find list
 );

@@ -1,8 +1,8 @@
 error: mismatched immediate lengths, expected 1, got 2
- --> $DIR/wrong_imm.nil:4
+ --> ./ui-tests/asm/wrong_imm.nil:4
 4 |         "local.get 0 0",
             ^^^^^^^^^^^^^^^
 error: mismatched immediate lengths, expected 1, got 0
- --> $DIR/wrong_imm.nil:11
-11 |         "local.get",
+ --> ./ui-tests/asm/wrong_imm.nil:12
+12 |         "local.get",
              ^^^^^^^^^^^

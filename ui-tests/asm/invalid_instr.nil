@@ -2,6 +2,7 @@ function dropping(_a: I32) =
     ___asm(
         __locals(),
         "meow meow",
+        //~^ ERROR: unknown instruction: meow
     );
 
 function main() = ;

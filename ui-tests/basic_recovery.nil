@@ -1,5 +1,10 @@
 function main() = (
   let a: Int = "";
+  //~^ ERROR: cannot assign String to Int
+  //~| WARN: unused variable: `a`
   let b: Int = "";
+  //~^ ERROR: cannot assign String to Int
+  //~| WARN: unused variable: `b`
   c;
+  //~^ ERROR: cannot find c
 );

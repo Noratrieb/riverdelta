@@ -1,6 +1,8 @@
 function dropping(_a: I32) = (
     1;
     ___asm(__locals(), "drop");
+    //~^ ERROR: `___asm` cannot be used as a value
+    //~| ERROR: `__locals` cannot be used as a value
 );
 
 function main() = ;

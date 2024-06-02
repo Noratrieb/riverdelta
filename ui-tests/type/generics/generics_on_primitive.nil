@@ -1,3 +1,4 @@
 function main() = (
-    let a: I32[I32] = 0;
+    let _a: I32[I32] = 0;
+    //~^ ERROR: type I32 does not take any generic arguments but 1 were passed
 );

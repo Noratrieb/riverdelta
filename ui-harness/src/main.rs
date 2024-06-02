@@ -1,9 +1,8 @@
 use ui_test::{
-    clap::Parser, default_filter_by_arg, default_per_file_config, status_emitter, Args,
-    CommandBuilder, Config, Mode, OutputConflictHandling,
+    default_per_file_config, status_emitter, Args, CommandBuilder, Config, OutputConflictHandling,
 };
 
-fn main() {
+fn main() -> ui_test::Result<()> {
     std::process::Command::new("cargo")
         .args(&[
             "build",
@@ -23,32 +22,28 @@ fn main() {
     let mut config = Config::rustc("./ui-tests");
     config.host = Some("wasm :3".into());
     config.program = CommandBuilder::cmd("ui-harness/target/debug/nilc-wrapper");
-    config.mode = Mode::Fail {
-        require_patterns: false,
-    };
 
-    let args = Args::parse();
+    let args = Args::parse_args(Args::default(), std::env::args().skip(1))?;
 
-    let text = if args.quiet {
-        status_emitter::Text::quiet()
-    } else {
-        status_emitter::Text::verbose()
-    };
+    config.with_args(&args);
 
     if !args.check && std::env::var_os("GITHUB_ACTIONS").is_none() {
         config.output_conflict_handling = OutputConflictHandling::Bless;
     }
 
     let result = ui_test::run_tests_generic(
-        config,
-        args,
-        |path, args| {
-            path.extension().is_some_and(|ext| ext == "nil") && default_filter_by_arg(path, args)
+        vec![config],
+        |path, config| {
+            if !path.extension().is_some_and(|ext| ext == "nil") {
+                return None;
+            }
+            Some(ui_test::default_any_file_filter(path, config))
         },
         default_per_file_config,
-        (text, status_emitter::Gha::<true> { name: "ui".into() }),
+        status_emitter::Text::quiet(),
     );
     if let Err(result) = result {
         println!("{:?}", result);
     }
+    Ok(())
 }

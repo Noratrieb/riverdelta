@@ -1,9 +1,7 @@
 import { Pkg, DepPkg, Final, Item, ItemId, Phase } from "./ast";
 import { ErrorHandler, Span } from "./error";
+import { Options } from "./options";
 import { Ids, unwrap } from "./utils";
-import fs from "fs";
-import path from "path";
-
 export type PkgLoader = (
   gcx: GlobalContext,
   name: string,
@@ -27,7 +25,7 @@ export class GlobalContext {
   public pkgId: Ids = new Ids();
 
   constructor(public opts: Options, public pkgLoader: PkgLoader) {
-    this.error = new ErrorHandler(opts.treatErrAsBug);
+    this.error = new ErrorHandler(opts);
   }
 
   public findItem<P extends Phase>(
@@ -75,80 +73,4 @@ export class GlobalContext {
     const mod = unwrap(pkg.itemsById.get(id));
     return mod;
   }
-}
-
-export type Options = {
-  input: string;
-  filename: string;
-  packageName: string;
-  debug: Set<string>;
-  noOutput: boolean;
-  noStd: boolean;
-  treatErrAsBug: boolean;
-};
-
-export function parseArgs(hardcodedInput: string): Options {
-  let filename: string;
-  let input: string;
-  let packageName: string;
-  let debug = new Set<string>();
-  let noOutput = false;
-  let noStd = false;
-  let treatErrAsBug = false;
-
-  if (process.argv.length > 2) {
-    filename = process.argv[2];
-    if (path.extname(filename) !== ".nil") {
-      console.error(process.argv);
-
-      console.error(
-        `error: filename must have \`.nil\` extension: \`${filename}\``,
-      );
-      process.exit(1);
-    }
-
-    input = fs.readFileSync(filename, { encoding: "utf-8" });
-    if (filename.endsWith(".mod.nil")) {
-      packageName = path.basename(filename, ".mod.nil");
-    } else {
-      packageName = path.basename(filename, ".nil");
-    }
-
-    const debugArg = process.argv.find((arg) => arg.startsWith("--debug="));
-    if (debugArg !== undefined) {
-      const debugs = debugArg.slice("--debug=".length);
-      debug = new Set(debugs.split(","));
-    }
-
-    if (process.argv.some((arg) => arg === "--no-output")) {
-      noOutput = true;
-    }
-    if (process.argv.some((arg) => arg === "--no-std")) {
-      noStd = true;
-    }
-    if (process.argv.some((arg) => arg === "--treat-err-as-bug")) {
-      treatErrAsBug = true;
-    }
-  } else {
-    filename = "<hardcoded>";
-    input = hardcodedInput;
-    packageName = "test";
-    debug = new Set([
-      "tokens",
-      "parsed",
-      "resolved",
-      "typecked",
-      "wasm-validate",
-    ]);
-  }
-
-  return {
-    filename,
-    input,
-    packageName,
-    debug,
-    noOutput,
-    noStd,
-    treatErrAsBug,
-  };
 }

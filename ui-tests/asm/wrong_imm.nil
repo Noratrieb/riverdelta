@@ -2,6 +2,7 @@ function a(_a: I32) =
     ___asm(
         __locals(),
         "local.get 0 0",
+        //~^ ERROR: mismatched immediate lengths, expected 1, got 2
         "drop",
     );
 
@@ -9,6 +10,7 @@ function b(_a: I32) =
     ___asm(
         __locals(),
         "local.get",
+        //~^ ERROR: mismatched immediate lengths, expected 1, got 0
         "drop",
     );
 

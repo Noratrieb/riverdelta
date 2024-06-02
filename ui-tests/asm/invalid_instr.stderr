@@ -1,4 +1,4 @@
 error: unknown instruction: meow
- --> $DIR/invalid_instr.nil:4
+ --> ./ui-tests/asm/invalid_instr.nil:4
 4 |         "meow meow",
             ^^^^^^^^^^^

@@ -1,3 +1,4 @@
 mod b;
+//~^ ERROR: .nil files cannot have submodules. use .mod.nil in a subdirectory
 
 function main() = ;

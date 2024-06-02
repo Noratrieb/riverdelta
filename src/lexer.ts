@@ -133,10 +133,13 @@ function tokenizeInner(file: LoadedFile): Token[] {
 
   finish: while (i < input.length) {
     const next = input[i];
+    if (next === undefined) {
+      throw new Error("index out of bounds");
+    }
     const span: Span = new Span(i, i + 1, file);
 
     if (next === "/" && input[i + 1] === "/") {
-      while (input[i] !== "\n") {
+      while (input[i] !== "\n" && input[i] !== undefined) {
         i++;
       }
 

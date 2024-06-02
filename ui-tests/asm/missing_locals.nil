@@ -1,5 +1,6 @@
 function dropping(_a: I32) =
     ___asm(
+        //~^ ERROR: inline assembly must have __locals() as first argument
         "local.get 0",
         "drop",
     );

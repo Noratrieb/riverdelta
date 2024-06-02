@@ -77,7 +77,7 @@ function dummyErrorPkg(
     packageName,
     rootItems: [],
     itemsById: new ComplexMap(),
-    rootFile: { content: "<dummy>" },
+    rootFile: { content: "<dummy>", path: "" },
     fatalError: emitted,
     typeckResults: {
       main: undefined,
